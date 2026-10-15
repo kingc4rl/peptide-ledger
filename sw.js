@@ -1,6 +1,6 @@
 /* Peptide Ledger service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.1.0';
+const VERSION = 'v1.2.0';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
 const SHELL_FILES = [

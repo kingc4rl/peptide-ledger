@@ -211,7 +211,7 @@ function stashCalc(v){
     const p = state.protocols.find(x=>x.id===v.protocolId);
     if(p){
       if(doseMg==null){ const d = doseAt(p, todayISO()); doseMg = doseToMg(d.dose, d.doseUnit); }
-      if(freqDays==null) freqDays = num(p.frequencyDays,null);
+      if(freqDays==null) freqDays = effectiveFreqDays(p);
     }
   }
   if(!doseMg || !freqDays) return {daysRemaining:null};
@@ -591,6 +591,25 @@ function protocolColorMap(){
   return map;
 }
 
+/* Fixed weekdays (0=Sun..6=Sat) override "days between doses". Average days between doses, for usage and cost maths. */
+function weekdaysOf(p){ return Array.isArray(p.activeWeekdays) && p.activeWeekdays.length ? p.activeWeekdays.map(Number) : null; }
+function effectiveFreqDays(p){ const w = weekdaysOf(p); return w ? 7/w.length : num(p.frequencyDays,null); }
+const DOW = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+function fmtClock(hhmm){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm||''); if(!m) return '';
+  const h = +m[1]; return `${((h+11)%12)+1}:${m[2]} ${h>=12?'PM':'AM'}`;
+}
+/* First scheduled dose date on or after fromISO for a weekday-based protocol. */
+function nextScheduledDate(p, fromISO){
+  const r = doseDatesInRange({...p, status:'active', nextDose:fromISO, frequencyDays:1}, fromISO, addDays(fromISO, 400));
+  return r[0] || null;
+}
+function scheduleLabel(p){
+  const w = weekdaysOf(p);
+  const t = fmtClock(p.doseTime);
+  if(w) return w.slice().sort((x,y)=>x-y).map(i=>DOW[i]).join(' · ') + (t?` · ${t}`:'');
+  return t ? `Usually ${t}` : '';
+}
 function doseDatesInRange(p, startISO, endISO){
   if(!isActiveP(p)) return [];
   const freq = num(p.frequencyDays, null);
@@ -696,7 +715,8 @@ function renderProtocols(){
           </div>
           ${p.doseNumber? `<div style="margin-top:6px;"><span class="pill pill-muted">Dose ${esc(p.doseNumber)}</span></div>` : ''}
           ${steps.length ? `<div class="footnote" style="margin-top:4px;">${d.step ? `Step ${d.step} of ${steps.length}` : 'Base dose'}${nxt ? ` · next ${esc(fmtDose(nxt.dose, nxt.doseUnit||p.doseUnit))} on ${fmtDateShort(nxt.start)}` : ' · final step'}</div>` : ''}
-          <div class="footnote" style="margin-top:3px;">${notStarted?'Start':'Started'} ${fmtDateShort(p.startDate)} · Next dose ${fmtDateShort(p.nextDose)}</div>
+          <div class="footnote" style="margin-top:3px;">${notStarted?'Start':'Started'} ${fmtDateShort(p.startDate)} · Next dose ${fmtDateShort(p.nextDose)}${p.doseTime && p.nextDose ? ' at '+fmtClock(p.doseTime) : ''}</div>
+          ${scheduleLabel(p) ? `<div class="footnote" style="margin-top:3px;">Schedule: ${esc(scheduleLabel(p))}</div>` : ''}
           ${activeVial? `<div class="footnote" style="margin-top:2px;">Vial: ${activeVial.remainingMg!=null? `${Math.round(activeVial.remainingMg*10)/10}mg left of ${num(activeVial.mgPerVial,0)}mg` : 'not yet opened'}${activeVial.pharmacy? ` (${esc(activeVial.pharmacy)})` : ''}</div>` : ''}
         </div>
         ${notStarted ? '' : `<div class="dose-actions">
@@ -777,10 +797,11 @@ async function logInjection(p, day, delta){
   const hasCounter = doseNumber!=null && doseNumber!=='';
   if(delta>0 && after===n){
     if(hasCounter) doseNumber = num(doseNumber,0)+1;
-    if(freq>0){ const cand = addDays(day, freq); if(!nextDose || cand>nextDose) nextDose = cand; }
+    const cand = weekdaysOf(p) ? nextScheduledDate(p, addDays(day,1)) : (freq>0 ? addDays(day, freq) : null);
+    if(cand && (!nextDose || cand>nextDose)) nextDose = cand;
   } else if(delta<0 && before===n){
     if(hasCounter) doseNumber = Math.max(0, num(doseNumber,0)-1);
-    if(day===doseDayISO()) nextDose = day;   // today's dose is due again
+    if(day===doseDayISO() && (!weekdaysOf(p) || weekdaysOf(p).includes(new Date(day+'T00:00:00').getDay()))) nextDose = day;   // today's dose is due again
   }
   await dbSet('protocols', p.id, {...stripId(p), doseLog:log, doseTimes:times, doseNumber, nextDose});
   // Linked supplies are consumed per injection: consume on log, restock on removal.
@@ -946,7 +967,15 @@ function openProtocolModal(existing){
         <button type="button" class="btn btn-sm" id="pAddStep" style="margin-top:8px;">+ Add step</button>
       </div>
       <div class="field"><label for="pDoseNumber">Current dose #</label><input id="pDoseNumber" type="number" inputmode="numeric" step="1" value="${esc(p.doseNumber||'')}" placeholder="e.g. 11"></div>
-      <div class="field"><label for="pFreq">Days between doses</label><input id="pFreq" type="number" inputmode="numeric" step="1" value="${esc(p.frequencyDays||'')}" placeholder="1 = daily"></div>
+      <div class="field span2 module-box">
+        <label style="margin-bottom:6px;display:block;">📅 Dose days <span style="font-weight:400;color:var(--muted);">: pick fixed weekdays (e.g. Sun &amp; Wed), or leave empty and use days between doses</span></label>
+        <div class="chip-row" id="pWeekdays">${DOW.map((n,i)=>`<button type="button" class="chip-btn ${(weekdaysOf(p)||[]).includes(i)?'on':''}" data-dow="${i}" aria-pressed="${(weekdaysOf(p)||[]).includes(i)}">${n}</button>`).join('')}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px;">
+          <div><label for="pFreq" class="footnote" style="display:block;margin-bottom:3px;">Days between doses</label><input id="pFreq" type="number" inputmode="numeric" step="1" value="${esc(p.frequencyDays||'')}" placeholder="1 = daily"></div>
+          <div><label for="pDoseTime" class="footnote" style="display:block;margin-bottom:3px;">Usual dose time</label><input id="pDoseTime" type="time" value="${esc(p.doseTime||'')}"></div>
+        </div>
+        <div class="footnote" id="pDowHint" style="margin-top:6px;"></div>
+      </div>
       <div class="field"><label for="pSortOrder">Display order</label><input id="pSortOrder" type="number" inputmode="numeric" step="1" value="${esc(p.sortOrder||'')}" placeholder="Lower shows first"></div>
       <div class="field"><label for="pStart">First started</label><input id="pStart" type="date" value="${esc(p.startDate||'')}"></div>
       <div class="field"><label for="pNext">Next dose date</label><input id="pNext" type="date" value="${esc(p.nextDose||'')}"></div>
@@ -1006,6 +1035,19 @@ function openProtocolModal(existing){
       const sel = $('#pActiveVial',body), keep = sel.value;
       sel.innerHTML = activeVialOptions($('#pCompound',body).value, keep);
     });
+    const dowSel = new Set(weekdaysOf(p)||[]);
+    function dowHint(){
+      $('#pFreq',body).disabled = dowSel.size>0;
+      $('#pDowHint',body).textContent = dowSel.size ? `Doses on ${[...dowSel].sort((x,y)=>x-y).map(i=>DOW[i]).join(' and ')} each week. Days between doses is ignored.` : '';
+    }
+    $('#pWeekdays',body).addEventListener('click', e=>{
+      const b = e.target.closest('[data-dow]'); if(!b) return;
+      const i = +b.dataset.dow;
+      if(dowSel.has(i)) dowSel.delete(i); else dowSel.add(i);
+      b.classList.toggle('on', dowSel.has(i)); b.setAttribute('aria-pressed', dowSel.has(i));
+      dowHint();
+    });
+    dowHint();
     function halfLifeHint(){
       const d = defaultHalfLife($('#pCompound',body).value);
       $('#pHalfLife',body).placeholder = d ? String(d) : 'e.g. 4';
@@ -1116,7 +1158,8 @@ function openProtocolModal(existing){
         ...stripId(p),
         compound, dose:$('#pDose',body).value, doseUnit:$('#pDoseUnit',body).value,
         dosesPerDay: parseInt($('#pSplit',body).value,10) || 1,
-        units:$('#pUnits',body).value, syringeMl:$('#pSyringeMl',body).value, doseNumber:$('#pDoseNumber',body).value, frequencyDays:$('#pFreq',body).value,
+        units:$('#pUnits',body).value, syringeMl:$('#pSyringeMl',body).value, doseNumber:$('#pDoseNumber',body).value, frequencyDays: dowSel.size ? '1' : $('#pFreq',body).value,
+        activeWeekdays: [...dowSel].sort((x,y)=>x-y), doseTime:$('#pDoseTime',body).value,
         sortOrder:$('#pSortOrder',body).value,
         vialMg:$('#pVialMg',body).value, bacMl:$('#pBacMl',body).value,
         halfLifeHours:$('#pHalfLife',body).value,
@@ -1128,6 +1171,13 @@ function openProtocolModal(existing){
         siteLog: siteLog.slice(-40),
         status: p.status || 'active',
       };
+      if(dowSel.size){
+        const nd = data.nextDose;
+        if(!nd || !dowSel.has(new Date(nd+'T00:00:00').getDay())){
+          const from = (data.startDate && data.startDate > doseDayISO()) ? data.startDate : doseDayISO();
+          data.nextDose = nextScheduledDate(data, from) || nd;
+        }
+      }
       // Assigning a vial that hasn't been opened yet opens it now: move one unit
       // from sealed stock into active use and start its remaining-amount tracker.
       if(newActiveVialId && newActiveVialId!==p.activeVialId){
@@ -1187,7 +1237,8 @@ function injectionEvents(p){
 function scheduledEvents(p, nowMs, untilMs){
   const evs = injectionEvents(p).filter(e=> e.day);
   const hrs = evs.length ? evs.map(e=>{ const d = new Date(e.t); return d.getHours()+d.getMinutes()/60; }).sort((a,b)=>a-b) : [9];
-  const hr = hrs[Math.floor(hrs.length/2)];
+  const tm = /^(\d{1,2}):(\d{2})$/.exec(p.doseTime||'');
+  const hr = tm ? +tm[1]+(+tm[2])/60 : hrs[Math.floor(hrs.length/2)];
   const today = doseDayISO(), n = splitCount(p), out = [];
   const endISO = isoFromDate(new Date(untilMs));
   doseDatesInRange(p, today, endISO).forEach(iso=>{
@@ -1462,10 +1513,10 @@ function supplyLabel(s){
   return bits.length ? `${name} (${esc(bits.join(', '))})` : name;
 }
 function dosesPerWeekFor(p){
+  const w = weekdaysOf(p);
+  if(w) return w.length;
   const freq = num(p.frequencyDays, null);
-  if(freq) return 7/freq;
-  if(Array.isArray(p.activeWeekdays) && p.activeWeekdays.length) return p.activeWeekdays.length;
-  return null;
+  return freq ? 7/freq : null;
 }
 function supplyWeeklyUsage(supplyId){
   let total = 0;
@@ -1751,7 +1802,7 @@ function renderCostTracking(){
     const costPerMg = num(vial.price,0)/mgTotal;
     const dNow = doseAt(p, todayISO());
     const doseMg = doseToMg(dNow.dose, dNow.doseUnit) || 0;
-    const freq = num(p.frequencyDays,0);
+    const freq = effectiveFreqDays(p) || 0;
     if(freq>0) monthly += costPerMg*doseMg*(30/freq);
   });
   el.innerHTML = `
@@ -2794,7 +2845,7 @@ function stackContextForAsk(){
     vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null})),
     protocols: state.protocols.filter(p=>p.status!=='archived').map(p=>{
       const d = doseAt(p, day);
-      return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays,
+      return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p),
         startDate: p.startDate||null, titrationSteps: titrationSteps(p),
         injectionsLast30Days: (p.doseLog||[]).filter(x=> x>=addDays(day,-29)).length,
         lastSite: (lastSiteOf(p)||{}).site||null,
