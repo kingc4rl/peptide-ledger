@@ -375,6 +375,10 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .k-used{ background:rgba(161,161,170,.3); }
 
 /* Chips */
+.serum-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--line); font-size:13.5px; }
+.serum-dot{ width:9px; height:9px; border-radius:50%; flex:none; }
+.serum-name{ flex:1; min-width:0; overflow-wrap:anywhere; }
+.serum-val{ text-align:right; white-space:nowrap; font-size:13px; }
 .chip-row{ display:flex; gap:6px; flex-wrap:wrap; }
 .chip-btn{ border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
 .chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep); }
@@ -493,6 +497,12 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
     <div class="page">
 
       <section id="pepProtocolsView" class="view">
+
+      <div class="card" id="serumCard">
+        <h3 style="font-size:16px;margin-bottom:2px;">Serum level</h3>
+        <p class="footnote" style="margin-bottom:10px;">Estimated amount of each compound still in your body, from your logged doses and half-life.</p>
+        <div id="serumBody"></div>
+      </div>
 
       <div class="card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">

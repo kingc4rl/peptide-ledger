@@ -762,10 +762,15 @@ async function logInjection(p, day, delta){
   if(!p) return;
   const n = splitCount(p);
   const log = Array.isArray(p.doseLog) ? p.doseLog.slice() : [];
+  let times = Array.isArray(p.doseTimes) ? p.doseTimes.slice() : [];   // exact injection moments, for the serum chart
   const before = log.filter(x=>x===day).length;
-  if(delta>0){ if(before>=n) return; log.push(day); }
-  else { const i = log.lastIndexOf(day); if(i<0) return; log.splice(i,1); }
+  if(delta>0){ if(before>=n) return; log.push(day); times.push({day, t:Date.now()}); }
+  else {
+    const i = log.lastIndexOf(day); if(i<0) return; log.splice(i,1);
+    for(let k=times.length-1;k>=0;k--) if(times[k].day===day){ times.splice(k,1); break; }
+  }
   log.sort();
+  times = times.slice(-400);
   const after = before + (delta>0 ? 1 : -1);
   const freq = num(p.frequencyDays,0);
   let doseNumber = p.doseNumber, nextDose = p.nextDose;
@@ -777,7 +782,7 @@ async function logInjection(p, day, delta){
     if(hasCounter) doseNumber = Math.max(0, num(doseNumber,0)-1);
     if(day===doseDayISO()) nextDose = day;   // today's dose is due again
   }
-  await dbSet('protocols', p.id, {...stripId(p), doseLog:log, doseNumber, nextDose});
+  await dbSet('protocols', p.id, {...stripId(p), doseLog:log, doseTimes:times, doseNumber, nextDose});
   // Linked supplies are consumed per injection: consume on log, restock on removal.
   const rules = Array.isArray(p.supplyUsage) ? p.supplyUsage : [];
   for(const r of rules){
@@ -911,6 +916,10 @@ function openProtocolModal(existing){
         <select id="pSplit">${[1,2,3,4].map(k=>`<option value="${k}" ${split===k?'selected':''}>${k===1?'1 injection (no split)':k+' injections'}</option>`).join('')}</select>
         <div class="footnote" id="pSplitOut" style="margin-top:4px;"></div>
       </div>
+      <div class="field span2"><label for="pHalfLife">Half-life (hours) <span style="font-weight:400;color:var(--muted);">: drives the serum level chart</span></label>
+        <input id="pHalfLife" type="number" inputmode="decimal" step="any" min="0" value="${esc(p.halfLifeHours||'')}" placeholder="">
+        <div class="footnote" id="pHalfLifeHint" style="margin-top:4px;"></div>
+      </div>
       <div class="field span2"><label for="pActiveVial">Active vial <span style="font-weight:400;color:var(--muted);">: the one you're drawing from. Picking an unopened vial opens it and starts tracking what's left.</span></label>
         <select id="pActiveVial">
           ${activeVialOptions(p.compound, p.activeVialId)}
@@ -997,6 +1006,13 @@ function openProtocolModal(existing){
       const sel = $('#pActiveVial',body), keep = sel.value;
       sel.innerHTML = activeVialOptions($('#pCompound',body).value, keep);
     });
+    function halfLifeHint(){
+      const d = defaultHalfLife($('#pCompound',body).value);
+      $('#pHalfLife',body).placeholder = d ? String(d) : 'e.g. 4';
+      $('#pHalfLifeHint',body).textContent = d ? `Leave blank to use ${fmtHours(d)}, a typical published figure for this compound. Enter your own to override.` : 'No typical figure on file for this compound. Enter its half-life to see it on the chart.';
+    }
+    $('#pCompound',body).addEventListener('input', halfLifeHint);
+    halfLifeHint();
     ['#pVialMg','#pBacMl','#pDose','#pDoseUnit','#pSplit'].forEach(sel=>{
       $(sel,body).addEventListener('input', recalc);
       $(sel,body).addEventListener('change', recalc);
@@ -1103,6 +1119,7 @@ function openProtocolModal(existing){
         units:$('#pUnits',body).value, syringeMl:$('#pSyringeMl',body).value, doseNumber:$('#pDoseNumber',body).value, frequencyDays:$('#pFreq',body).value,
         sortOrder:$('#pSortOrder',body).value,
         vialMg:$('#pVialMg',body).value, bacMl:$('#pBacMl',body).value,
+        halfLifeHours:$('#pHalfLife',body).value,
         activeVialId: newActiveVialId,
         startDate:$('#pStart',body).value, nextDose:$('#pNext',body).value,
         cycleStart:$('#pCycleStart',body).value, cycleOnWeeks:$('#pOn',body).value, cycleOffWeeks:$('#pOff',body).value,
@@ -1130,6 +1147,168 @@ function openProtocolModal(existing){
   });
 }
 $('#addProtocolBtn').addEventListener('click', ()=> openProtocolModal(null));
+
+/* ===================== Serum level chart ===================== */
+/* Approximate typical half-lives in hours (published / commonly cited figures; the protocol's own half-life field wins).
+   First matching rule wins, so more specific names come first. */
+const HALF_LIFE_RULES = [
+  [/cjc-?1295.*dac/i, 192, /no\s*dac/i],
+  [/cjc-?1295|mod\s*grf/i, 0.5],
+  [/semaglutide/i, 168], [/tirzepatide/i, 120], [/retatrutide/i, 144], [/cagrilintide/i, 168],
+  [/dulaglutide/i, 120], [/liraglutide/i, 13], [/exenatide/i, 2.4], [/lixisenatide/i, 3],
+  [/ipamorelin/i, 2], [/sermorelin/i, 0.2], [/tesamorelin/i, 0.5], [/ghrp-?2/i, 0.5], [/ghrp-?6/i, 0.5],
+  [/hexarelin/i, 1], [/mk-?677|ibutamoren/i, 24], [/pt-?141|bremelanotide/i, 2.7],
+  [/thymosin alpha|tα1|ta1/i, 2], [/bpc-?157/i, 4],
+];
+function defaultHalfLife(name){
+  const s = String(name||'');
+  for(const r of HALF_LIFE_RULES){ if(r[0].test(s) && !(r[2] && r[2].test(s))) return r[1]; }
+  return null;
+}
+function halfLifeOf(p){
+  const own = num(p.halfLifeHours, null);
+  return own>0 ? own : defaultHalfLife(p.compound);
+}
+function fmtHours(h){ return h>=48 ? `${Math.round(h/24*10)/10} days` : h<1 ? `${Math.round(h*60)} min` : `${Math.round(h*10)/10} h`; }
+const HOUR = 3600000;
+/* Every injection as {t (ms), mg}. Entries logged before timestamps existed (or backfilled) sit at noon. */
+function injectionEvents(p){
+  const log = Array.isArray(p.doseLog) ? p.doseLog : [];
+  const times = Array.isArray(p.doseTimes) ? p.doseTimes.slice() : [];
+  const n = splitCount(p);
+  return log.map(day=>{
+    const k = times.findIndex(x=>x.day===day);
+    const t = k>-1 ? times.splice(k,1)[0].t : new Date(day+'T12:00:00').getTime();
+    const d = doseAt(p, day);
+    return {t, mg: (doseToMg(d.dose, d.doseUnit)||0)/n, day};
+  });
+}
+/* Doses still to come from the schedule, at the usual time of day for this protocol. */
+function scheduledEvents(p, nowMs, untilMs){
+  const evs = injectionEvents(p).filter(e=> e.day);
+  const hrs = evs.length ? evs.map(e=>{ const d = new Date(e.t); return d.getHours()+d.getMinutes()/60; }).sort((a,b)=>a-b) : [9];
+  const hr = hrs[Math.floor(hrs.length/2)];
+  const today = doseDayISO(), n = splitCount(p), out = [];
+  const endISO = isoFromDate(new Date(untilMs));
+  doseDatesInRange(p, today, endISO).forEach(iso=>{
+    if(iso===today && injectionsOn(p, iso)>=n) return;
+    const d = doseAt(p, iso), mg = (doseToMg(d.dose, d.doseUnit)||0)/n;
+    const base = new Date(iso+'T00:00:00'); base.setMinutes(Math.round(hr*60));
+    for(let i=0;i<n;i++){
+      const t = base.getTime() + i*Math.min(8, 12/n)*HOUR;
+      if(t>nowMs && t<=untilMs) out.push({t, mg});
+    }
+  });
+  return out;
+}
+function levelAt(events, hl, t){
+  let s = 0;
+  for(const e of events){ if(e.t<=t) s += e.mg*Math.pow(0.5, (t-e.t)/(hl*HOUR)); }
+  return s;
+}
+function fmtAmount(mg){
+  if(!(mg>0)) return '0 mg';
+  if(mg>=1) return `${Math.round(mg*100)/100} mg`;
+  const mcg = mg*1000;
+  return mcg>=10 ? `${Math.round(mcg)} mcg` : `${Math.round(mcg*100)/100} mcg`;
+}
+let serumRange = parseInt(lsGet('ledger.serumRange','7'),10) || 7;
+let serumSel = lsGet('ledger.serumSel','all');
+function serumSeries(){
+  const colorMap = protocolColorMap();
+  const out = [], missing = [];
+  state.protocols.filter(p=> p.status!=='archived').forEach(p=>{
+    const hl = halfLifeOf(p);
+    const evs = injectionEvents(p).filter(e=>e.mg>0);
+    if(!hl){ if(isActiveP(p)) missing.push(p); return; }
+    if(!evs.length && !isActiveP(p)) return;
+    out.push({p, hl, evs, color: colorMap.get(p.id)||PROTOCOL_COLORS[0]});
+  });
+  return {series:out, missing};
+}
+function renderSerum(){
+  const el = $('#serumBody');
+  if(!el) return;
+  const {series, missing} = serumSeries();
+  const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">No half-life for ${missing.map(p=>esc(p.compound||'Untitled')).join(', ')}. Edit the protocol and enter one to chart it.</p>` : '';
+  if(!series.length){
+    el.innerHTML = `<div class="empty"><div class="glyph">📉</div><p>Add a protocol and log a dose to see the level of it in your body over time.</p></div>${miss}`;
+    return;
+  }
+  if(serumSel!=='all' && !series.some(s=>s.p.id===serumSel)) serumSel = 'all';
+  const now = Date.now();
+  const back = serumRange*24*HOUR, fwd = Math.max(1, Math.round(serumRange*0.3))*24*HOUR;
+  const t0 = now-back, t1 = now+fwd;
+  const shown = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
+  const STEPS = 160;
+  const lines = shown.map(s=>{
+    const future = scheduledEvents(s.p, now, t1);
+    const all = s.evs.concat(future);
+    const pts = [];
+    for(let i=0;i<=STEPS;i++){
+      const t = t0 + (t1-t0)*i/STEPS;
+      pts.push({t, y: levelAt(all, s.hl, t)});
+    }
+    // add exact points at each injection so the spike peaks are not smoothed over
+    s.evs.concat(future).filter(e=>e.t>=t0 && e.t<=t1).forEach(e=>{
+      pts.push({t:e.t-1, y:levelAt(all,s.hl,e.t-1)}); pts.push({t:e.t, y:levelAt(all,s.hl,e.t)});
+    });
+    pts.sort((a,b)=>a.t-b.t);
+    return {s, pts, cur: levelAt(s.evs, s.hl, now)};
+  });
+  const pct = serumSel==='all' && shown.length>1;   // different compounds: compare as % of each one's own peak in view
+  const peak = l=> Math.max(1e-12, ...l.pts.map(p=>p.y));
+  const val = (l,y)=> pct ? y/peak(l)*100 : y;
+  const yMaxRaw = Math.max(1e-12, ...lines.map(l=> Math.max(...l.pts.map(p=>val(l,p.y)))));
+  const W = 360, H = 220, padL = 46, padR = 12, padT = 14, padB = 28;
+  const yMax = pct ? 100 : yMaxRaw*1.08;
+  const X = t=> padL + (W-padL-padR)*(t-t0)/(t1-t0);
+  const Y = v=> padT + (H-padT-padB)*(1 - v/yMax);
+  const fmtY = pct ? (v=> `${Math.round(v)}%`) : (v=> v>0 ? fmtAmount(v).replace(' mg','mg').replace(' mcg','mcg') : '0');
+  let g = '';
+  const tk = niceTicks(0, yMax, 4);
+  tk.ticks.filter(v=> v<=yMax*1.001).forEach(v=>{
+    const y = Y(v).toFixed(1);
+    g += `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" class="ch-grid"/><text x="${padL-6}" y="${(+y+4).toFixed(1)}" class="ch-ylab">${esc(fmtY(v))}</text>`;
+  });
+  const xl = [[t0,'start'],[now,'middle'],[t1,'end']];
+  xl.forEach(([t,anchor],i)=>{
+    const lab = i===1 ? 'Now' : fmtDateShort(isoFromDate(new Date(t)));
+    g += `<text x="${X(t).toFixed(1)}" y="${H-8}" class="ch-xlab" text-anchor="${anchor}">${esc(lab)}</text>`;
+  });
+  g += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:var(--muted)"/>`;
+  lines.forEach(l=>{
+    const split = pts=> ({past: pts.filter(p=>p.t<=now), fut: pts.filter(p=>p.t>=now)});
+    const sp = split(l.pts);
+    const toPath = pts=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
+    // past line is only what was logged; the dashed part after "Now" adds scheduled doses
+    const past = l.pts.filter(p=>p.t<=now).map(p=>({t:p.t, y:levelAt(l.s.evs, l.s.hl, p.t)}));
+    const fut = [{t:now, y:levelAt(l.s.evs, l.s.hl, now)}].concat(sp.fut.filter(p=>p.t>now));
+    if(past.length>1) g += `<polyline points="${toPath(past)}" class="ch-line" style="stroke:${l.s.color}"/>`;
+    if(fut.length>1) g += `<polyline points="${toPath(fut)}" class="ch-line" style="stroke:${l.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
+    const cy = Y(val(l, levelAt(l.s.evs, l.s.hl, now)));
+    g += `<circle cx="${X(now).toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" style="fill:${l.s.color}"><title>${esc(l.s.p.compound||'')}: ${esc(fmtAmount(l.cur))} now</title></circle>`;
+  });
+  const chips = [['all','All']].concat(series.map(s=>[s.p.id, s.p.compound||'Untitled'])).map(([id,label])=>
+    `<button type="button" class="chip-btn ${serumSel===id?'on':''}" data-serum-sel="${esc(id)}">${esc(label)}</button>`).join('');
+  const ranges = [3,7,14,30].map(d=> `<button type="button" class="chip-btn ${serumRange===d?'on':''}" data-serum-range="${d}">${d}d</button>`).join('');
+  const rows = series.map(s=>{
+    const cur = levelAt(s.evs, s.hl, now);
+    const lastPeak = Math.max(0, ...s.evs.filter(e=>e.t<=now).map(e=>levelAt(s.evs, s.hl, e.t)));
+    const last = s.evs.filter(e=>e.t<=now).sort((a,b)=>b.t-a.t)[0];
+    return `<div class="serum-row"><span class="serum-dot" style="background:${s.color}"></span>
+      <span class="serum-name"><strong>${esc(s.p.compound||'Untitled')}</strong><span class="footnote"> · t½ ${esc(fmtHours(s.hl))}${last?'':' · no doses logged'}</span></span>
+      <span class="mono serum-val">${esc(fmtAmount(cur))}${lastPeak>0?` <span class="footnote">${Math.round(cur/lastPeak*100)}% of peak</span>`:''}</span></div>`;
+  }).join('');
+  el.innerHTML = `
+    <div class="chip-row" style="margin-bottom:8px;">${chips}</div>
+    <svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Estimated serum level over time">${g}</svg>
+    <div class="chip-row" style="margin:8px 0 10px;"><span class="footnote" style="align-self:center;margin-right:2px;">Show</span>${ranges}</div>
+    ${rows}
+    <p class="footnote" style="margin-top:8px;">${pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
+  $$('[data-serum-sel]',el).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
+  $$('[data-serum-range]',el).forEach(b=> b.addEventListener('click', ()=>{ serumRange = +b.dataset.serumRange; lsSet('ledger.serumRange', String(serumRange)); renderSerum(); }));
+}
 
 /* ===================== Peptides: Stash ===================== */
 function renderVials(){
@@ -2836,6 +3015,7 @@ function registerServiceWorker(){
 /* ===================== Render all ===================== */
 function renderAll(){
   renderProtocols();
+  renderSerum();
   renderArchivedProtocols();
   renderVials();
   renderSupplyGroups();
