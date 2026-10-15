@@ -1,0 +1,786 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Peptide Ledger</title>
+<meta name="description" content="Private peptide tracker: protocols, dosing, stash, supplies, progress and labs. Data stays on your device.">
+<meta name="theme-color" content="#18181b">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Peptides">
+<meta name="robots" content="noindex, nofollow">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+#page-peptides{
+  --ink:#f2f2f3; --paper:#18181b; --surface:#222226; --surface-2:#2c2c31;
+  --line:#3a3a41; --muted:#a1a1aa;
+  --accent-pep:#ff9f43; --accent-pep-soft:#3d2813; --accent-pep-text:#1c1005;
+  --info:#5aa9ff; --info-soft:#15283d;
+  --cal-blue:#5aa9ff;
+  --accent-dash:#5aa9ff; --accent-dash-soft:#15283d;
+  --accent-tar:#5aa9ff; --accent-tar-soft:#15283d;
+  --warn:#ff6b6b; --warn-soft:#3d1f1f;
+  --good:#3ecf8e; --good-soft:#14331f;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+  color-scheme: dark;
+  color:var(--ink);
+  background:var(--paper);
+  border-radius:20px;
+  padding:22px clamp(16px,4vw,32px) 32px;
+  font-family:"Inter",system-ui,sans-serif;
+}
+#page-peptides h1,#page-peptides h3,#page-peptides h4{ font-family:"Space Grotesk","Inter",system-ui,sans-serif; letter-spacing:-.01em; }
+.endo-opt{ margin-top:14px; padding-top:12px; border-top:1px solid var(--line); }
+.endo-check{ display:flex; gap:8px; align-items:center; font-size:13.5px; font-weight:600; cursor:pointer; }
+.endo-stackrow{ border:1px solid var(--line); border-radius:10px; padding:12px; margin-bottom:10px; display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; align-items:end; }
+.endo-stackrow .rm{ justify-self:start; }
+.endo-form{ display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+.endo-banner{ border-radius:10px; padding:10px 12px; font-size:13px; margin-bottom:10px; background:var(--surface-2); }
+.endo-banner.warn{ background:var(--warn-soft,#fbeed6); }
+.endo-banner.bad{ background:var(--bad-soft,#fbe1e1); }
+.endo-stats{ display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; }
+.endo-stat .v{ font-size:22px; font-weight:600; font-variant-numeric:tabular-nums; }
+.endo-stat .l{ font-size:11.5px; color:var(--muted); }
+.endo-meter{ height:8px; border-radius:99px; background:var(--surface-2); overflow:hidden; margin-top:10px; }
+.endo-meter i{ display:block; height:100%; background:var(--good,#2f9e5e); }
+.endo-meter.warn i{ background:var(--warn,#c88a1d); }
+.endo-meter.bad i{ background:var(--bad,#cc3b3b); }
+.endo-tbl{ border-collapse:collapse; width:100%; font-size:13px; font-variant-numeric:tabular-nums; }
+.endo-tbl th,.endo-tbl td{ text-align:left; padding:6px 10px; border-bottom:1px solid var(--line); white-space:nowrap; }
+.endo-tbl tr.me td{ background:var(--accent-pep-soft); font-weight:600; }
+.endo-table summary{ cursor:pointer; font-weight:600; font-size:13.5px; }
+.pep-subtabs{ display:flex; gap:8px; margin-bottom:16px; }
+.pep-subtab{ padding:9px 16px; border-radius:9px; border:1px solid var(--line); background:var(--surface); color:var(--muted); font-size:13.5px; font-weight:600; cursor:pointer; }
+.pep-subtab.active{ background:var(--accent-pep); border-color:var(--accent-pep); color:var(--accent-pep-text,#fff); }
+.supply-group-h{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:700; margin:16px 0 8px; }
+.supply-group-h:first-child{ margin-top:0; }
+.supply-rule-row{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:7px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.supply-rule-row:last-child{ border-bottom:none; }
+.supply-rule-row .srr-main{ flex:1; min-width:160px; }
+.vf-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+.vf-wrap{ position:relative; }
+.vf-btn.active{ border-color:var(--accent-pep); color:var(--accent-pep); }
+.vf-panel{ position:absolute; z-index:20; top:calc(100% + 6px); left:0; min-width:230px; max-width:min(320px,86vw); max-height:300px; overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
+.vf-opt{ display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:7px; cursor:pointer; font-size:13.5px; }
+.vf-opt:hover{ background:var(--surface-2); }
+.vf-opt input{ width:auto; margin:0; padding:0; }
+.vf-opt span:nth-of-type(1){ flex:1; }
+.vf-count{ color:var(--muted); font-size:12px; font-variant-numeric:tabular-nums; }
+.vf-summary{ margin-left:auto; }
+.vendor-table-wrap{ overflow-x:auto; }
+.vendor-table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+.vendor-table th{ text-align:left; font-size:11px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600; padding:6px 10px 8px; border-bottom:1px solid var(--line); }
+.vendor-table td{ padding:9px 10px; border-bottom:1px solid var(--line); vertical-align:top; }
+.vendor-table tbody tr{ cursor:pointer; }
+.vendor-table tbody tr:hover{ background:var(--surface-2); }
+.vendor-table tbody tr:last-child td{ border-bottom:none; }
+.vendor-table .vt-name{ width:34%; min-width:130px; font-weight:600; overflow-wrap:anywhere; }
+.vendor-table .vt-name a{ color:var(--info); text-decoration:none; }
+.vendor-table .vt-name a:hover{ text-decoration:underline; }
+.vendor-table .vt-tg{ font-weight:400; font-size:12px; margin-top:2px; }
+.vendor-table .vt-tg a{ color:var(--muted); }
+.vt-chips{ display:flex; flex-wrap:wrap; gap:5px; }
+.vt-chip{ background:var(--surface-2); color:var(--ink); border:1px solid var(--line); border-radius:999px; padding:2px 9px; font-size:12px; }
+.supply-item-card:hover{ border-color:var(--accent-pep); }
+.supply-group-card{ grid-column:1/-1; }
+.supply-sub{ cursor:pointer; padding:8px 0; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; gap:8px 12px; flex-wrap:wrap; }
+.supply-sub:first-of-type{ margin-top:8px; }
+.supply-sub:hover{ opacity:.8; }
+.supply-sub > div:last-child{ margin-top:0 !important; }
+.supply-item-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:8px; }
+@media (max-width:700px){ .supply-item-grid{ grid-template-columns:1fr; } }
+*{box-sizing:border-box;}
+body{
+  background:var(--paper); color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;
+  font-size:15px; line-height:1.5;
+  padding-inline:0;
+}
+h1,h2,h3,h4{ font-family:"Fraunces",Georgia,serif; font-weight:600; text-wrap:balance; margin:0; }
+.mono{ font-family:"IBM Plex Mono",ui-monospace,monospace; font-variant-numeric:tabular-nums; }
+a{ color:inherit; }
+button{ font:inherit; }
+input,select,textarea{ font:inherit; color:inherit; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:8px 10px; }
+input:focus,select:focus,textarea:focus,button:focus-visible{ outline:2px solid var(--accent-dash); outline-offset:1px; }
+label{ font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
+.field{ display:flex; flex-direction:column; gap:4px; min-width:0; }
+.field input, .field select, .field textarea{ width:100%; box-sizing:border-box; }
+.field input[type=checkbox], .field input[type=radio]{ width:16px; height:16px; flex:none; accent-color:var(--accent-pep); }
+.field label{ font-size:12px; color:var(--muted); }
+[hidden]{ display:none!important; }
+.sync-pill{ display:flex; align-items:center; justify-content:center; }
+.sync-dot{ width:7px; height:7px; border-radius:50%; background:var(--good); flex:none; }
+.sync-dot.off{ background:var(--muted); }
+.main{ flex:1; min-width:0; padding:24px clamp(16px,4vw,40px) 60px; }
+.page{ max-width:1080px; margin:0 auto; display:flex; flex-direction:column; gap:26px; }
+#pepProtocolsView, #pepSuppliesView{ display:flex; flex-direction:column; gap:26px; }
+.section-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
+.section-head h1{ font-size:26px; }
+.section-eyebrow{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
+.section-sub{ color:var(--muted); font-size:13.5px; margin-top:4px; max-width:60ch; }
+.card{ width:100%; box-sizing:border-box; min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; box-shadow:var(--shadow); }
+.card-flat{ width:100%; box-sizing:border-box; min-width:0; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:18px; }
+.grid{ display:grid; gap:14px; width:100%; box-sizing:border-box; min-width:0; }
+.grid-2{ grid-template-columns:repeat(2,1fr); }
+.page > *{ width:100%; box-sizing:border-box; min-width:0; }
+.grid-2 > *, .grid-3 > *, .grid-auto > *{ min-width:0; }
+@media (max-width:640px){ .grid-2,.grid-3{ grid-template-columns:1fr; } }
+.btn{
+  display:inline-flex; align-items:center; gap:7px; border-radius:9px; padding:9px 14px;
+  border:1px solid var(--line); background:var(--surface); color:var(--ink); cursor:pointer; font-size:13.5px; font-weight:500;
+}
+.btn:hover{ border-color:var(--muted); }
+.btn-accent-pep{ background:var(--accent-pep); border-color:var(--accent-pep); color:var(--accent-pep-text, #fff); font-weight:600; }
+.btn-danger{ color:var(--warn); border-color:var(--warn-soft); background:var(--warn-soft); }
+.btn-sm{ padding:5px 10px; font-size:12.5px; border-radius:7px; }
+.icon-btn{ background:transparent; border:none; color:var(--muted); cursor:pointer; padding:4px; border-radius:6px; }
+.icon-btn:hover{ color:var(--ink); background:var(--surface-2); }
+.dose-check-btn{
+  display:inline-flex; align-items:center; gap:6px; flex:none; white-space:nowrap;
+  border:1.5px solid var(--accent-pep); background:var(--surface); color:var(--accent-pep);
+  font-size:12.5px; font-weight:700; padding:6px 12px; border-radius:99px; cursor:pointer;
+  transition:transform .12s ease, background .15s ease, color .15s ease;
+}
+.dose-check-btn:hover{ transform:scale(1.04); }
+.dose-check-btn:active{ transform:scale(.96); }
+.dose-check-btn.taken{ background:var(--accent-pep); color:var(--accent-pep-text, #fff); }
+.pill{ display:inline-flex; align-items:center; gap:5px; font-size:11.5px; font-weight:600; padding:3px 9px; border-radius:99px; letter-spacing:.01em; white-space:nowrap; max-width:100%; overflow:hidden; text-overflow:ellipsis; }
+.pill-warn{ background:var(--warn-soft); color:var(--warn); }
+.pill-good{ background:var(--good-soft); color:var(--good); }
+.pill-info{ background:var(--info-soft); color:var(--info); }
+.pill-pep{ background:var(--accent-pep-soft); color:var(--accent-pep); }
+.pill-tar{ background:var(--accent-tar-soft); color:var(--accent-tar); }
+.pill-muted{ background:var(--surface-2); color:var(--muted); }
+.cost-total{ display:flex; justify-content:space-between; align-items:baseline; font-size:15px; padding:4px 0; }
+.cost-total strong{ font-size:20px; color:var(--accent-pep); }
+.cost-cols{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
+@media (max-width:480px){ .cost-cols{ grid-template-columns:1fr; } }
+.cost-col-h{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:6px; }
+.cost-row{ display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; border-top:1px solid var(--line); }
+.cost-row:first-of-type{ border-top:none; }
+.site-pill{ font-size:11px; padding:4px 9px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
+.site-pill.current{ background:var(--accent-pep-soft); color:var(--accent-pep); font-weight:600; }
+.research-md table{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0; }
+.research-md th,.research-md td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
+.research-md th{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
+.research-md a{ color:var(--info); }
+.research-md ul{ margin:6px 0; padding-left:18px; }
+.research-md p{ margin:6px 0; }
+.empty{ text-align:center; padding:30px 16px; color:var(--muted); display:flex; flex-direction:column; align-items:center; gap:10px; }
+.empty .glyph{ font-size:26px; opacity:.5; }
+.empty p{ max-width:38ch; font-size:13.5px; }
+table{ width:100%; border-collapse:collapse; font-size:13.5px; }
+th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); font-weight:600; padding:8px 10px; border-bottom:1px solid var(--line); }
+td{ padding:10px; border-bottom:1px solid var(--line); vertical-align:top; }
+tr:last-child td{ border-bottom:none; }
+.modal-backdrop{ position:fixed; inset:0; background:rgba(20,24,22,.5); display:flex; align-items:flex-start; justify-content:center; padding:5vh 16px; z-index:50; overflow-y:auto; }
+.modal{ background:var(--surface); border-radius:16px; border:1px solid var(--line); width:100%; max-width:520px; padding:22px; box-shadow:var(--shadow); }
+.modal h3{ font-size:19px; margin-bottom:4px; }
+.modal-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:14px; }
+.form-grid{ display:grid; gap:12px; grid-template-columns:1fr 1fr; }
+.form-grid .span2{ grid-column:1/-1; }
+@media (max-width:480px){ .form-grid{ grid-template-columns:1fr; } }
+.form-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:16px; }
+.footnote{ font-size:12px; color:var(--muted); }
+.disclaimer{
+  border:1px dashed var(--line); border-radius:10px; padding:12px 14px; font-size:12px; color:var(--muted);
+  background:var(--surface-2);
+}
+.week-strip{ display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; }
+.day-chip{
+  flex:1 0 44px; min-width:44px; border:1px solid var(--line); border-radius:11px; background:var(--surface);
+  padding:9px 4px; text-align:center; cursor:pointer;
+}
+.day-chip .dow{ font-size:10px; color:var(--muted); text-transform:uppercase; }
+.day-chip .num{ font-family:"Fraunces",serif; font-size:17px; font-weight:600; margin-top:2px; }
+.day-chip .marks{ display:flex; justify-content:center; align-content:flex-start; flex-wrap:wrap; gap:2px; margin-top:4px; min-height:6px; }
+.day-chip .marks span{ width:5px; height:5px; border-radius:50%; box-sizing:border-box; flex:none; }
+.day-chip.today{ border-color:var(--accent-dash); background:var(--accent-dash-soft); }
+.card-actions{ display:flex; gap:6px; justify-content:flex-end; }
+.calc-layout{ display:flex; flex-direction:column; gap:18px; width:100%; }
+.calc-result{ background:var(--accent-pep-soft); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:4px; width:100%; }
+.calc-result .big{ font-family:"IBM Plex Mono",monospace; font-size:34px; font-weight:600; color:var(--accent-pep); line-height:1; }
+.calc-result .lbl{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
+.calc-sub-row{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:13.5px; padding:9px 0; border-top:1px solid var(--line); flex-wrap:nowrap; }
+.calc-sub-row span:first-child{ flex:none; color:var(--muted); }
+.calc-sub-row strong{ text-align:right; white-space:nowrap; }
+.progress-track{ height:8px; border-radius:99px; background:var(--surface-2); overflow:hidden; }
+.progress-fill{ height:100%; border-radius:99px; }
+.link-bank{ display:flex; flex-wrap:wrap; gap:8px; }
+.link-chip{
+  display:inline-flex; align-items:center; gap:6px; padding:8px 13px; border-radius:10px;
+  background:var(--surface); border:1px solid var(--line); font-size:13px; font-weight:500; text-decoration:none; color:var(--ink);
+}
+.link-chip:hover{ border-color:var(--accent-pep); color:var(--accent-pep); }
+.syr-size-row{ display:flex; gap:8px; flex-wrap:wrap; }
+.syr-size-btn{
+  flex:1; min-width:108px; text-align:left; padding:9px 11px; border-radius:10px;
+  border:1.5px solid var(--line); background:var(--surface); cursor:pointer; font-family:inherit;
+}
+.syr-size-btn strong{ display:block; font-size:13.5px; }
+.syr-size-btn span{ display:block; font-size:11px; color:var(--muted); margin-top:1px; }
+.syr-size-btn.active{ border-color:var(--accent-pep); background:var(--accent-pep-soft); }
+.syr-size-btn.active strong{ color:var(--accent-pep); }
+.syr-size-btn .syr-tag{ display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-pep); background:var(--accent-pep-soft); border-radius:4px; padding:1px 5px; margin-left:5px; vertical-align:1px; }
+.syr-size-btn.active .syr-tag{ background:var(--accent-pep); color:var(--accent-pep-text,#fff); }
+.syringe-wrap{ width:100%; }
+.syringe-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
+.syringe-cap-warn{ font-size:11.5px; color:var(--warn); margin-top:4px; }
+.syringe-caption{ display:flex; justify-content:space-between; align-items:baseline; font-size:11px; color:var(--muted); margin-bottom:2px; }
+.protocol-syringe{ margin-top:12px; padding-top:12px; border-top:1px solid var(--line); }
+.protocol-syringe .syringe-wrap{ max-width:340px; }
+.research-thread{ display:flex; flex-direction:column; gap:14px; }
+.research-item{ border:1px solid var(--line); border-radius:12px; padding:14px; background:var(--surface); }
+.research-item h4{ font-size:14.5px; }
+.research-item .meta{ font-size:11.5px; color:var(--muted); margin-top:2px; }
+.research-body{ font-size:13.5px; margin-top:10px; white-space:pre-wrap; }
+@media (max-width:820px){ .main{ padding:18px 16px 40px; } }
+.link-fold{ margin-top:8px; }
+.link-fold > summary{ list-style:none; cursor:pointer; user-select:none; }
+.link-fold > summary::-webkit-details-marker{ display:none; }
+.link-fold > summary::after{ content:'▾'; color:var(--muted); font-size:11px; transition:transform .15s ease; }
+.link-fold[open] > summary{ border-color:var(--accent-pep); color:var(--accent-pep); }
+.link-fold[open] > summary::after{ transform:rotate(180deg); color:var(--accent-pep); }
+.link-fold-body{ margin-top:10px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
+
+.site-row{ display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin-top:12px; font-size:12px; color:var(--muted); }
+.site-row-label{ font-weight:600; }
+.site-row-next strong{ color:var(--accent-pep); font-weight:600; }
+.protocol-mood{ margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); }
+.mood-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
+.mood-title{ font-size:12px; font-weight:600; color:var(--muted); }
+.mood-week{ display:flex; gap:3px; }
+.mood-day{ width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; font-size:13px; border-radius:6px; color:var(--muted); background:var(--surface-2); }
+.mood-day.today{ outline:1px solid var(--accent-pep); }
+.mood-faces{ display:flex; gap:6px; }
+.mood-btn{ flex:1; min-width:0; font-size:22px; line-height:1; padding:8px 0; border-radius:12px; border:1px solid var(--line); background:var(--surface-2); cursor:pointer; filter:grayscale(.7) opacity(.75); transition:transform .12s ease, filter .12s ease; }
+.mood-btn:hover{ filter:none; }
+.mood-btn.on{ filter:none; border-color:var(--accent-pep); background:var(--accent-pep-soft); transform:scale(1.06); }
+.mood-note{ width:100%; margin-top:8px; font-size:13px; padding:8px 10px; }
+.module-box{ background:var(--surface-2); border-radius:10px; padding:10px 12px; }
+.mood-log-row{ display:grid; grid-template-columns:24px 64px 1fr; gap:6px; align-items:center; padding:3px 0; font-size:13px; }
+
+
+/* App shell: one deliberate dark graphite look (the dashboard's own palette) applied app-wide,
+   orange for actions, blue for info, green/red for status only. */
+:root{
+  --ink:#f2f2f3; --paper:#18181b; --surface:#222226; --surface-2:#2c2c31;
+  --line:#3a3a41; --muted:#a1a1aa;
+  --accent-pep:#ff9f43; --accent-pep-soft:#3d2813; --accent-pep-text:#1c1005;
+  --info:#5aa9ff; --info-soft:#15283d;
+  --accent-dash:#5aa9ff; --accent-dash-soft:#15283d;
+  --accent-tar:#5aa9ff; --accent-tar-soft:#15283d;
+  --warn:#ff6b6b; --warn-soft:#3d1f1f;
+  --good:#3ecf8e; --good-soft:#14331f;
+  --bad:#ff6b6b; --bad-soft:#3d1f1f;
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
+  --head-bg: rgba(24,24,27,.94);
+  --gutter-l: max(16px, env(safe-area-inset-left, 0px));
+  --gutter-r: max(16px, env(safe-area-inset-right, 0px));
+  --tabbar-h: 62px;
+  color-scheme: dark;
+  background: var(--paper);
+}
+html{ -webkit-text-size-adjust:100%; }
+body{ margin:0; background:var(--paper); color:var(--ink); font-family:"Inter",system-ui,-apple-system,sans-serif; -webkit-tap-highlight-color:transparent; overscroll-behavior-y:none; }
+#page-peptides{ border-radius:0; padding:0; min-height:100vh; background:var(--paper); }
+#page-peptides h1, #page-peptides h2, #page-peptides h3, #page-peptides h4, .modal h3{ font-family:"Space Grotesk","Inter",system-ui,sans-serif; letter-spacing:-.01em; }
+.day-chip .num{ font-family:"Space Grotesk","Inter",system-ui,sans-serif; }
+
+/* Header */
+.app-head{ position:sticky; top:0; z-index:30; background:var(--head-bg); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border-bottom:1px solid var(--line);
+  padding-top:calc(env(safe-area-inset-top, 0px) + 10px); padding-bottom:10px; padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
+.head-row{ max-width:1080px; margin:0 auto; display:flex; align-items:center; justify-content:space-between; gap:12px; }
+.brand{ display:flex; align-items:center; gap:10px; min-width:0; }
+.brand img{ width:30px; height:30px; border-radius:8px; flex:none; }
+.brand h1{ font-size:19px; line-height:1.1; }
+.brand .section-eyebrow{ font-size:10.5px; margin:0; color:var(--accent-pep); }
+.sync-pill{ border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:99px; padding:6px 11px; cursor:pointer; gap:7px; max-width:55vw; }
+.sync-pill .footnote{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.sync-dot.bad{ background:var(--warn); }
+
+/* Banners */
+.banner{ max-width:1080px; margin:10px auto 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--accent-pep-soft); border:1px solid #6b4520; color:var(--ink); border-radius:12px; padding:10px 12px; font-size:13px; }
+.banner span{ flex:1; min-width:160px; }
+.banner.info{ background:var(--info-soft); border-color:#24476d; }
+.banner-wrap{ padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
+
+/* Main + views */
+.main{ padding:0; }
+.page{ max-width:1080px; margin:0 auto; padding-block:16px calc(var(--tabbar-h) + env(safe-area-inset-bottom, 0px) + 24px); padding-left:var(--gutter-l); padding-right:var(--gutter-r); display:block; }
+.view{ display:flex; flex-direction:column; gap:16px; }
+.view-title{ font-size:24px; margin:4px 0 0; }
+.view-sub{ color:var(--muted); font-size:13.5px; margin-top:2px; max-width:60ch; }
+.card-h{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:10px; flex-wrap:wrap; }
+.card-h h3{ font-size:16px; }
+.card{ padding:16px; }
+.lbl{ font-size:12px; color:var(--muted); display:block; margin-bottom:4px; }
+.btn-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+a.btn{ text-decoration:none; }
+.form-actions.wrap{ flex-wrap:wrap; }
+.backup-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:12px; }
+button:disabled{ opacity:.45; cursor:default; }
+
+/* Bottom tab bar */
+.tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:40; display:grid; grid-template-columns:repeat(5,1fr);
+  background:var(--head-bg); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom, 0px); padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px); }
+.tabbar button{ background:none; border:none; color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:var(--tabbar-h); font-size:11px; font-weight:600; cursor:pointer; letter-spacing:.01em; }
+.tabbar svg{ width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.tabbar button.active{ color:var(--accent-pep); }
+.tabbar button:focus-visible{ outline:2px solid var(--info); outline-offset:-4px; border-radius:10px; }
+
+/* Touch inputs: 16px stops iOS from zooming on focus */
+@media (pointer:coarse){ input, select, textarea{ font-size:16px; } }
+input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
+
+/* Protocol cards */
+.dose-actions{ display:flex; flex-direction:column; align-items:flex-end; gap:6px; flex:none; }
+.hist-btn{ background:none; border:1px solid var(--line); color:var(--muted); border-radius:99px; font-size:12px; font-weight:600; padding:5px 10px; cursor:pointer; white-space:nowrap; }
+.hist-btn:hover{ color:var(--ink); border-color:var(--muted); }
+.paused-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer; opacity:.85; }
+.hist-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid var(--line); font-size:13.5px; }
+.hist-row:last-of-type{ border-bottom:none; }
+.hist-row.done .hist-count{ color:var(--good); }
+.hist-ctrl{ display:flex; align-items:center; gap:8px; flex:none; }
+.hist-ctrl .btn{ min-width:38px; justify-content:center; font-size:16px; padding:4px 10px; }
+.hist-count{ min-width:30px; text-align:center; font-weight:600; }
+.step-row{ display:grid; grid-template-columns:minmax(0,1.4fr) minmax(0,1fr) 74px 30px; gap:6px; margin-bottom:6px; align-items:center; }
+.step-row input, .step-row select{ width:100%; min-width:0; }
+
+/* Body map */
+.body-map svg{ display:block; width:100%; max-width:340px; margin:0 auto; }
+.bm-body{ fill:var(--surface); stroke:var(--line); stroke-width:1.2; }
+.bm-label{ fill:var(--muted); font:600 10px "Inter",sans-serif; letter-spacing:.12em; text-anchor:middle; }
+.bm-side{ fill:var(--muted); font:600 11px "IBM Plex Mono",monospace; text-anchor:middle; }
+.bm-zone{ fill:transparent; stroke:var(--muted); stroke-width:1.2; stroke-dasharray:3 2; cursor:pointer; transition:fill .12s ease; }
+.bm-zone.used{ fill:var(--muted); fill-opacity:.22; stroke-dasharray:none; }
+.bm-zone.next{ fill:var(--info); fill-opacity:.25; stroke:var(--info); stroke-width:2; stroke-dasharray:none; }
+.bm-zone.last{ fill:var(--accent-pep); fill-opacity:.4; stroke:var(--accent-pep); stroke-dasharray:none; }
+.bm-zone.sel{ fill:var(--accent-pep); fill-opacity:.95; stroke:var(--ink); stroke-width:2; stroke-dasharray:none; }
+.bm-zone:focus{ outline:none; stroke:var(--ink); stroke-width:2.4; }
+.bm-legend{ display:flex; flex-wrap:wrap; justify-content:center; gap:6px 12px; font-size:11.5px; color:var(--muted); margin-top:6px; }
+.bm-legend i{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
+.k-sel{ background:var(--accent-pep); box-shadow:0 0 0 1.5px var(--ink); }
+.k-last{ background:rgba(255,159,67,.45); border:1px solid var(--accent-pep); }
+.k-next{ background:rgba(90,169,255,.3); border:1.5px solid var(--info); }
+.k-used{ background:rgba(161,161,170,.3); }
+
+/* Chips */
+.chip-row{ display:flex; gap:6px; flex-wrap:wrap; }
+.chip-btn{ border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
+.chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep); }
+
+/* Charts */
+.chart{ display:block; width:100%; height:auto; overflow:visible; margin-top:8px; }
+.ch-grid{ stroke:var(--line); stroke-width:1; }
+.ch-ylab{ fill:var(--muted); font:11px "IBM Plex Mono",monospace; text-anchor:end; }
+.ch-xlab{ fill:var(--muted); font:11px "Inter",sans-serif; }
+.ch-line{ fill:none; stroke-width:2.4; stroke-linejoin:round; stroke-linecap:round; }
+.ch-last{ stroke:var(--surface); stroke-width:2; }
+.ch-lastlab{ font:600 12px "IBM Plex Mono",monospace; }
+.ch-marker{ stroke-width:1.2; stroke-dasharray:3 3; opacity:.75; }
+.ch-mlab{ font:600 10px "Inter",sans-serif; }
+.ch-band{ fill:var(--good); opacity:.12; }
+.trend-block{ margin-top:16px; padding-top:12px; border-top:1px solid var(--line); }
+.trend-head{ display:flex; justify-content:space-between; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.trend-head h4{ font-size:14.5px; }
+.trend-stats{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; font-size:12.5px; color:var(--muted); }
+.trend-stats strong{ color:var(--ink); font-size:14px; }
+.chart-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--muted); margin-top:4px; }
+.chart-legend i{ display:inline-block; width:14px; height:3px; border-radius:2px; margin-right:6px; vertical-align:3px; }
+
+/* Check-ins */
+.energy-row{ display:flex; gap:6px; }
+.energy-btn{ flex:1; min-width:0; display:flex; flex-direction:column; align-items:center; gap:2px; padding:7px 0; border-radius:12px; border:1px solid var(--line); background:var(--surface-2); color:var(--muted); cursor:pointer; font-size:13px; }
+.energy-btn .bolts{ font-size:11px; filter:grayscale(.7) opacity(.75); line-height:1.2; }
+.energy-btn.on{ border-color:var(--info); background:var(--info-soft); color:var(--ink); }
+.energy-btn.on .bolts{ filter:none; }
+.ci-row{ width:100%; display:grid; grid-template-columns:80px 1fr; gap:2px 10px; align-items:center; text-align:left; background:none; border:none; border-bottom:1px solid var(--line); color:var(--ink); padding:9px 0; cursor:pointer; font-size:13.5px; }
+.ci-row:last-child{ border-bottom:none; }
+.ci-vals{ display:flex; gap:12px; align-items:center; }
+.ci-note{ grid-column:2; color:var(--muted); font-size:12.5px; overflow-wrap:anywhere; }
+
+/* Photos */
+.photo-tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:10px 0; }
+.photo-grid{ display:grid; grid-template-columns:repeat(auto-fill, minmax(104px,1fr)); gap:8px; }
+.ph-tile{ position:relative; aspect-ratio:3/4; max-width:100%; padding:0; border:1px solid var(--line); border-radius:10px; overflow:hidden; background:var(--surface-2); cursor:pointer; }
+.ph-tile img{ width:100%; height:100%; object-fit:cover; display:block; }
+.ph-tile.sel{ outline:2.5px solid var(--accent-pep); outline-offset:-2px; }
+.ph-tile.missing::after{ content:'Missing file'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:11px; color:var(--muted); }
+.ph-cap{ position:absolute; left:0; right:0; bottom:0; display:flex; justify-content:space-between; gap:4px; padding:14px 6px 5px; font-size:10.5px; font-weight:600; color:#fff; background:linear-gradient(transparent, rgba(0,0,0,.75)); }
+.ph-check{ position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; border:2px solid #fff; background:rgba(0,0,0,.35); color:var(--accent-pep-text); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
+.ph-tile.sel .ph-check{ background:var(--accent-pep); border-color:var(--accent-pep); }
+.ph-preview img{ display:block; max-width:100%; max-height:240px; border-radius:10px; margin:0 auto; }
+.ph-full img{ display:block; width:100%; max-height:68vh; object-fit:contain; border-radius:10px; background:#000; }
+.ph-compare{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.ph-compare figure{ margin:0; min-width:0; }
+.ph-compare img{ width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:8px; display:block; background:#000; }
+.ph-compare figcaption{ font-size:12px; color:var(--muted); margin-top:4px; }
+
+/* Labs */
+.lab-table-wrap{ overflow-x:auto; margin:0 -4px; -webkit-overflow-scrolling:touch; }
+.lab-table{ border-collapse:separate; border-spacing:0; width:100%; font-size:13px; }
+.lab-table th, .lab-table td{ padding:8px 10px; border-bottom:1px solid var(--line); white-space:nowrap; text-align:right; }
+.lab-table thead th{ font-size:11.5px; color:var(--muted); font-weight:600; text-transform:none; letter-spacing:0; }
+.lab-table th[scope=row], .lab-table thead th:first-child{ text-align:left; position:sticky; left:0; background:var(--surface); z-index:1; min-width:118px; }
+.lab-year{ font-size:10px; color:var(--muted); font-weight:500; }
+.lab-name{ display:block; font-weight:600; color:var(--ink); font-size:13px; white-space:normal; }
+.lab-unit{ display:block; font-size:11px; color:var(--muted); font-weight:500; text-transform:none; letter-spacing:0; }
+.lab-panel-row th{ text-align:left !important; background:var(--surface-2) !important; font-size:11px; text-transform:uppercase; letter-spacing:.06em; color:var(--muted); padding:6px 10px; }
+.lab-row{ cursor:pointer; }
+.lab-row:hover td, .lab-row:hover th{ background:var(--surface-2); }
+.lab-cell.hi, .lab-cell.lo{ color:var(--warn); background:var(--warn-soft); }
+.lab-flag{ font-size:10px; font-weight:700; margin-left:4px; color:var(--warn); }
+.lab-arrow{ font-size:11px; color:var(--muted); margin-left:4px; }
+.empty-cell{ color:var(--muted); }
+.lab-hist{ margin-top:12px; font-size:13px; }
+.lab-hist tr.hi td, .lab-hist tr.lo td{ color:var(--warn); }
+.draw-list{ margin-top:12px; }
+.draw-row{ width:100%; display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; text-align:left; background:none; border:none; border-top:1px solid var(--line); color:var(--ink); padding:10px 0; cursor:pointer; font-size:13.5px; }
+.draw-pills{ display:flex; gap:6px; flex-wrap:wrap; }
+.lab-rows-head, .lab-edit-row{ display:grid; grid-template-columns:minmax(0,1.7fr) minmax(0,1fr) minmax(0,.9fr) minmax(0,.8fr) minmax(0,.8fr) 28px; gap:5px; align-items:center; }
+.lab-rows-head{ font-size:11px; color:var(--muted); margin-bottom:4px; }
+.lab-edit-row{ margin-bottom:6px; }
+.lab-edit-row input{ width:100%; min-width:0; padding:7px 6px; }
+@media (max-width:520px){
+  .lab-rows-head{ display:none; }
+  .lab-edit-row{ grid-template-columns:repeat(4, minmax(0,1fr)) 28px; padding-bottom:8px; border-bottom:1px dashed var(--line); }
+  .lab-edit-row input[data-f=marker]{ grid-column:1 / -1; font-weight:600; }
+}
+.ur-pads{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.ur-pad label{ font-size:12px; }
+.ur-pad select{ width:100%; }
+
+/* Modals as bottom-friendly sheets on phones */
+.modal-backdrop{ background:rgba(0,0,0,.6); padding-top:calc(env(safe-area-inset-top, 0px) + 4vh); padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 24px); padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
+.modal{ max-width:560px; background:var(--surface); color:var(--ink); }
+.modal input, .modal select, .modal textarea{ background:var(--surface-2); }
+.module-box{ background:var(--surface-2); }
+.module-box input, .module-box select{ background:var(--surface); }
+
+@media (min-width:900px){ .tabbar{ grid-template-columns:repeat(5, 120px); justify-content:center; } }
+@media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
+
+</style>
+</head>
+<body>
+<div id="page-peptides">
+  <header class="app-head">
+    <div class="head-row">
+      <div class="brand">
+        <img src="icons/icon-192.png" alt="" width="30" height="30">
+        <div><div class="section-eyebrow">Peptides &amp; Stacks</div><h1>Peptide Ledger</h1></div>
+      </div>
+      <button type="button" class="sync-pill" id="syncPill" title="Backup and storage"><span class="sync-dot off" id="syncDot"></span><span class="footnote" id="syncLabel">Loading…</span></button>
+    </div>
+  </header>
+
+  <div class="banner-wrap">
+    <div class="banner info" id="updateBanner" role="status" hidden><span>A new version of the app is ready.</span><button type="button" class="btn btn-sm" id="updateBtn">Reload</button></div>
+    <div class="banner" id="backupNudge" role="status" hidden><span id="backupNudgeText"></span><button type="button" class="btn btn-sm btn-accent-pep" id="backupNudgeBtn">Back up now</button><button type="button" class="icon-btn" id="backupNudgeDismiss" aria-label="Remind me tomorrow">✕</button></div>
+  </div>
+
+  <main class="main">
+    <div class="page">
+
+      <section id="pepProtocolsView" class="view">
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+          <h3 style="font-size:16px;">Current protocols</h3>
+          <button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button>
+        </div>
+        <div id="protocolCalendar" style="margin-bottom:14px;"></div>
+        <div id="protocolList"></div>
+      </div>
+
+      <div class="grid grid-2">
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:16px;">Stash</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button>
+          </div>
+          <div id="vialList"></div>
+        </div>
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:16px;">Vendors</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addVendorBtn">+ Add vendor</button>
+          </div>
+          <div id="vendorList"></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3 style="font-size:16px;margin-bottom:4px;">Cost tracking</h3>
+        <p class="footnote" style="margin-bottom:10px;">Pulled from prices you log on each vial. Add a price next time you log a vial to fill this in.</p>
+        <div id="costSummary"></div>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+          <h3 style="font-size:16px;">Past protocols</h3>
+        </div>
+        <div id="archivedProtocolList"></div>
+      </div>
+
+      </section>
+
+      <section id="pepSuppliesView" class="view" hidden>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+            <h3 style="font-size:16px;">Supply inventory</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addSupplyBtn">+ Add supply</button>
+          </div>
+          <p class="footnote" style="margin-bottom:12px;">Counts by category, tagged by what they're used for (reconstitution, dosage, or general prep). Days-left estimates appear once a supply is assigned to a protocol below.</p>
+          <div id="supplyGroups"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:16px;margin-bottom:4px;">Protocol supply usage</h3>
+          <p class="footnote" style="margin-bottom:12px;">Assign which supplies each protocol draws on, and how often (every dose, or every N doses for a reconstitution cycle), to project depletion.</p>
+          <div id="protocolSupplyList"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:16px;margin-bottom:4px;">Depletion &amp; reorder</h3>
+          <p class="footnote" style="margin-bottom:10px;">Ranked by soonest to run out, based on the usage rules above.</p>
+          <div id="supplyDepletion"></div>
+        </div>
+
+        <div class="disclaimer">Estimates assume steady, on-schedule use per your logged protocols — actual consumption (skipped doses, waste, extra draws) will vary.</div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:16px;">Equipment</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addPepEquipmentBtn">+ Add equipment</button>
+          </div>
+          <div id="pepEquipmentList"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:16px;">Supply vendors</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addSupplyVendorBtn">+ Add vendor</button>
+          </div>
+          <div id="supplyVendorList"></div>
+        </div>
+
+      </section>
+
+      <section id="progressView" class="view" hidden>
+        <div class="card" id="checkinCard">
+          <div class="card-h"><h3>Daily check-in</h3><span class="footnote">Pick an earlier date to fill in a missed day</span></div>
+          <div class="form-grid">
+            <div class="field"><label for="ciDate">Date</label><input type="date" id="ciDate"></div>
+            <div class="field"><label for="ciWeight">Weight</label>
+              <div style="display:flex;gap:8px;"><input type="number" id="ciWeight" inputmode="decimal" step="any" min="0" placeholder="e.g. 182.4" style="flex:1;min-width:0;"><select id="ciUnit" aria-label="Weight unit" style="width:74px;"><option value="lb">lb</option><option value="kg">kg</option></select></div></div>
+            <div class="field span2"><span class="lbl" id="ciMoodLbl">Mood</span><div class="mood-faces" id="ciMood" role="group" aria-labelledby="ciMoodLbl"></div></div>
+            <div class="field span2"><span class="lbl" id="ciEnergyLbl">Energy</span><div class="energy-row" id="ciEnergy" role="group" aria-labelledby="ciEnergyLbl"></div></div>
+            <div class="field span2"><label for="ciNote">Note (optional)</label><input type="text" id="ciNote" maxlength="200" placeholder="Sleep, appetite, side effects…"></div>
+          </div>
+          <div class="form-actions"><button type="button" class="btn btn-danger" id="ciDelete" style="margin-right:auto;" hidden>Delete</button><button type="button" class="btn btn-accent-pep" id="ciSave">Save check-in</button></div>
+          <div class="footnote" id="ciStatus" role="status" style="margin-top:6px;min-height:16px;"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Trends</h3><span class="footnote" id="trendRangeLabel"></span></div>
+          <div class="chip-row" id="trendRange" role="group" aria-label="Date range"></div>
+          <div class="form-grid" id="trendCustom" hidden style="margin-top:10px;">
+            <div class="field"><label for="trendFrom">From</label><input type="date" id="trendFrom"></div>
+            <div class="field"><label for="trendTo">To</label><input type="date" id="trendTo"></div>
+          </div>
+          <label class="endo-check" style="margin-top:12px;font-weight:500;color:var(--muted);"><input type="checkbox" id="trendMarkers" checked> Show protocol starts and dose changes</label>
+          <div id="trendCharts"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Recent check-ins</h3><span class="footnote">Tap one to edit</span></div>
+          <div id="checkinList"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Progress photos</h3><button type="button" class="btn btn-accent-pep btn-sm" id="addPhotoBtn">+ Add photo</button></div>
+          <div class="chip-row" id="photoFilter" role="group" aria-label="Filter by angle"></div>
+          <div class="photo-tools"><button type="button" class="btn btn-sm" id="photoSelectBtn">Compare two</button><button type="button" class="btn btn-sm btn-accent-pep" id="photoCompareBtn" hidden disabled>Compare</button><span class="footnote" id="photoSelectHint" hidden>Pick two photos.</span></div>
+          <div class="photo-grid" id="photoGrid"></div>
+          <p class="footnote" style="margin-top:10px;">Photos stay on this device and are included in backups.</p>
+        </div>
+      </section>
+
+      <section id="labsView" class="view" hidden>
+        <div class="card">
+          <div class="card-h"><h3>Lab results</h3><button type="button" class="btn btn-accent-pep btn-sm" id="addLabBtn">+ Add draw</button></div>
+          <div id="labCompare"></div>
+          <div class="draw-list" id="labDraws"></div>
+        </div>
+        <div class="card">
+          <div class="card-h"><h3>Urine test strips</h3><button type="button" class="btn btn-accent-pep btn-sm" id="addUrineBtn">+ Log strip</button></div>
+          <div class="draw-list" id="urineList" style="margin-top:0;"></div>
+        </div>
+        <div class="disclaimer">For personal record-keeping. Flags only compare a value with the range you typed in. Talk to your doctor about what results mean for you.</div>
+      </section>
+
+      <section id="pepCalcView" class="view" hidden>
+
+      <div class="card">
+        <h3 style="font-size:16px;margin-bottom:4px;">Reconstitution &amp; dosing calculator</h3>
+        <p class="footnote" style="margin-bottom:14px;">Same math as PeptideDeck's calculator, rebuilt so it doesn't depend on an outside site.</p>
+        <div class="calc-layout">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div class="field">
+              <label for="calcPreset">Peptide</label>
+              <select id="calcPreset"></select>
+              <div class="footnote" id="calcPresetNote" style="margin-top:4px;"></div>
+            </div>
+            <div class="field"><label for="calcVial">Vial size (mg)</label><input type="number" id="calcVial" inputmode="decimal" value="5" min="0" step="any"></div>
+            <div class="field"><label for="calcBac">BAC water added (mL)</label><input type="number" id="calcBac" inputmode="decimal" value="2" min="0" step="any"></div>
+            <div class="field">
+              <label for="calcDose">Desired dose</label>
+              <div style="display:flex;gap:8px;">
+                <input type="number" id="calcDose" inputmode="decimal" value="250" min="0" step="any" style="flex:1;">
+                <select id="calcDoseUnit" style="width:90px;"><option value="mcg" selected>mcg</option><option value="mg">mg</option></select>
+              </div>
+            </div>
+          </div>
+          <div class="calc-result">
+            <div>
+              <div class="lbl">Draw to</div>
+              <div class="big"><span id="calcUnits">—</span> <span style="font-size:15px;font-weight:500;">IU</span></div>
+              <div class="footnote" id="calcMl">—</div>
+            </div>
+            <div class="calc-sub-row"><span>Concentration</span><strong class="mono" id="calcConc">—</strong></div>
+            <div class="calc-sub-row"><span>1 IU equals</span><strong class="mono" id="calcPerIu">—</strong></div>
+            <div class="calc-sub-row"><span>Doses per vial</span><strong class="mono" id="calcDosesPerVial">—</strong></div>
+          </div>
+        </div>
+
+        <div style="margin-top:16px;">
+          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Syringe size</label>
+          <div class="syr-size-row" id="calcSyringeSizeRow"></div>
+        </div>
+        <div style="margin-top:12px;">
+          <div class="syringe-caption"><span id="calcSyringeCaption">—</span><span id="calcSyringeUnitsLabel">—</span></div>
+          <div class="syringe-wrap" id="calcSyringeGraphic"></div>
+          <div class="syringe-cap-warn" id="calcSyringeWarn" hidden></div>
+        </div>
+
+        <div class="disclaimer" style="margin-top:14px;">Research use only. Not medical advice — this tool does arithmetic, it doesn't evaluate dosing decisions.</div>
+
+      </div>
+
+      <div class="card" id="endoCard">
+        <h3 style="font-size:16px;margin-bottom:4px;">Endotoxin check</h3>
+        <p class="footnote" style="margin-bottom:14px;">Compares a dose, a stack or a whole cycle against the FDA/USP &lt;85&gt; endotoxin reference ceiling, the way PeptideSafe does. It uses the vial, water and dose from the calculator above. Enter the total EU for the whole vial from an independent LAL test (not EU/mg, and not the vendor's CoA).</p>
+        <div class="endo-form">
+          <div class="field" style="grid-column:1/-1;"><label for="endoCompound">Compound (optional, adds the typical and reference max dose)</label>
+            <input type="text" id="endoCompound" list="endoCompounds" placeholder="Type to search, e.g. BPC-157" autocomplete="off">
+            <datalist id="endoCompounds"></datalist>
+            <div class="footnote" id="endoCompoundNote" style="margin-top:4px;"></div></div>
+          <div class="field"><label for="endoWeight">Body weight (kg)</label><input type="number" id="endoWeight" inputmode="decimal" min="0" step="any" placeholder="75"></div>
+          <div class="field"><label for="endoRoute">Route</label>
+            <select id="endoRoute">
+              <option value="SubQ">SubQ (subcutaneous)</option>
+              <option value="IM">IM (intramuscular)</option>
+              <option value="IV">IV (intravenous)</option>
+              <option value="IT">Intrathecal / spinal / epidural</option>
+            </select></div>
+          <div class="field"><label for="endoEU">Total EU in this vial</label><input type="number" id="endoEU" inputmode="decimal" min="0" step="any" placeholder="e.g. 25"></div>
+        </div>
+
+        <div class="endo-opt">
+          <label class="endo-check"><input type="checkbox" id="endoPen"> Using a pen injector</label>
+          <div id="endoPenBox" hidden>
+            <div class="field" style="max-width:340px;"><label for="endoClick">IU delivered per click</label>
+              <select id="endoClick"><option value="0.5">0.5 IU per click (0.005 mL)</option><option value="1" selected>1 IU per click (0.01 mL), most common</option><option value="2">2 IU per click (0.02 mL)</option></select></div>
+            <div class="footnote" style="margin-top:4px;">Check your pen's dial markings. Standard U100 pens: 1 IU = 0.01 mL.</div>
+          </div>
+        </div>
+
+        <div class="endo-opt">
+          <div id="endoStack"></div>
+          <button class="btn btn-sm" type="button" id="endoAddBtn">+ Add another compound to this injection</button>
+        </div>
+
+        <div class="endo-opt">
+          <label class="endo-check"><input type="checkbox" id="endoCycle"> Calculate cumulative cycle exposure</label>
+          <div id="endoCycleBox" class="endo-form" hidden style="margin-top:10px;">
+            <div class="field"><label for="endoPerDay">Injections per day</label><select id="endoPerDay"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+            <div class="field"><label for="endoDays">Days per week</label><select id="endoDays"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></div>
+            <div class="field"><label for="endoWeeks">Weeks</label><select id="endoWeeks"><option>2</option><option>4</option><option>6</option><option>8</option><option>10</option><option selected>12</option><option>16</option><option>20</option><option>24</option></select></div>
+          </div>
+        </div>
+
+        <div id="endoResult" style="margin-top:14px;"></div>
+        <details class="endo-table" style="margin-top:14px;">
+          <summary>FDA endotoxin thresholds by body weight</summary>
+          <p class="footnote" style="margin:8px 0;">Maximum EU per dose for IV, IM and SubQ at 5 EU/kg. Intrathecal and spinal routes use 0.2 EU/kg.</p>
+          <div style="overflow-x:auto;"><table class="endo-tbl" id="endoTable"></table></div>
+        </details>
+        <div class="disclaimer" style="margin-top:14px;">Research and education only. Informational estimates, not dosing instructions or a safety guarantee. The FDA/USP limit is a manufacturing reference, not a statement that any dose is safe for any person. Modeled on <a href="https://peptidesafe.lovable.app/" target="_blank" rel="noopener">PeptideSafe</a>.</div>
+      </div>
+
+        <div class="card">
+          <h3 style="font-size:16px;margin-bottom:4px;">Ask Claude about your stack</h3>
+          <p class="footnote" style="margin-bottom:12px;">Copies your question together with your protocols, stash, vendors, recent check-ins and labs, ready to paste into a Claude chat. Nothing leaves this device unless you paste it somewhere.</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="field"><label for="researchTopic">Question</label><input type="text" id="researchTopic" placeholder="e.g. What's my cost per mg of BPC-157 across vendors?"></div>
+            <div class="field"><label for="researchInput">Paste anything relevant (optional)</label><textarea id="researchInput" rows="2" placeholder="An article excerpt, your notes, a vendor page…"></textarea></div>
+            <div class="btn-row"><button type="button" class="btn btn-accent-pep btn-sm" id="copyClaudeBtn">Copy question + my data</button><a class="btn btn-sm" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a></div>
+            <div class="footnote" id="researchStatus" role="status"></div>
+            <textarea id="copyFallback" rows="4" readonly hidden aria-label="Text to copy"></textarea>
+          </div>
+          <div class="module-box" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+            <div class="field"><label for="answerTopic">Save Claude's answer: topic</label><input type="text" id="answerTopic" placeholder="Filled in from your question"></div>
+            <div class="field"><label for="answerText">Answer</label><textarea id="answerText" rows="4" placeholder="Paste the answer here"></textarea></div>
+            <div class="btn-row"><button type="button" class="btn btn-sm" id="saveAnswerBtn">Save answer</button><span class="footnote" id="answerStatus" role="status"></span></div>
+          </div>
+          <div class="research-thread" id="researchList" style="margin-top:14px;"></div>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:16px;margin-bottom:10px;">Resources</h3>
+          <div class="link-bank" id="resourceLinks"></div>
+          <details class="link-fold" id="howtoRef">
+            <summary class="link-chip">📖 How-to &amp; testing links</summary>
+            <div class="link-fold-body">
+              <div class="link-bank" id="howtoLinks"></div>
+              <p class="footnote" style="margin-top:12px;">Outside links are community-shared, so check them yourself.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="card">
+          <h3 style="font-size:16px;margin-bottom:6px;">App &amp; backup</h3>
+          <div id="installInfo"></div>
+          <p class="footnote" style="margin:8px 0 10px;">Your data is stored only in this app on this device. Export a backup now and then, and keep the file somewhere safe.</p>
+          <button type="button" class="btn btn-sm" id="openBackupBtn">Backup &amp; restore</button>
+        </div>
+      </section>
+
+      <div class="disclaimer" style="margin-top:16px;">Everything in this app is for personal research tracking only and is not medical advice. Verify vendor legitimacy and any protocol independently.</div>
+    </div>
+  </main>
+
+  <nav class="tabbar" aria-label="Sections">
+    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Protocols</span></button>
+    <button type="button" data-tab="supplies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg><span>Supplies</span></button>
+    <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg><span>Progress</span></button>
+    <button type="button" data-tab="labs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M6.8 15h10.4"/></svg><span>Labs</span></button>
+    <button type="button" data-tab="tools"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><span>Tools</span></button>
+  </nav>
+</div>
+<div id="modalRoot"></div>
+<script src="app.js"></script>
+</body>
+</html>
