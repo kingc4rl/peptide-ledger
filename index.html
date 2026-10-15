@@ -4,12 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Peptide Ledger</title>
-<meta name="description" content="Private peptide tracker: protocols, dosing, stash, supplies, progress and labs. Data stays on your device.">
-<meta name="theme-color" content="#18181b">
-<meta name="color-scheme" content="dark">
+<meta name="description" content="Private peptide tracker: dosing, protocols, inventory and progress. Data stays on your device.">
+<meta name="theme-color" content="#f6f5f2">
+<meta name="color-scheme" content="light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="Peptides">
 <meta name="robots" content="noindex, nofollow">
 <link rel="manifest" href="manifest.webmanifest">
@@ -20,17 +20,17 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 #page-peptides{
-  --ink:#f2f2f3; --paper:#18181b; --surface:#222226; --surface-2:#2c2c31;
-  --line:#3a3a41; --muted:#a1a1aa;
-  --accent-pep:#ff9f43; --accent-pep-soft:#3d2813; --accent-pep-text:#1c1005;
-  --info:#5aa9ff; --info-soft:#15283d;
-  --cal-blue:#5aa9ff;
-  --accent-dash:#5aa9ff; --accent-dash-soft:#15283d;
-  --accent-tar:#5aa9ff; --accent-tar-soft:#15283d;
-  --warn:#ff6b6b; --warn-soft:#3d1f1f;
-  --good:#3ecf8e; --good-soft:#14331f;
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
-  color-scheme: dark;
+  --ink:#1d1d20; --paper:#f6f5f2; --surface:#ffffff; --surface-2:#f1efea;
+  --line:#e3e0d9; --muted:#6b6b74;
+  --accent-pep:#ff9f43; --accent-pep-soft:#fff0e0; --accent-pep-text:#1c1005; --accent-pep-strong:#b85a00;
+  --info:#1f6fd1; --info-soft:#e7f0fc;
+  --cal-blue:#1f6fd1;
+  --accent-dash:#1f6fd1; --accent-dash-soft:#e7f0fc;
+  --accent-tar:#1f6fd1; --accent-tar-soft:#e7f0fc;
+  --warn:#cf3434; --warn-soft:#fdeaea;
+  --good:#17844f; --good-soft:#e2f4ea;
+  --shadow: 0 1px 2px rgba(30,25,15,.06), 0 6px 18px rgba(30,25,15,.06);
+  color-scheme: light;
   color:var(--ink);
   background:var(--paper);
   border-radius:20px;
@@ -67,7 +67,7 @@
 .supply-rule-row .srr-main{ flex:1; min-width:160px; }
 .vf-bar{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
 .vf-wrap{ position:relative; }
-.vf-btn.active{ border-color:var(--accent-pep); color:var(--accent-pep); }
+.vf-btn.active{ border-color:var(--accent-pep); color:var(--accent-pep-strong); }
 .vf-panel{ position:absolute; z-index:20; top:calc(100% + 6px); left:0; min-width:230px; max-width:min(320px,86vw); max-height:300px; overflow-y:auto; background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:6px; box-shadow:0 8px 24px rgba(0,0,0,.25); }
 .vf-opt{ display:flex; align-items:center; gap:9px; padding:6px 8px; border-radius:7px; cursor:pointer; font-size:13.5px; }
 .vf-opt:hover{ background:var(--surface-2); }
@@ -121,7 +121,7 @@ label{ font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
 .sync-dot.off{ background:var(--muted); }
 .main{ flex:1; min-width:0; padding:24px clamp(16px,4vw,40px) 60px; }
 .page{ max-width:1080px; margin:0 auto; display:flex; flex-direction:column; gap:26px; }
-#pepProtocolsView, #pepSuppliesView{ display:flex; flex-direction:column; gap:26px; }
+#doseView, #inventoryView{ display:flex; flex-direction:column; gap:26px; }
 .section-head{ display:flex; align-items:flex-end; justify-content:space-between; gap:16px; flex-wrap:wrap; }
 .section-head h1{ font-size:26px; }
 .section-eyebrow{ font-size:12px; letter-spacing:.06em; text-transform:uppercase; color:var(--muted); margin-bottom:4px; }
@@ -145,7 +145,7 @@ label{ font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
 .icon-btn:hover{ color:var(--ink); background:var(--surface-2); }
 .dose-check-btn{
   display:inline-flex; align-items:center; gap:6px; flex:none; white-space:nowrap;
-  border:1.5px solid var(--accent-pep); background:var(--surface); color:var(--accent-pep);
+  border:1.5px solid var(--accent-pep); background:var(--surface); color:var(--accent-pep-strong);
   font-size:12.5px; font-weight:700; padding:6px 12px; border-radius:99px; cursor:pointer;
   transition:transform .12s ease, background .15s ease, color .15s ease;
 }
@@ -156,18 +156,18 @@ label{ font-size:12.5px; color:var(--muted); display:block; margin-bottom:4px; }
 .pill-warn{ background:var(--warn-soft); color:var(--warn); }
 .pill-good{ background:var(--good-soft); color:var(--good); }
 .pill-info{ background:var(--info-soft); color:var(--info); }
-.pill-pep{ background:var(--accent-pep-soft); color:var(--accent-pep); }
+.pill-pep{ background:var(--accent-pep-soft); color:var(--accent-pep-strong); }
 .pill-tar{ background:var(--accent-tar-soft); color:var(--accent-tar); }
 .pill-muted{ background:var(--surface-2); color:var(--muted); }
 .cost-total{ display:flex; justify-content:space-between; align-items:baseline; font-size:15px; padding:4px 0; }
-.cost-total strong{ font-size:20px; color:var(--accent-pep); }
+.cost-total strong{ font-size:20px; color:var(--accent-pep-strong); }
 .cost-cols{ display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:12px; }
 @media (max-width:480px){ .cost-cols{ grid-template-columns:1fr; } }
 .cost-col-h{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--muted); margin-bottom:6px; }
 .cost-row{ display:flex; justify-content:space-between; font-size:13.5px; padding:5px 0; border-top:1px solid var(--line); }
 .cost-row:first-of-type{ border-top:none; }
 .site-pill{ font-size:11px; padding:4px 9px; border-radius:99px; background:var(--surface-2); color:var(--muted); white-space:nowrap; }
-.site-pill.current{ background:var(--accent-pep-soft); color:var(--accent-pep); font-weight:600; }
+.site-pill.current{ background:var(--accent-pep-soft); color:var(--accent-pep-strong); font-weight:600; }
 .research-md table{ width:100%; border-collapse:collapse; font-size:13px; margin:8px 0; }
 .research-md th,.research-md td{ text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); }
 .research-md th{ color:var(--muted); font-size:11px; text-transform:uppercase; letter-spacing:.03em; }
@@ -207,7 +207,7 @@ tr:last-child td{ border-bottom:none; }
 .card-actions{ display:flex; gap:6px; justify-content:flex-end; }
 .calc-layout{ display:flex; flex-direction:column; gap:18px; width:100%; }
 .calc-result{ background:var(--accent-pep-soft); border-radius:12px; padding:18px 20px; display:flex; flex-direction:column; gap:4px; width:100%; }
-.calc-result .big{ font-family:"IBM Plex Mono",monospace; font-size:34px; font-weight:600; color:var(--accent-pep); line-height:1; }
+.calc-result .big{ font-family:"IBM Plex Mono",monospace; font-size:34px; font-weight:600; color:var(--accent-pep-strong); line-height:1; }
 .calc-result .lbl{ font-size:12px; color:var(--muted); text-transform:uppercase; letter-spacing:.03em; }
 .calc-sub-row{ display:flex; justify-content:space-between; align-items:baseline; gap:12px; font-size:13.5px; padding:9px 0; border-top:1px solid var(--line); flex-wrap:nowrap; }
 .calc-sub-row span:first-child{ flex:none; color:var(--muted); }
@@ -219,7 +219,7 @@ tr:last-child td{ border-bottom:none; }
   display:inline-flex; align-items:center; gap:6px; padding:8px 13px; border-radius:10px;
   background:var(--surface); border:1px solid var(--line); font-size:13px; font-weight:500; text-decoration:none; color:var(--ink);
 }
-.link-chip:hover{ border-color:var(--accent-pep); color:var(--accent-pep); }
+.link-chip:hover{ border-color:var(--accent-pep); color:var(--accent-pep-strong); }
 .syr-size-row{ display:flex; gap:8px; flex-wrap:wrap; }
 .syr-size-btn{
   flex:1; min-width:108px; text-align:left; padding:9px 11px; border-radius:10px;
@@ -228,8 +228,8 @@ tr:last-child td{ border-bottom:none; }
 .syr-size-btn strong{ display:block; font-size:13.5px; }
 .syr-size-btn span{ display:block; font-size:11px; color:var(--muted); margin-top:1px; }
 .syr-size-btn.active{ border-color:var(--accent-pep); background:var(--accent-pep-soft); }
-.syr-size-btn.active strong{ color:var(--accent-pep); }
-.syr-size-btn .syr-tag{ display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-pep); background:var(--accent-pep-soft); border-radius:4px; padding:1px 5px; margin-left:5px; vertical-align:1px; }
+.syr-size-btn.active strong{ color:var(--accent-pep-strong); }
+.syr-size-btn .syr-tag{ display:inline-block; font-size:9.5px; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:var(--accent-pep-strong); background:var(--accent-pep-soft); border-radius:4px; padding:1px 5px; margin-left:5px; vertical-align:1px; }
 .syr-size-btn.active .syr-tag{ background:var(--accent-pep); color:var(--accent-pep-text,#fff); }
 .syringe-wrap{ width:100%; }
 .syringe-wrap svg{ width:100%; height:auto; display:block; overflow:visible; }
@@ -247,13 +247,13 @@ tr:last-child td{ border-bottom:none; }
 .link-fold > summary{ list-style:none; cursor:pointer; user-select:none; }
 .link-fold > summary::-webkit-details-marker{ display:none; }
 .link-fold > summary::after{ content:'▾'; color:var(--muted); font-size:11px; transition:transform .15s ease; }
-.link-fold[open] > summary{ border-color:var(--accent-pep); color:var(--accent-pep); }
-.link-fold[open] > summary::after{ transform:rotate(180deg); color:var(--accent-pep); }
+.link-fold[open] > summary{ border-color:var(--accent-pep); color:var(--accent-pep-strong); }
+.link-fold[open] > summary::after{ transform:rotate(180deg); color:var(--accent-pep-strong); }
 .link-fold-body{ margin-top:10px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; box-shadow:var(--shadow); }
 
 .site-row{ display:flex; align-items:center; flex-wrap:wrap; gap:6px 8px; margin-top:12px; font-size:12px; color:var(--muted); }
 .site-row-label{ font-weight:600; }
-.site-row-next strong{ color:var(--accent-pep); font-weight:600; }
+.site-row-next strong{ color:var(--accent-pep-strong); font-weight:600; }
 .protocol-mood{ margin-top:12px; padding-top:10px; border-top:1px dashed var(--line); }
 .mood-head{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin-bottom:8px; }
 .mood-title{ font-size:12px; font-weight:600; color:var(--muted); }
@@ -269,24 +269,24 @@ tr:last-child td{ border-bottom:none; }
 .mood-log-row{ display:grid; grid-template-columns:24px 64px 1fr; gap:6px; align-items:center; padding:3px 0; font-size:13px; }
 
 
-/* App shell: one deliberate dark graphite look (the dashboard's own palette) applied app-wide,
+/* App shell: one light warm-paper look (the dashboard's own palette) applied app-wide,
    orange for actions, blue for info, green/red for status only. */
 :root{
-  --ink:#f2f2f3; --paper:#18181b; --surface:#222226; --surface-2:#2c2c31;
-  --line:#3a3a41; --muted:#a1a1aa;
-  --accent-pep:#ff9f43; --accent-pep-soft:#3d2813; --accent-pep-text:#1c1005;
-  --info:#5aa9ff; --info-soft:#15283d;
-  --accent-dash:#5aa9ff; --accent-dash-soft:#15283d;
-  --accent-tar:#5aa9ff; --accent-tar-soft:#15283d;
-  --warn:#ff6b6b; --warn-soft:#3d1f1f;
-  --good:#3ecf8e; --good-soft:#14331f;
-  --bad:#ff6b6b; --bad-soft:#3d1f1f;
-  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px rgba(0,0,0,.45);
-  --head-bg: rgba(24,24,27,.94);
+  --ink:#1d1d20; --paper:#f6f5f2; --surface:#ffffff; --surface-2:#f1efea;
+  --line:#e3e0d9; --muted:#6b6b74;
+  --accent-pep:#ff9f43; --accent-pep-soft:#fff0e0; --accent-pep-text:#1c1005; --accent-pep-strong:#b85a00;
+  --info:#1f6fd1; --info-soft:#e7f0fc;
+  --accent-dash:#1f6fd1; --accent-dash-soft:#e7f0fc;
+  --accent-tar:#1f6fd1; --accent-tar-soft:#e7f0fc;
+  --warn:#cf3434; --warn-soft:#fdeaea;
+  --good:#17844f; --good-soft:#e2f4ea;
+  --bad:#cf3434; --bad-soft:#fdeaea;
+  --shadow: 0 1px 2px rgba(30,25,15,.06), 0 6px 18px rgba(30,25,15,.06);
+  --head-bg: rgba(246,245,242,.92);
   --gutter-l: max(16px, env(safe-area-inset-left, 0px));
   --gutter-r: max(16px, env(safe-area-inset-right, 0px));
   --tabbar-h: 62px;
-  color-scheme: dark;
+  color-scheme: light;
   background: var(--paper);
 }
 html{ -webkit-text-size-adjust:100%; }
@@ -302,15 +302,15 @@ body{ margin:0; background:var(--paper); color:var(--ink); font-family:"Inter",s
 .brand{ display:flex; align-items:center; gap:10px; min-width:0; }
 .brand img{ width:30px; height:30px; border-radius:8px; flex:none; }
 .brand h1{ font-size:19px; line-height:1.1; }
-.brand .section-eyebrow{ font-size:10.5px; margin:0; color:var(--accent-pep); }
+.brand .section-eyebrow{ font-size:10.5px; margin:0; color:var(--accent-pep-strong); }
 .sync-pill{ border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:99px; padding:6px 11px; cursor:pointer; gap:7px; max-width:55vw; }
 .sync-pill .footnote{ white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .sync-dot.bad{ background:var(--warn); }
 
 /* Banners */
-.banner{ max-width:1080px; margin:10px auto 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--accent-pep-soft); border:1px solid #6b4520; color:var(--ink); border-radius:12px; padding:10px 12px; font-size:13px; }
+.banner{ max-width:1080px; margin:10px auto 0; display:flex; align-items:center; gap:10px; flex-wrap:wrap; background:var(--accent-pep-soft); border:1px solid #f5c48f; color:var(--ink); border-radius:12px; padding:10px 12px; font-size:13px; }
 .banner span{ flex:1; min-width:160px; }
-.banner.info{ background:var(--info-soft); border-color:#24476d; }
+.banner.info{ background:var(--info-soft); border-color:#b9d3f3; }
 .banner-wrap{ padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
 
 /* Main + views */
@@ -335,7 +335,7 @@ button:disabled{ opacity:.45; cursor:default; }
   padding-bottom:env(safe-area-inset-bottom, 0px); padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px); }
 .tabbar button{ background:none; border:none; color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:var(--tabbar-h); font-size:11px; font-weight:600; cursor:pointer; letter-spacing:.01em; }
 .tabbar svg{ width:23px; height:23px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-.tabbar button.active{ color:var(--accent-pep); }
+.tabbar button.active{ color:var(--accent-pep-strong); }
 .tabbar button:focus-visible{ outline:2px solid var(--info); outline-offset:-4px; border-radius:10px; }
 
 /* Touch inputs: 16px stops iOS from zooming on focus */
@@ -371,17 +371,26 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .bm-legend i{ display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:5px; vertical-align:-1px; }
 .k-sel{ background:var(--accent-pep); box-shadow:0 0 0 1.5px var(--ink); }
 .k-last{ background:rgba(255,159,67,.45); border:1px solid var(--accent-pep); }
-.k-next{ background:rgba(90,169,255,.3); border:1.5px solid var(--info); }
-.k-used{ background:rgba(161,161,170,.3); }
+.k-next{ background:rgba(31,111,209,.25); border:1.5px solid var(--info); }
+.k-used{ background:rgba(107,107,116,.25); }
 
 /* Chips */
 .serum-row{ display:flex; align-items:center; gap:8px; padding:6px 0; border-top:1px solid var(--line); font-size:13.5px; }
 .serum-dot{ width:9px; height:9px; border-radius:50%; flex:none; }
 .serum-name{ flex:1; min-width:0; overflow-wrap:anywhere; }
 .serum-val{ text-align:right; white-space:nowrap; font-size:13px; }
+.dose-row{ width:100%; display:grid; grid-template-columns:auto 1fr auto; gap:2px 10px; align-items:center; text-align:left; background:none; border:none; border-top:1px solid var(--line); color:var(--ink); padding:9px 0; cursor:pointer; font-size:13.5px; }
+.dose-row:first-child{ border-top:none; }
+.dose-row .when{ font-weight:600; white-space:nowrap; }
+.dose-row .what{ min-width:0; overflow-wrap:anywhere; }
+.dose-row .amt{ text-align:right; white-space:nowrap; }
+.pm-row{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin-bottom:8px; cursor:pointer; }
+.pm-row:hover{ border-color:var(--accent-pep); }
+.lab-test{ margin-top:6px; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+.lab-test a{ color:var(--info); font-size:12px; font-weight:600; }
 .chip-row{ display:flex; gap:6px; flex-wrap:wrap; }
 .chip-btn{ border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
-.chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep); }
+.chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep-strong); }
 
 /* Charts */
 .chart{ display:block; width:100%; height:auto; overflow:visible; margin-top:8px; }
@@ -465,7 +474,7 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .ur-pad select{ width:100%; }
 
 /* Modals as bottom-friendly sheets on phones */
-.modal-backdrop{ background:rgba(0,0,0,.6); padding-top:calc(env(safe-area-inset-top, 0px) + 4vh); padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 24px); padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
+.modal-backdrop{ background:rgba(20,18,14,.4); padding-top:calc(env(safe-area-inset-top, 0px) + 4vh); padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 24px); padding-left:var(--gutter-l); padding-right:var(--gutter-r); }
 .modal{ max-width:560px; background:var(--surface); color:var(--ink); }
 .modal input, .modal select, .modal textarea{ background:var(--surface-2); }
 .module-box{ background:var(--surface-2); }
@@ -496,56 +505,53 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
   <main class="main">
     <div class="page">
 
-      <section id="pepProtocolsView" class="view">
+      <section id="doseView" class="view">
 
-      <div class="card" id="serumCard">
-        <h3 style="font-size:16px;margin-bottom:2px;">Serum level</h3>
-        <p class="footnote" style="margin-bottom:10px;">Estimated amount of each compound still in your body, from your logged doses and half-life.</p>
-        <div id="serumBody"></div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <h3 style="font-size:16px;">Current protocols</h3>
-          <button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button>
-        </div>
-        <div id="protocolCalendar" style="margin-bottom:14px;"></div>
-        <div id="protocolList"></div>
-      </div>
-
-      <div class="grid grid-2">
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 style="font-size:16px;">Stash</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button>
-          </div>
-          <div id="vialList"></div>
+          <div class="card-h"><h3>Log a dose</h3><span class="footnote" id="doseTodayLabel"></span></div>
+          <div id="protocolList"></div>
         </div>
+
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 style="font-size:16px;">Vendors</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addVendorBtn">+ Add vendor</button>
-          </div>
-          <div id="vendorList"></div>
+          <div class="card-h"><h3>Upcoming doses</h3></div>
+          <div id="protocolCalendar" style="margin-bottom:12px;"></div>
+          <div id="upcomingList"></div>
         </div>
-      </div>
 
-      <div class="card">
-        <h3 style="font-size:16px;margin-bottom:4px;">Cost tracking</h3>
-        <p class="footnote" style="margin-bottom:10px;">Pulled from prices you log on each vial. Add a price next time you log a vial to fill this in.</p>
-        <div id="costSummary"></div>
-      </div>
-
-      <div class="card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
-          <h3 style="font-size:16px;">Past protocols</h3>
+        <div class="card">
+          <div class="card-h"><h3>Dose history</h3><span class="footnote">Tap a dose to edit or backfill</span></div>
+          <div id="recentDoseList"></div>
         </div>
-        <div id="archivedProtocolList"></div>
-      </div>
+
+        <div class="card" id="serumCard">
+          <h3 style="font-size:16px;margin-bottom:2px;">Serum level</h3>
+          <p class="footnote" style="margin-bottom:10px;">Estimated amount of each compound still in your body, from your logged doses and half-life.</p>
+          <div id="serumBody"></div>
+        </div>
 
       </section>
 
-      <section id="pepSuppliesView" class="view" hidden>
+      <section id="protocolsView" class="view" hidden>
+
+        <div class="card">
+          <div class="card-h"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div>
+          <p class="footnote" style="margin-bottom:10px;">Tap a protocol to edit its dose, schedule, vial, half-life and titration.</p>
+          <div id="protocolManager"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Past protocols</h3></div>
+          <div id="archivedProtocolList"></div>
+        </div>
+
+      </section>
+
+      <section id="inventoryView" class="view" hidden>
+
+        <div class="card">
+          <div class="card-h"><h3>Stash</h3><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div>
+          <div id="vialList"></div>
+        </div>
 
         <div class="card">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
@@ -571,19 +577,9 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
         <div class="disclaimer">Estimates assume steady, on-schedule use per your logged protocols — actual consumption (skipped doses, waste, extra draws) will vary.</div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 style="font-size:16px;">Equipment</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addPepEquipmentBtn">+ Add equipment</button>
-          </div>
-          <div id="pepEquipmentList"></div>
-        </div>
-
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 style="font-size:16px;">Supply vendors</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addSupplyVendorBtn">+ Add vendor</button>
-          </div>
-          <div id="supplyVendorList"></div>
+          <h3 style="font-size:16px;margin-bottom:4px;">Cost tracking</h3>
+          <p class="footnote" style="margin-bottom:10px;">Pulled from prices you log on each vial. Add a price next time you log a vial to fill this in.</p>
+          <div id="costSummary"></div>
         </div>
 
       </section>
@@ -628,19 +624,6 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
         </div>
       </section>
 
-      <section id="labsView" class="view" hidden>
-        <div class="card">
-          <div class="card-h"><h3>Lab results</h3><button type="button" class="btn btn-accent-pep btn-sm" id="addLabBtn">+ Add draw</button></div>
-          <div id="labCompare"></div>
-          <div class="draw-list" id="labDraws"></div>
-        </div>
-        <div class="card">
-          <div class="card-h"><h3>Urine test strips</h3><button type="button" class="btn btn-accent-pep btn-sm" id="addUrineBtn">+ Log strip</button></div>
-          <div class="draw-list" id="urineList" style="margin-top:0;"></div>
-        </div>
-        <div class="disclaimer">For personal record-keeping. Flags only compare a value with the range you typed in. Talk to your doctor about what results mean for you.</div>
-      </section>
-
       <section id="pepCalcView" class="view" hidden>
 
       <div class="card">
@@ -658,8 +641,8 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
             <div class="field">
               <label for="calcDose">Desired dose</label>
               <div style="display:flex;gap:8px;">
-                <input type="number" id="calcDose" inputmode="decimal" value="250" min="0" step="any" style="flex:1;">
-                <select id="calcDoseUnit" style="width:90px;"><option value="mcg" selected>mcg</option><option value="mg">mg</option></select>
+                <input type="number" id="calcDose" inputmode="decimal" value="0.25" min="0" step="any" style="flex:1;">
+                <select id="calcDoseUnit" style="width:90px;"><option value="mg" selected>mg</option><option value="mcg">mcg</option></select>
               </div>
             </div>
           </div>
@@ -769,6 +752,19 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
       <section id="resourcesView" class="view" hidden>
 
         <div class="card">
+          <div class="card-h"><h3>Peptide vendors</h3><button class="btn btn-accent-pep btn-sm" id="addVendorBtn">+ Add vendor</button></div>
+          <div id="vendorList"></div>
+        </div>
+
+        <div class="card">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <h3 style="font-size:16px;">Supply vendors</h3>
+            <button class="btn btn-accent-pep btn-sm" id="addSupplyVendorBtn">+ Add vendor</button>
+          </div>
+          <div id="supplyVendorList"></div>
+        </div>
+
+        <div class="card">
           <h3 style="font-size:16px;margin-bottom:10px;">Resources</h3>
           <div class="link-bank" id="resourceLinks"></div>
           <details class="link-fold" id="howtoRef">
@@ -787,10 +783,10 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
   </main>
 
   <nav class="tabbar" aria-label="Sections">
-    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Protocols</span></button>
-    <button type="button" data-tab="supplies"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg><span>Supplies</span></button>
+    <button type="button" data-tab="dose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Dose</span></button>
+    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/></svg><span>Protocols</span></button>
+    <button type="button" data-tab="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg><span>Inventory</span></button>
     <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg><span>Progress</span></button>
-    <button type="button" data-tab="labs"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 3h6"/><path d="M10 3v6.5L4.6 18.2A2 2 0 0 0 6.3 21h11.4a2 2 0 0 0 1.7-2.8L14 9.5V3"/><path d="M6.8 15h10.4"/></svg><span>Labs</span></button>
     <button type="button" data-tab="tools"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><span>Tools</span></button>
     <button type="button" data-tab="resources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7"/></svg><span>Resources</span></button>
   </nav>

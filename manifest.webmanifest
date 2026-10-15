@@ -1,14 +1,14 @@
 {
   "name": "Peptide Ledger",
   "short_name": "Peptides",
-  "description": "Private peptide tracker: protocols, dosing, stash, supplies, progress and labs. Data stays on your device.",
+  "description": "Private peptide tracker: dosing, protocols, inventory and progress. Data stays on your device.",
   "id": "./",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#18181b",
-  "theme_color": "#18181b",
+  "background_color": "#f6f5f2",
+  "theme_color": "#f6f5f2",
   "icons": [
     { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },

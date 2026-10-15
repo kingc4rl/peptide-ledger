@@ -293,8 +293,8 @@ function populatePresetSelect(){
     if(sel.value===''){ note.textContent=''; return; }
     const p = PEPTIDE_PRESETS[+sel.value];
     $('#calcVial').value = p.vial;
-    $('#calcDose').value = p.doseLow;
-    $('#calcDoseUnit').value = p.doseUnit;
+    $('#calcDose').value = p.doseUnit==='mcg' ? Math.round(p.doseLow)/1000 : p.doseLow;   // the calculator works in mg by default
+    $('#calcDoseUnit').value = 'mg';
     note.textContent = `Typical range: ${p.doseLow}–${p.doseHigh} ${p.doseUnit}, ${p.freq}. Prefilled with the low end — adjust to your actual protocol.`;
     runCalc();
   });
@@ -671,8 +671,16 @@ function renderProtocols(){
   const el = $('#protocolList');
   const active = state.protocols.filter(isActiveP);
   const paused = state.protocols.filter(p=>p.status==='paused').sort((a,b)=> (a.compound||'').localeCompare(b.compound||''));
-  if(!active.length && !paused.length){
-    el.innerHTML = `<div class="empty"><div class="glyph">💉</div><p>No active protocols. Add a compound to start tracking dose, cycle and history.</p></div>`;
+  const lbl = $('#doseTodayLabel');
+  if(lbl){
+    const day = doseDayISO();
+    const sched = active.filter(p=> doseDatesInRange(p, day, day).length);
+    const due = sched.filter(p=> injectionsOn(p, day) < splitCount(p)).length;
+    lbl.textContent = !active.length ? '' : due ? `${due} due today` : sched.length ? "Today's doses done" : 'No doses due today';
+  }
+  if(!active.length){
+    el.innerHTML = `<div class="empty"><div class="glyph">💉</div><p>No active protocols. Add one on the Protocols tab to start logging doses.</p><button type="button" class="btn btn-sm" data-goto-tab="protocols">Go to Protocols</button></div>`;
+    $$('[data-goto-tab]',el).forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.gotoTab)));
     return;
   }
   // Active (started, not off-cycle) protocols A-Z first; then the rest by sortOrder.
@@ -740,17 +748,6 @@ function renderProtocols(){
       ${siteRowHTML(p)}
     </div>`;
   }).join('');
-  if(paused.length){
-    html += `<div class="supply-group-h" style="margin-top:14px;">Paused</div>` + paused.map(p=>`
-      <div class="card-flat paused-row" data-open-protocol="${p.id}">
-        <div style="min-width:0;">
-          <strong>${esc(p.compound||'Untitled compound')}</strong>
-          <span class="pill pill-muted" style="margin-left:6px;">${esc(fmtDose(p.dose, p.doseUnit))}</span>
-          <div class="footnote" style="margin-top:3px;">Paused ${fmtDateShort(p.pausedDate)}. Vial and supply links are kept.</div>
-        </div>
-        <button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>
-      </div>`).join('');
-  }
   el.innerHTML = html;
   bindProtocolExtras(el);
   $$('[data-syr-units]',el).forEach(w=> renderSyringeInto(w, num(w.dataset.syrUnits,0), num(w.dataset.syrCap,100), {compact:true, color: w.dataset.syrColor||undefined}));
@@ -915,6 +912,94 @@ async function resumeProtocol(p){
   await dbSet('protocols', p.id, {...stripId(p), status:'active', pausedDate:null, pauseLog: log, nextDose});
 }
 function stripId(obj){ const {id, ...rest} = obj; return rest; }
+/* Dose tab: the next scheduled doses across active protocols, in time order. */
+function renderUpcoming(){
+  const el = $('#upcomingList');
+  if(!el) return;
+  const now = Date.now(), until = now + 21*24*HOUR;
+  const colorMap = protocolColorMap();
+  const evs = [];
+  state.protocols.filter(isActiveP).forEach(p=>{
+    const d = doseAt(p, doseDayISO());
+    scheduledEvents(p, now - 20*HOUR, until).forEach(e=>{
+      const iso = isoFromDate(new Date(e.t - 2*HOUR));
+      if(injectionsOn(p, iso) >= splitCount(p)) return;        // already logged for that dose day
+      const dd = doseAt(p, iso);
+      evs.push({p, t:e.t, iso, dose: fmtDose(num(dd.dose)/splitCount(p), dd.doseUnit), units: unitsPerInjection(p, iso), color: colorMap.get(p.id)});
+    });
+  });
+  evs.sort((x,y)=> x.t-y.t);
+  if(!evs.length){ el.innerHTML = `<p class="footnote">No scheduled doses in the next 3 weeks. Set a schedule on the Protocols tab.</p>`; return; }
+  const today = doseDayISO();
+  el.innerHTML = evs.slice(0,8).map(e=>{
+    const day = daysBetween(today, e.iso);
+    const when = day<0 ? 'Overdue' : day===0 ? 'Today' : day===1 ? 'Tomorrow' : new Date(e.iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+    const time = e.p.doseTime ? fmtClock(e.p.doseTime) : '';
+    return `<button type="button" class="dose-row" data-hist-pid="${e.p.id}">
+      <span class="when" style="${day<=0?'color:var(--accent-pep-strong)':''}">${esc(when)}</span>
+      <span class="what"><span class="serum-dot" style="display:inline-block;background:${e.color};margin-right:6px;"></span>${esc(e.p.compound||'Untitled')}${time?` <span class="footnote">${esc(time)}</span>`:''}</span>
+      <span class="amt mono">${esc(e.dose)}${e.units!=null?` <span class="footnote">${e.units}u</span>`:''}</span>
+    </button>`;
+  }).join('');
+  $$('[data-hist-pid]',el).forEach(b=> b.addEventListener('click', ()=> openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.histPid))));
+}
+/* Dose tab: every logged injection across protocols, newest first. */
+function renderRecentDoses(){
+  const el = $('#recentDoseList');
+  if(!el) return;
+  const colorMap = protocolColorMap();
+  const all = [];
+  state.protocols.filter(p=>p.status!=='archived').forEach(p=>{
+    injectionEvents(p).forEach(e=> all.push({p, ...e}));
+  });
+  all.sort((x,y)=> y.t-x.t);
+  if(!all.length){ el.innerHTML = `<p class="footnote">No doses logged yet. Tap Mark taken above when you inject.</p>`; return; }
+  const show = all.slice(0, lsGet('ledger.histAll','')==='1' ? 200 : 10);
+  el.innerHTML = show.map(e=>{
+    const d = new Date(e.t);
+    return `<button type="button" class="dose-row" data-hist-pid="${e.p.id}">
+      <span class="when">${esc(d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'}))}</span>
+      <span class="what"><span class="serum-dot" style="display:inline-block;background:${colorMap.get(e.p.id)||'var(--muted)'};margin-right:6px;"></span>${esc(e.p.compound||'Untitled')} <span class="footnote">${esc(d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}))}</span></span>
+      <span class="amt mono">${esc(fmtAmount(e.mg))}</span>
+    </button>`;
+  }).join('') + (all.length>10 ? `<button type="button" class="btn btn-sm" id="histMore" style="margin-top:8px;">${lsGet('ledger.histAll','')==='1' ? 'Show fewer' : `Show all ${all.length}`}</button>` : '');
+  $$('[data-hist-pid]',el).forEach(b=> b.addEventListener('click', ()=> openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.histPid))));
+  const more = $('#histMore',el);
+  if(more) more.addEventListener('click', ()=>{ lsSet('ledger.histAll', lsGet('ledger.histAll','')==='1' ? '' : '1'); renderRecentDoses(); });
+}
+/* Protocols tab: every non-archived protocol, tap to edit. */
+function renderProtocolManager(){
+  const el = $('#protocolManager');
+  if(!el) return;
+  const list = state.protocols.filter(p=>p.status!=='archived')
+    .sort((a,b)=> (a.status==='paused') - (b.status==='paused') || (a.compound||'').localeCompare(b.compound||'', undefined, {sensitivity:'base'}));
+  if(!list.length){ el.innerHTML = `<div class="empty"><div class="glyph">📋</div><p>No protocols yet. Add one to set its dose, schedule and vial.</p></div>`; return; }
+  const colorMap = protocolColorMap();
+  el.innerHTML = list.map(p=>{
+    const d = doseAt(p, doseDayISO());
+    const u = unitsPerInjection(p, doseDayISO());
+    const paused = p.status==='paused';
+    const notStarted = p.startDate && p.startDate > todayISO();
+    const freq = num(p.frequencyDays,null);
+    const sched = scheduleLabel(p) || (freq ? (freq===1 ? 'Daily' : `Every ${freq} days`) : 'No schedule set');
+    const hl = halfLifeOf(p);
+    return `<div class="card-flat pm-row ${paused?'paused-row':''}" data-open-protocol="${p.id}">
+      <div style="min-width:0;">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span class="serum-dot" style="background:${colorMap.get(p.id)||'var(--muted)'}"></span>
+          <strong>${esc(p.compound||'Untitled compound')}</strong>
+          <span class="pill pill-pep">${esc(fmtDose(d.dose, d.doseUnit))}</span>
+          ${u!=null?`<span class="pill pill-info">${u} units</span>`:''}
+          ${paused?'<span class="pill pill-muted">Paused</span>':notStarted?'<span class="pill pill-muted">Not started</span>':''}
+        </div>
+        <div class="footnote" style="margin-top:4px;">${esc(sched)}${splitCount(p)>1?` · split ×${splitCount(p)}`:''}${hl?` · t½ ${esc(fmtHours(hl))}`:''}${titrationSteps(p).length?` · ${titrationSteps(p).length} titration step${titrationSteps(p).length===1?'':'s'}`:''}</div>
+      </div>
+      ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : `<span class="footnote" aria-hidden="true">Edit ›</span>`}
+    </div>`;
+  }).join('');
+  $$('[data-open-protocol]',el).forEach(c=> c.addEventListener('click', ()=> openProtocolModal(state.protocols.find(p=>p.id===c.dataset.openProtocol))));
+  $$('[data-resume-protocol]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); resumeProtocol(state.protocols.find(p=>p.id===b.dataset.resumeProtocol)); }));
+}
 function renderArchivedProtocols(){
   const el = $('#archivedProtocolList');
   if(!el) return;
@@ -1442,6 +1527,7 @@ function renderVials(){
         <div style="margin-top:6px;">
           ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : `<span class="pill pill-muted">Link a protocol</span>`}
         </div>`}
+        ${labTestHTML(v)}
         <div class="footnote" style="margin-top:6px;overflow-wrap:anywhere;">${num(v.mgPerVial,0)}mg vial${v.dateOpened? ' · opened '+fmtDateShort(v.dateOpened) : ' · unopened'}${v.lot? ' · Lot '+esc(v.lot) : ''}${v.price? ' · $'+num(v.price).toFixed(2) : ''}</div>
       </div>`;
     }).join('');
@@ -1456,7 +1542,18 @@ function renderVials(){
       ${rows}
     </div>`;
   }).join('');
-  $$('[data-open-vial]',el).forEach(card=> card.addEventListener('click', ()=> openVialModal(state.vials.find(v=>v.id===card.dataset.openVial))));
+  $$('[data-open-vial]',el).forEach(card=> card.addEventListener('click', e=>{ if(e.target.closest('[data-coa]')) return; openVialModal(state.vials.find(v=>v.id===card.dataset.openVial)); }));
+}
+function hasLabTest(v){ return !!(v.testLab || v.testMassMg || v.testPurity || v.testEndo || v.coaUrl); }
+function safeUrl(u){ return /^https?:\/\//i.test(String(u||'').trim()) ? String(u).trim() : ''; }
+function labTestHTML(v){
+  if(!hasLabTest(v)) return '';
+  const bits = [];
+  if(num(v.testMassMg,null)!=null) bits.push(`${num(v.testMassMg)} mg`);
+  if(num(v.testPurity,null)!=null) bits.push(`${num(v.testPurity)}% pure`);
+  if(num(v.testEndo,null)!=null) bits.push(`${num(v.testEndo)} EU/mg`);
+  const coa = safeUrl(v.coaUrl);
+  return `<div class="lab-test"><span class="pill pill-good">🔬 Tested${v.testLab?` · ${esc(v.testLab)}`:''}</span>${bits.length?`<span class="footnote">${esc(bits.join(' · '))}${v.testDate?` · ${esc(fmtDateShort(v.testDate))}`:''}</span>`:''}${coa?`<a href="${esc(coa)}" target="_blank" rel="noopener" data-coa>View COA ↗</a>`:''}</div>`;
 }
 function openVialModal(existing){
   const v = existing || {};
@@ -1473,6 +1570,17 @@ function openVialModal(existing){
       <div class="field"><label for="vOpened">Date opened</label><input id="vOpened" type="date" value="${esc(v.dateOpened||'')}" placeholder="Leave blank if unopened"></div>
       <div class="field"><label for="vBud">BUD (beyond-use date)</label><input id="vBud" type="date" value="${esc(v.bud||'')}"></div>
       <div class="field span2"><label for="vProtocol">Linked protocol (for dose/frequency)</label><select id="vProtocol"><option value="">— none —</option>${protocolOptions}</select></div>
+      <details class="field span2 module-box" ${hasLabTest(v)?'open':''}>
+        <summary style="cursor:pointer;font-weight:600;font-size:13px;">🔬 Lab test results <span style="font-weight:400;color:var(--muted);">(optional, if you had it tested)</span></summary>
+        <div class="form-grid" style="margin-top:10px;">
+          <div class="field span2"><label for="vTestLab">Lab name</label><input id="vTestLab" type="text" value="${esc(v.testLab||'')}" placeholder="e.g. Janoshik"></div>
+          <div class="field"><label for="vTestMass">Tested mass (mg)</label><input id="vTestMass" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.testMassMg||'')}" placeholder="e.g. 20.4"></div>
+          <div class="field"><label for="vTestPurity">Purity (%)</label><input id="vTestPurity" type="number" inputmode="decimal" step="any" min="0" max="100" value="${esc(v.testPurity||'')}" placeholder="e.g. 99.2"></div>
+          <div class="field"><label for="vTestEndo">Endotoxin (EU/mg)</label><input id="vTestEndo" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.testEndo||'')}" placeholder="e.g. 0.5"></div>
+          <div class="field"><label for="vTestDate">Test date</label><input id="vTestDate" type="date" value="${esc(v.testDate||'')}"></div>
+          <div class="field span2"><label for="vCoaUrl">COA link</label><input id="vCoaUrl" type="url" inputmode="url" value="${esc(v.coaUrl||'')}" placeholder="https://…"></div>
+        </div>
+      </details>
     </div>
     <div class="form-actions">
       ${existing? `<button class="btn btn-danger" id="vDelete" style="margin-right:auto;">Delete</button>` : ''}
@@ -1486,7 +1594,9 @@ function openVialModal(existing){
     $('#vSave',body).addEventListener('click', async ()=>{
       const compound = $('#vCompound',body).value.trim();
       if(!compound) return;
-      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:$('#vPharmacy',body).value.trim(), dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
+      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:$('#vPharmacy',body).value.trim(),
+        testLab:$('#vTestLab',body).value.trim(), testMassMg:$('#vTestMass',body).value, testPurity:$('#vTestPurity',body).value, testEndo:$('#vTestEndo',body).value, testDate:$('#vTestDate',body).value, coaUrl:$('#vCoaUrl',body).value.trim(),
+        dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
       if(existing) await dbSet('vials', existing.id, data); else await dbAdd('vials', data);
       closeModal();
     });
@@ -2195,7 +2305,6 @@ function openPepEquipmentModal(existing){
     });
   });
 }
-$('#addPepEquipmentBtn').addEventListener('click', ()=> openPepEquipmentModal(null));
 
 /* ===================== Peptides: Research ===================== */
 /* Small, safe-enough markdown -> HTML for LLM answers: bold, links, pipe tables, bullet lists, paragraphs.
@@ -2869,7 +2978,7 @@ function stackContextForAsk(){
   return {
     today: todayISO(),
     vendors: state.vendors.map(v=>({name:v.name, url:v.url||null, deal:v.deal||null, notes:v.notes||null})),
-    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null})),
+    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTest: hasLabTest(v) ? {lab:v.testLab||null, massMg:num(v.testMassMg,null), purityPct:num(v.testPurity,null), endotoxinEUperMg:num(v.testEndo,null), date:v.testDate||null, coa:safeUrl(v.coaUrl)||null} : null})),
     protocols: state.protocols.filter(p=>p.status!=='archived').map(p=>{
       const d = doseAt(p, day);
       return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p),
@@ -2934,10 +3043,10 @@ function initAsk(){
 }
 
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {protocols:'#pepProtocolsView', supplies:'#pepSuppliesView', progress:'#progressView', labs:'#labsView', tools:'#pepCalcView', resources:'#resourcesView'};
-let currentTab = 'protocols';
+const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView'};
+let currentTab = 'dose';
 function setTab(name, opts){
-  if(!TABS[name]) name = 'protocols';
+  if(!TABS[name]) name = 'dose';
   currentTab = name;
   Object.entries(TABS).forEach(([k,sel])=>{ $(sel).hidden = k!==name; });
   $$('.tabbar [data-tab]').forEach(b=>{ const on = b.dataset.tab===name; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
@@ -3093,6 +3202,9 @@ function registerServiceWorker(){
 /* ===================== Render all ===================== */
 function renderAll(){
   renderProtocols();
+  renderUpcoming();
+  renderRecentDoses();
+  renderProtocolManager();
   renderSerum();
   renderArchivedProtocols();
   renderVials();
@@ -3101,10 +3213,8 @@ function renderAll(){
   renderSupplyDepletion();
   renderVendors();
   renderSupplyVendors();
-  renderPepEquipment();
   renderCostTracking();
   renderResearch();
-  renderLabs();
   if(currentTab==='progress') renderProgress(); else { renderCheckinList(); }
   renderBackupNudge();
 }
@@ -3116,7 +3226,6 @@ async function boot(){
   initTabs();
   initAsk();
   initProgress();
-  initLabs();
   $('#syncPill').addEventListener('click', openBackupModal);
   $('#backupNudgeBtn').addEventListener('click', openBackupModal);
   $('#backupNudgeDismiss').addEventListener('click', ()=>{ lsSet('ledger.nudgeSnooze', todayISO()); renderBackupNudge(); });
@@ -3126,7 +3235,7 @@ async function boot(){
   renderInstallCard();
   await loadAll();
   renderStoragePill();
-  setTab(lsGet('ledger.tab','protocols'), {keepScroll:true});
+  setTab('dose', {keepScroll:true});   // the app always opens on Dose
   renderAll();
   registerServiceWorker();
   // Day boundaries: refresh "today" whenever the app comes back to the foreground.

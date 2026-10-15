@@ -11,7 +11,7 @@ If the session started on another branch (e.g. `claude/...`), merge or fast-forw
 Do not stop at "branch pushed" or open a PR unless the owner asks for one. Afterwards, tell him it's live and to tap Reload in the app.
 
 ## Files
-- `index.html`: markup and all CSS (single dark graphite theme; orange `--accent-pep` for actions, blue `--info` for info, green/red for status only).
+- `index.html`: markup and all CSS (single light warm-paper theme; orange `--accent-pep` for action fills, `--accent-pep-strong` for orange text, blue `--info` for info, green/red for status only).
 - `app.js`: all logic, one IIFE. Sections are marked with `/* ===== ... ===== */` banners.
 - `sw.js`: offline cache. **Bump `VERSION` on every change**, or installed phones keep the old files.
 - `manifest.webmanifest`, `icons/`: install metadata.
@@ -19,6 +19,8 @@ Do not stop at "branch pushed" or open a PR unless the owner asks for one. After
 ## Data (never break it)
 - The owner's real data lives only in IndexedDB on his phone (db `peptide-ledger`, stores `collections` and `blobs`). It is never in this repo.
 - Collections: protocols, vials, vendors, research, supplies, supplyVendors, pepEquipment, checkins, photos, labs, urine.
+  (pepEquipment, labs and urine no longer have a screen but are kept so old records and backups survive.)
+- Tabs: Dose (home), Protocols, Inventory, Progress, Tools, Resources.
 - Changes must stay backward compatible with existing records and with backup files (`format: 1`). Add fields with safe defaults; never rename or drop fields without a migration in `loadAll()`.
 - Backup/restore is in the "Backup, restore, install" section of `app.js`.
 
