@@ -738,7 +738,6 @@ function renderProtocols(){
         <div class="syringe-wrap" data-syr-units="${u}" data-syr-color="${esc(color||'')}" data-syr-cap="${syringeCapacityUnits(p)}"></div>
       </div>` : ''}
       ${siteRowHTML(p)}
-      ${moodBlockHTML(p)}
     </div>`;
   }).join('');
   if(paused.length){
@@ -778,13 +777,19 @@ function markDoseTaken(p){
 }
 /* Add (+1) or remove (-1) one injection on a given dose day. Keeps the dose counter, next-dose date,
    active vial and linked supplies in step. Works for today and for backfilled days. */
-async function logInjection(p, day, delta){
+function momentOn(day, hhmm){
+  const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm||''); if(!m) return null;
+  const d = new Date(day+'T00:00:00'); d.setHours(+m[1], +m[2], 0, 0);
+  if(+m[1] < 2) d.setDate(d.getDate()+1);   // 12–2am still belongs to the previous dose day
+  return d.getTime();
+}
+async function logInjection(p, day, delta, hhmm){
   if(!p) return;
   const n = splitCount(p);
   const log = Array.isArray(p.doseLog) ? p.doseLog.slice() : [];
   let times = Array.isArray(p.doseTimes) ? p.doseTimes.slice() : [];   // exact injection moments, for the serum chart
   const before = log.filter(x=>x===day).length;
-  if(delta>0){ if(before>=n) return; log.push(day); times.push({day, t:Date.now()}); }
+  if(delta>0){ if(before>=n) return; log.push(day); times.push({day, t: momentOn(day, hhmm) || (day===doseDayISO() ? Date.now() : new Date(day+'T12:00:00').getTime())}); }
   else {
     const i = log.lastIndexOf(day); if(i<0) return; log.splice(i,1);
     for(let k=times.length-1;k>=0;k--) if(times[k].day===day){ times.splice(k,1); break; }
@@ -839,12 +844,13 @@ function openDoseHistoryModal(p){
     const log = Array.isArray(cur.doseLog) ? cur.doseLog : [];
     const older = log.filter(x=> x < addDays(day,-14)).length;
     let out = '';
+    const tOf = iso=>{ const e = injectionEvents(cur).filter(x=>x.day===iso).map(x=>new Date(x.t).toLocaleTimeString(undefined,{hour:'numeric',minute:'2-digit'})); return e.length ? ` <span class="footnote">${e.join(', ')}</span>` : ''; };
     for(let i=0;i<=14;i++){
       const iso = addDays(day,-i);
       const cnt = injectionsOn(cur, iso);
       const wd = new Date(iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'short'});
       out += `<div class="hist-row ${cnt>=n?'done':''}">
-        <span class="hist-date"><strong>${i===0?'Today':fmtDateShort(iso)}</strong> <span class="footnote">${wd}</span>${sched.has(iso)?' <span class="pill pill-info">scheduled</span>':''}</span>
+        <span class="hist-date"><strong>${i===0?'Today':fmtDateShort(iso)}</strong> <span class="footnote">${wd}</span>${tOf(iso)}${sched.has(iso)?' <span class="pill pill-info">scheduled</span>':''}</span>
         <span class="hist-ctrl">
           <button class="btn btn-sm" data-h="-1" data-d="${iso}" ${cnt?'':'disabled'} aria-label="Remove an injection on ${fmtDateShort(iso)}">−</button>
           <span class="mono hist-count">${cnt}/${n}</span>
@@ -852,11 +858,25 @@ function openDoseHistoryModal(p){
         </span>
       </div>`;
     }
+    const oldDays = [...new Set(log.filter(x=> x < addDays(day,-14)))].sort().reverse();
+    if(oldDays.length){
+      out += `<div class="supply-group-h" style="margin-top:12px;">Older doses</div>` + oldDays.map(iso=>`<div class="hist-row done">
+        <span class="hist-date"><strong>${fmtDateShort(iso)}</strong> <span class="footnote">${new Date(iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'short'})}</span>${tOf(iso)}</span>
+        <span class="hist-ctrl"><button class="btn btn-sm" data-h="-1" data-d="${iso}" aria-label="Remove an injection on ${fmtDateShort(iso)}">−</button><span class="mono hist-count">${injectionsOn(cur, iso)}/${n}</span></span></div>`).join('');
+    }
     out += `<p class="footnote" style="margin-top:10px;">${log.length} injection${log.length===1?'':'s'} logged in total${older?`, ${older} of them more than 14 days ago`:''}.</p>`;
     return out;
   };
   openModal(`Dose history: ${p.compound||'protocol'}`, `
-    <p class="footnote" style="margin-bottom:10px;">Log a missed injection up to 14 days back, or remove one logged by mistake. Each change also adjusts the active vial and linked supplies.</p>
+    <p class="footnote" style="margin-bottom:10px;">Log a missed injection, or remove one logged by mistake. Each change also adjusts the active vial and linked supplies. The time below is used for doses you add here, so the serum chart is accurate.</p>
+    <div class="module-box" style="margin-bottom:12px;">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div><label for="hTime" class="footnote" style="display:block;margin-bottom:3px;">Time for added doses</label><input id="hTime" type="time" value="${esc(p.doseTime||'22:00')}"></div>
+        <div><label for="hDate" class="footnote" style="display:block;margin-bottom:3px;">Add a dose on any date</label><input id="hDate" type="date" max="${esc(doseDayISO())}"></div>
+      </div>
+      <button type="button" class="btn btn-sm" id="hAddDate" style="margin-top:8px;">+ Add dose on that date</button>
+      <div class="footnote" id="hMsg" style="margin-top:6px;"></div>
+    </div>
     <div id="histRows"></div>
     <div class="form-actions"><button class="btn btn-accent-pep" id="hClose">Done</button></div>
   `, body=>{
@@ -866,8 +886,16 @@ function openDoseHistoryModal(p){
       const b = e.target.closest('[data-h]');
       if(!b || b.disabled) return;
       const cur = state.protocols.find(x=>x.id===p.id);
-      await logInjection(cur, b.dataset.d, +b.dataset.h);
+      await logInjection(cur, b.dataset.d, +b.dataset.h, $('#hTime',body).value);
       draw();
+    });
+    $('#hAddDate',body).addEventListener('click', async ()=>{
+      const iso = $('#hDate',body).value, msg = $('#hMsg',body);
+      if(!iso){ msg.textContent = 'Pick a date first.'; return; }
+      const cur = state.protocols.find(x=>x.id===p.id);
+      if(injectionsOn(cur, iso) >= splitCount(cur)){ msg.textContent = `${fmtDateShort(iso)} already has all its injections logged.`; return; }
+      await logInjection(cur, iso, 1, $('#hTime',body).value);
+      msg.textContent = `Added ${fmtDateShort(iso)}.`; draw();
     });
     $('#hClose',body).addEventListener('click', closeModal);
   });
@@ -997,7 +1025,6 @@ function openProtocolModal(existing){
         </div>
         <div class="footnote" id="pSiteHint" style="margin-top:6px;"></div>
       </div>
-      ${existing? `<div class="field span2 module-box"><label style="margin-bottom:6px;display:block;">🙂 Recent daily notes <span style="font-weight:400;color:var(--muted);">: set from the faces on the protocol card</span></label>${moodLogHTML(p)}</div>` : ''}
       <div class="field span2"><label for="pNote">Log note (optional, adds to history)</label><input id="pNote" type="text" placeholder="e.g. increased dose, felt X"></div>
     </div>
     <div class="form-actions wrap">
@@ -2907,7 +2934,7 @@ function initAsk(){
 }
 
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {protocols:'#pepProtocolsView', supplies:'#pepSuppliesView', progress:'#progressView', labs:'#labsView', tools:'#pepCalcView'};
+const TABS = {protocols:'#pepProtocolsView', supplies:'#pepSuppliesView', progress:'#progressView', labs:'#labsView', tools:'#pepCalcView', resources:'#resourcesView'};
 let currentTab = 'protocols';
 function setTab(name, opts){
   if(!TABS[name]) name = 'protocols';
