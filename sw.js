@@ -1,6 +1,6 @@
 /* Peptide Ledger service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.9.1';
+const VERSION = 'v1.9.2';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
 const SHELL_FILES = [
@@ -9,7 +9,8 @@ const SHELL_FILES = [
 ];
 
 self.addEventListener('install', event=>{
-  event.waitUntil(caches.open(SHELL).then(c=> c.addAll(SHELL_FILES)));
+  // cache:'reload' skips the browser's HTTP cache, so a new version never stores an older file.
+  event.waitUntil(caches.open(SHELL).then(c=> c.addAll(SHELL_FILES.map(u=> new Request(u, {cache:'reload'}))))));
 });
 
 self.addEventListener('activate', event=>{
@@ -43,7 +44,7 @@ self.addEventListener('fetch', event=>{
   event.respondWith(caches.open(SHELL).then(async c=>{
     const key = req.mode==='navigate' ? './index.html' : req;
     const hit = await c.match(key, {ignoreSearch:true});
-    const net = fetch(req).then(res=>{ if(res && res.ok && req.mode!=='navigate') c.put(req, res.clone()); return res; }).catch(()=> null);
+    const net = fetch(req, {cache:'no-cache'}).then(res=>{ if(res && res.ok) c.put(key, res.clone()); return res; }).catch(()=> null);
     if(hit) return hit;
     const res = await net;
     return res || new Response('Offline and this file is not cached yet.', {status:503, headers:{'Content-Type':'text/plain'}});

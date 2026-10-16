@@ -1675,6 +1675,30 @@ function serumSvgInner(ctx, t1, winMs){
   });
   return g;
 }
+/* Chart scrubbing input. iPhone Safari is more reliable with touch events than pointer events on SVG,
+   so touch devices use touch events: a sideways drag reads values, an up/down swipe scrolls the page. */
+function bindScrub(el, onMove, onEnd){
+  if('ontouchstart' in window){
+    let start = null, mode = null;
+    el.addEventListener('touchstart', e=>{ const t = e.touches[0]; start = {x:t.clientX, y:t.clientY}; mode = null; onMove(t.clientX); }, {passive:true});
+    el.addEventListener('touchmove', e=>{
+      if(!start) return;
+      const t = e.touches[0], dx = Math.abs(t.clientX-start.x), dy = Math.abs(t.clientY-start.y);
+      if(!mode && (dx>6 || dy>6)) mode = dy > dx*1.2 ? 'scroll' : 'scrub';
+      if(mode==='scroll'){ onEnd(true); return; }
+      e.preventDefault(); onMove(t.clientX);
+    }, {passive:false});
+    el.addEventListener('touchend', ()=>{ start = null; onEnd(false); });
+    el.addEventListener('touchcancel', ()=>{ start = null; onEnd(true); });
+    return;
+  }
+  let active = null;
+  el.addEventListener('pointerdown', e=>{ active = e.pointerId; try{ el.setPointerCapture(e.pointerId); }catch(_){} onMove(e.clientX); });
+  el.addEventListener('pointermove', e=>{ if(active===e.pointerId || e.pointerType==='mouse') onMove(e.clientX); });
+  el.addEventListener('pointerup', ()=>{ active = null; onEnd(false); });
+  el.addEventListener('pointercancel', ()=>{ active = null; onEnd(true); });
+  el.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') onEnd(true); });
+}
 /* Finger/mouse scrub: a crosshair with a readout of every line at the touched moment. */
 function attachSerumScrub(wrap, ctx){
   const svg = $('svg', wrap);
@@ -1705,12 +1729,7 @@ function attachSerumScrub(wrap, ctx){
     const left = xv/SV.W*r.width, w = tip.offsetWidth;
     tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
   };
-  let active = null;
-  svg.addEventListener('pointerdown', e=>{ active = e.pointerId; try{ svg.setPointerCapture(e.pointerId); }catch(_){} show(e.clientX); });
-  svg.addEventListener('pointermove', e=>{ if(active===e.pointerId || e.pointerType==='mouse') show(e.clientX); });
-  svg.addEventListener('pointerup', ()=>{ active = null; });
-  svg.addEventListener('pointercancel', ()=>{ active = null; hide(); });
-  svg.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') hide(); });
+  bindScrub(wrap, show, cancel=> { if(cancel) hide(); });
   return {hide};
 }
 function serumCtx(shownS, now, pct){
@@ -2801,12 +2820,7 @@ function attachLineScrub(root){
       const left = x/c.W*r.width, w = tip.offsetWidth;
       tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
     };
-    let active = null;
-    svg.addEventListener('pointerdown', e=>{ active = e.pointerId; try{ svg.setPointerCapture(e.pointerId); }catch(_){} show(e.clientX); });
-    svg.addEventListener('pointermove', e=>{ if(active===e.pointerId || e.pointerType==='mouse') show(e.clientX); });
-    svg.addEventListener('pointerup', ()=>{ active = null; });
-    svg.addEventListener('pointercancel', ()=>{ active = null; hide(); });
-    svg.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') hide(); });
+    bindScrub(wrap, show, cancel=> { if(cancel) hide(); });
   });
 }
 
