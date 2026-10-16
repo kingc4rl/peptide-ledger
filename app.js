@@ -666,6 +666,23 @@ function renderProtocolCalendar(){
   el.innerHTML = html;
 }
 
+/* Dose-tab cards start minimised; expanded ones stay open until the app is reloaded. */
+const expandedCards = new Set();
+function fmtMoment(t, withTime){
+  const d = new Date(t);
+  const ds = d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+  return withTime===false ? ds : `${ds} · ${d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'})}`;
+}
+/* The next scheduled injection not yet logged (ms), or the stored next-dose date at the usual time. */
+function nextDoseMoment(p){
+  if(p.startDate && p.startDate > todayISO()) return null;
+  const now = Date.now();
+  const n = splitCount(p);
+  const ev = scheduledEvents(p, now - 20*HOUR, now + 120*24*HOUR).find(e=> injectionsOn(p, isoFromDate(new Date(e.t - 2*HOUR))) < n);
+  if(ev) return ev.t;
+  if(!p.nextDose) return null;
+  return momentOn(p.nextDose, p.doseTime||'') || new Date(p.nextDose+'T12:00:00').getTime();
+}
 function renderProtocols(){
   renderProtocolCalendar();
   const el = $('#protocolList');
@@ -708,8 +725,9 @@ function renderProtocols(){
     const d = doseAt(p, day);
     const perInj = num(d.dose,null)!=null ? num(d.dose)/n : null;
     const u = unitsPerInjection(p, day);
-    const steps = titrationSteps(p);
-    const nxt = nextStepAfter(p, day);
+    const lastEv = injectionEvents(p).sort((x,y)=> y.t-x.t)[0];
+    const nextT = nextDoseMoment(p);
+    const open = expandedCards.has(p.id);
     const activeVial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
     const markLabel = complete ? '✓ Taken' : (n>1 ? `💉 ${done}/${n} taken` : '💉 Mark taken');
     return `<div class="card-flat supply-item-card" data-open-protocol="${p.id}" style="margin-bottom:10px;cursor:pointer;">
@@ -721,17 +739,20 @@ function renderProtocols(){
             ${n>1 && perInj!=null ? `<span class="pill pill-muted">${n} × ${esc(fmtDose(perInj, d.doseUnit))}</span>` : ''}
             ${u!=null ? `<span class="pill pill-info">${u} units${n>1?' each':''}</span>` : ''}
           </div>
-          ${p.doseNumber? `<div style="margin-top:6px;"><span class="pill pill-muted">Dose ${esc(p.doseNumber)}</span></div>` : ''}
-          ${steps.length ? `<div class="footnote" style="margin-top:4px;">${d.step ? `Step ${d.step} of ${steps.length}` : 'Base dose'}${nxt ? ` · next ${esc(fmtDose(nxt.dose, nxt.doseUnit||p.doseUnit))} on ${fmtDateShort(nxt.start)}` : ' · final step'}</div>` : ''}
-          <div class="footnote" style="margin-top:3px;">${notStarted?'Start':'Started'} ${fmtDateShort(p.startDate)} · Next dose ${fmtDateShort(p.nextDose)}${p.doseTime && p.nextDose ? ' at '+fmtClock(p.doseTime) : ''}</div>
-          ${scheduleLabel(p) ? `<div class="footnote" style="margin-top:3px;">Schedule: ${esc(scheduleLabel(p))}</div>` : ''}
-          ${activeVial? `<div class="footnote" style="margin-top:2px;">Vial: ${activeVial.remainingMg!=null? `${Math.round(activeVial.remainingMg*10)/10}mg left of ${num(activeVial.mgPerVial,0)}mg` : 'not yet opened'}${activeVial.pharmacy? ` (${esc(activeVial.pharmacy)})` : ''}</div>` : ''}
+          <div class="pc-facts">
+            <div><span class="pc-k">Last dose</span> ${lastEv ? `${esc(fmtMoment(lastEv.t))} · ${esc(fmtAmount(lastEv.mg))}` : '<span class="footnote">none logged</span>'}</div>
+            <div><span class="pc-k">Next dose</span> ${nextT ? esc(fmtMoment(nextT, !!p.doseTime)) : (notStarted ? `starts ${esc(fmtDateShort(p.startDate))}` : '<span class="footnote">no schedule set</span>')}</div>
+          </div>
+          ${activeVial? `<div class="footnote" style="margin-top:4px;">Vial: ${activeVial.remainingMg!=null? `${Math.round(activeVial.remainingMg*10)/10}mg left of ${num(activeVial.mgPerVial,0)}mg` : 'not yet opened'}${activeVial.pharmacy? ` (${esc(activeVial.pharmacy)})` : ''}</div>` : ''}
         </div>
         ${notStarted ? '' : `<div class="dose-actions">
           <button class="dose-check-btn ${complete?'taken':''}" data-mark-dose="${p.id}" title="${complete? 'Marked taken. Tap to undo the last injection' : 'Log an injection for today'}">${markLabel}</button>
           <button class="hist-btn" data-dose-history="${p.id}" title="Dose history and backfill">🗓 History</button>
         </div>`}
       </div>
+      <button type="button" class="pc-toggle" data-toggle-card="${p.id}" aria-expanded="${open}">${open ? 'Hide syringe &amp; details ▴' : 'Show syringe &amp; details ▾'}</button>
+      <div class="pc-more" ${open?'':'hidden'}>
+      ${scheduleLabel(p) ? `<div class="footnote" style="margin-top:10px;">Schedule: ${esc(scheduleLabel(p))}</div>` : ''}
       ${cyc ? `
       <div style="margin-top:12px;">
         <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
@@ -746,10 +767,19 @@ function renderProtocols(){
         <div class="syringe-wrap" data-syr-units="${u}" data-syr-color="${esc(color||'')}" data-syr-cap="${syringeCapacityUnits(p)}"></div>
       </div>` : ''}
       ${siteRowHTML(p)}
+      </div>
     </div>`;
   }).join('');
   el.innerHTML = html;
   bindProtocolExtras(el);
+  $$('[data-toggle-card]',el).forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const id = b.dataset.toggleCard, more = b.nextElementSibling;
+    const open = !expandedCards.has(id);
+    if(open) expandedCards.add(id); else expandedCards.delete(id);
+    more.hidden = !open; b.setAttribute('aria-expanded', open);
+    b.innerHTML = open ? 'Hide syringe &amp; details ▴' : 'Show syringe &amp; details ▾';
+  }));
   $$('[data-syr-units]',el).forEach(w=> renderSyringeInto(w, num(w.dataset.syrUnits,0), num(w.dataset.syrCap,100), {compact:true, color: w.dataset.syrColor||undefined}));
   $$('[data-open-protocol]',el).forEach(card=> card.addEventListener('click', ()=> openProtocolModal(state.protocols.find(p=>p.id===card.dataset.openProtocol))));
   $$('[data-mark-dose]',el).forEach(b=> b.addEventListener('click', (e)=>{
@@ -1448,7 +1478,6 @@ function fmtAmount(mg){
   const mcg = mg*1000;
   return mcg>=10 ? `${Math.round(mcg)} mcg` : `${Math.round(mcg*100)/100} mcg`;
 }
-let serumRange = parseInt(lsGet('ledger.serumRange','7'),10) || 7;
 let serumSel = lsGet('ledger.serumSel','all');
 function serumSeries(){
   const colorMap = protocolColorMap();
@@ -1474,6 +1503,61 @@ function serumSeries(){
   });
   return {series:out, missing};
 }
+const SERUM_WINDOWS = [['1h',HOUR],['12h',12*HOUR],['24h',24*HOUR],['7d',7*24*HOUR],['30d',30*24*HOUR]];
+let serumWin = SERUM_WINDOWS.some(w=>w[0]===lsGet('ledger.serumWin','')) ? lsGet('ledger.serumWin','') : '7d';
+let serumEnd = null;   // right edge of the view in ms; null keeps "now" at 70% across
+const serumWinMs = ()=> SERUM_WINDOWS.find(w=>w[0]===serumWin)[1];
+const serumFollowEnd = now=> now + serumWinMs()*0.3;
+function serumAxisLabel(t){
+  const d = new Date(t), win = serumWinMs();
+  if(win <= 24*HOUR) return d.toLocaleTimeString(undefined,{hour:'numeric', minute: win<=HOUR ? '2-digit' : undefined});
+  return d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
+}
+const SV = {W:360, H:220, padL:46, padR:12, padT:14, padB:28};
+/* Draws the visible slice [t1 - window, t1]. ctx holds per-series event lists computed once per render. */
+function serumSvgInner(ctx, t1){
+  const {W,H,padL,padR,padT,padB} = SV;
+  const now = ctx.now, t0 = t1 - serumWinMs();
+  const STEPS = 160;
+  const lines = ctx.shown.map(c=>{
+    const pts = [];
+    for(let i=0;i<=STEPS;i++) pts.push(t0 + (t1-t0)*i/STEPS);
+    c.all.filter(e=>e.t>=t0 && e.t<=t1).forEach(e=>{ pts.push(e.t-1, e.t); });
+    if(now>=t0 && now<=t1) pts.push(now);
+    pts.sort((x,y)=>x-y);
+    const past = pts.filter(t=>t<=now).map(t=>({t, y:levelAt(c.s.evs, c.s.hl, t)}));
+    const fut = pts.filter(t=>t>=now).map(t=>({t, y: t===now ? levelAt(c.s.evs, c.s.hl, t) : levelAt(c.all, c.s.hl, t)}));
+    return {c, past, fut};
+  });
+  const val = (l,y)=> ctx.pct ? y/l.c.peak*100 : y;
+  const vis = lines.flatMap(l=> l.past.concat(l.fut).map(p=>val(l,p.y)));
+  const yMax = ctx.pct ? 100 : Math.max(1e-9, ...vis)*1.08;
+  const X = t=> padL + (W-padL-padR)*(t-t0)/(t1-t0);
+  const Y = v=> padT + (H-padT-padB)*(1 - v/yMax);
+  const fmtY = ctx.pct ? (v=> `${Math.round(v)}%`) : (v=> v>0 ? fmtAmount(v).replace(' mg','mg').replace(' mcg','mcg') : '0');
+  let g = `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent"/>`;
+  niceTicks(0, yMax, 4).ticks.filter(v=> v<=yMax*1.001).forEach(v=>{
+    const y = Y(v).toFixed(1);
+    g += `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" class="ch-grid"/><text x="${padL-6}" y="${(+y+4).toFixed(1)}" class="ch-ylab">${esc(fmtY(v))}</text>`;
+  });
+  [[t0,'start'],[(t0+t1)/2,'middle'],[t1,'end']].forEach(([t,anchor])=>{
+    g += `<text x="${X(t).toFixed(1)}" y="${H-8}" class="ch-xlab" text-anchor="${anchor}">${esc(serumAxisLabel(t))}</text>`;
+  });
+  if(now>=t0 && now<=t1){
+    g += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:var(--muted)"/>`;
+    g += `<text x="${(X(now)+4).toFixed(1)}" y="${padT+9}" class="ch-mlab" style="fill:var(--muted)">Now</text>`;
+  }
+  const toPath = (l,pts)=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
+  lines.forEach(l=>{
+    if(l.past.length>1) g += `<polyline points="${toPath(l,l.past)}" class="ch-line" style="stroke:${l.c.s.color}"/>`;
+    if(l.fut.length>1) g += `<polyline points="${toPath(l,l.fut)}" class="ch-line" style="stroke:${l.c.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
+    if(now>=t0 && now<=t1){
+      const cur = levelAt(l.c.s.evs, l.c.s.hl, now);
+      g += `<circle cx="${X(now).toFixed(1)}" cy="${Y(val(l,cur)).toFixed(1)}" r="4.5" style="fill:${l.c.s.color}"><title>${esc(l.c.s.label)}: ${esc(fmtAmount(cur))} now</title></circle>`;
+    }
+  });
+  return g;
+}
 function renderSerum(){
   const el = $('#serumBody');
   if(!el) return;
@@ -1485,62 +1569,22 @@ function renderSerum(){
   }
   if(serumSel!=='all' && !series.some(s=>s.p.id===serumSel)) serumSel = 'all';
   const now = Date.now();
-  const back = serumRange*24*HOUR, fwd = Math.max(1, Math.round(serumRange*0.3))*24*HOUR;
-  const t0 = now-back, t1 = now+fwd;
-  const shown = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
-  const STEPS = 160;
-  const lines = shown.map(s=>{
-    const future = scheduledEvents(s.p, now, t1).map(e=>({...e, mg:e.mg*s.frac}));
-    const all = s.evs.concat(future);
-    const pts = [];
-    for(let i=0;i<=STEPS;i++){
-      const t = t0 + (t1-t0)*i/STEPS;
-      pts.push({t, y: levelAt(all, s.hl, t)});
-    }
-    // add exact points at each injection so the spike peaks are not smoothed over
-    s.evs.concat(future).filter(e=>e.t>=t0 && e.t<=t1).forEach(e=>{
-      pts.push({t:e.t-1, y:levelAt(all,s.hl,e.t-1)}); pts.push({t:e.t, y:levelAt(all,s.hl,e.t)});
-    });
-    pts.sort((a,b)=>a.t-b.t);
-    return {s, pts, cur: levelAt(s.evs, s.hl, now)};
-  });
-  const pct = serumSel==='all' && new Set(shown.map(s=>s.p.id)).size>1;   // different protocols: compare as % of each one's own peak in view
-  const peak = l=> Math.max(1e-12, ...l.pts.map(p=>p.y));
-  const val = (l,y)=> pct ? y/peak(l)*100 : y;
-  const yMaxRaw = Math.max(1e-12, ...lines.map(l=> Math.max(...l.pts.map(p=>val(l,p.y)))));
-  const W = 360, H = 220, padL = 46, padR = 12, padT = 14, padB = 28;
-  const yMax = pct ? 100 : yMaxRaw*1.08;
-  const X = t=> padL + (W-padL-padR)*(t-t0)/(t1-t0);
-  const Y = v=> padT + (H-padT-padB)*(1 - v/yMax);
-  const fmtY = pct ? (v=> `${Math.round(v)}%`) : (v=> v>0 ? fmtAmount(v).replace(' mg','mg').replace(' mcg','mcg') : '0');
-  let g = '';
-  const tk = niceTicks(0, yMax, 4);
-  tk.ticks.filter(v=> v<=yMax*1.001).forEach(v=>{
-    const y = Y(v).toFixed(1);
-    g += `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" class="ch-grid"/><text x="${padL-6}" y="${(+y+4).toFixed(1)}" class="ch-ylab">${esc(fmtY(v))}</text>`;
-  });
-  const xl = [[t0,'start'],[now,'middle'],[t1,'end']];
-  xl.forEach(([t,anchor],i)=>{
-    const lab = i===1 ? 'Now' : fmtDateShort(isoFromDate(new Date(t)));
-    g += `<text x="${X(t).toFixed(1)}" y="${H-8}" class="ch-xlab" text-anchor="${anchor}">${esc(lab)}</text>`;
-  });
-  g += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:var(--muted)"/>`;
-  lines.forEach(l=>{
-    const split = pts=> ({past: pts.filter(p=>p.t<=now), fut: pts.filter(p=>p.t>=now)});
-    const sp = split(l.pts);
-    const toPath = pts=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
-    // past line is only what was logged; the dashed part after "Now" adds scheduled doses
-    const past = l.pts.filter(p=>p.t<=now).map(p=>({t:p.t, y:levelAt(l.s.evs, l.s.hl, p.t)}));
-    const fut = [{t:now, y:levelAt(l.s.evs, l.s.hl, now)}].concat(sp.fut.filter(p=>p.t>now));
-    if(past.length>1) g += `<polyline points="${toPath(past)}" class="ch-line" style="stroke:${l.s.color}"/>`;
-    if(fut.length>1) g += `<polyline points="${toPath(fut)}" class="ch-line" style="stroke:${l.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
-    const cy = Y(val(l, levelAt(l.s.evs, l.s.hl, now)));
-    g += `<circle cx="${X(now).toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" style="fill:${l.s.color}"><title>${esc(l.s.label)}: ${esc(fmtAmount(l.cur))} now</title></circle>`;
-  });
+  const shownS = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
+  const horizon = now + 31*24*HOUR;
+  const ctx = {now, pct: serumSel==='all' && new Set(shownS.map(s=>s.p.id)).size>1,
+    shown: shownS.map(s=>{
+      const all = s.evs.concat(scheduledEvents(s.p, now, horizon).map(e=>({...e, mg:e.mg*s.frac})));
+      // peak used for the % view: highest level right after any injection
+      const peak = Math.max(1e-12, ...all.map(e=> levelAt(all, s.hl, e.t)));
+      return {s, all, peak};
+    })};
+  const earliest = Math.min(now, ...series.flatMap(s=> s.evs.map(e=>e.t)));
+  const clampEnd = t1=> Math.max(earliest + serumWinMs()*0.25, Math.min(now + 30*24*HOUR, t1));
+  let t1 = serumEnd==null ? serumFollowEnd(now) : clampEnd(serumEnd);
   const chipIds = [...new Map(series.map(s=>[s.p.id, s.p.compound||'Untitled'])).entries()];
   const chips = [['all','All']].concat(chipIds).map(([id,label])=>
     `<button type="button" class="chip-btn ${serumSel===id?'on':''}" data-serum-sel="${esc(id)}">${esc(label)}</button>`).join('');
-  const ranges = [3,7,14,30].map(d=> `<button type="button" class="chip-btn ${serumRange===d?'on':''}" data-serum-range="${d}">${d}d</button>`).join('');
+  const wins = SERUM_WINDOWS.map(([k])=> `<button type="button" class="chip-btn ${serumWin===k?'on':''}" data-serum-win="${k}">${k}</button>`).join('');
   const rows = series.map(s=>{
     const cur = levelAt(s.evs, s.hl, now);
     const lastPeak = Math.max(0, ...s.evs.filter(e=>e.t<=now).map(e=>levelAt(s.evs, s.hl, e.t)));
@@ -1551,12 +1595,49 @@ function renderSerum(){
   }).join('');
   el.innerHTML = `
     <div class="chip-row" style="margin-bottom:8px;">${chips}</div>
-    <svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="Estimated serum level over time">${g}</svg>
-    <div class="chip-row" style="margin:8px 0 10px;"><span class="footnote" style="align-self:center;margin-right:2px;">Show</span>${ranges}</div>
+    <div class="chip-row">${wins}</div>
+    <div class="serum-pan">
+      <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart" id="serumSvg" role="img" aria-label="Estimated serum level over time. Drag left or right to move through time.">${serumSvgInner(ctx, t1)}</svg>
+    </div>
+    <div class="serum-nav"><span class="footnote" id="serumRangeLbl"></span><button type="button" class="btn btn-sm" id="serumNow" ${serumEnd==null?'hidden':''}>↺ Back to now</button></div>
     ${rows}
-    <p class="footnote" style="margin-top:8px;">${pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
+    <p class="footnote" style="margin-top:8px;">Drag the chart left or right to see past and future levels. ${ctx.pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
+  const svg = $('#serumSvg',el), lbl = $('#serumRangeLbl',el), nowBtn = $('#serumNow',el);
+  const rangeText = ()=>{
+    const t0 = t1 - serumWinMs();
+    const f = t=> new Date(t).toLocaleString(undefined, serumWinMs()<=24*HOUR ? {month:'short', day:'numeric', hour:'numeric', minute:'2-digit'} : {month:'short', day:'numeric'});
+    lbl.textContent = `${f(t0)} – ${f(t1)}`;
+  };
+  rangeText();
+  let raf = 0;
+  const draw = ()=>{ raf = 0; svg.innerHTML = serumSvgInner(ctx, t1); rangeText(); nowBtn.hidden = serumEnd==null; };
+  let drag = null;
+  svg.addEventListener('pointerdown', e=>{
+    drag = {x:e.clientX, t1, id:e.pointerId, moved:false};
+    try{ svg.setPointerCapture(e.pointerId); }catch(_){}
+  });
+  svg.addEventListener('pointermove', e=>{
+    if(!drag || e.pointerId!==drag.id) return;
+    const r = svg.getBoundingClientRect();
+    const plotPx = r.width * (SV.W-SV.padL-SV.padR)/SV.W;
+    const dx = e.clientX - drag.x;
+    if(Math.abs(dx) > 3) drag.moved = true;
+    t1 = clampEnd(drag.t1 - dx/plotPx*serumWinMs());
+    serumEnd = t1;
+    if(!raf) raf = requestAnimationFrame(draw);
+  });
+  const endDrag = ()=>{ drag = null; };
+  svg.addEventListener('pointerup', endDrag);
+  svg.addEventListener('pointercancel', endDrag);
+  nowBtn.addEventListener('click', ()=>{ serumEnd = null; t1 = serumFollowEnd(now); draw(); });
   $$('[data-serum-sel]',el).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
-  $$('[data-serum-range]',el).forEach(b=> b.addEventListener('click', ()=>{ serumRange = +b.dataset.serumRange; lsSet('ledger.serumRange', String(serumRange)); renderSerum(); }));
+  $$('[data-serum-win]',el).forEach(b=> b.addEventListener('click', ()=>{
+    // keep the same centre point when switching windows, unless following now
+    const centre = serumEnd==null ? null : t1 - serumWinMs()/2;
+    serumWin = b.dataset.serumWin; lsSet('ledger.serumWin', serumWin);
+    if(centre!=null) serumEnd = centre + serumWinMs()/2;
+    renderSerum();
+  }));
 }
 
 /* ===================== Peptides: Stash ===================== */

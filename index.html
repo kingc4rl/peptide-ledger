@@ -394,6 +394,12 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .blend-row input{ width:100%; min-width:0; }
 .test-block{ border-top:1px dashed var(--line); padding-top:10px; margin-top:10px; }
 .test-block:first-child{ border-top:none; padding-top:0; margin-top:0; }
+.pc-facts{ margin-top:8px; display:flex; flex-direction:column; gap:2px; font-size:13px; }
+.pc-k{ display:inline-block; min-width:72px; color:var(--muted); font-size:12px; }
+.pc-toggle{ margin-top:10px; background:none; border:none; padding:4px 0; color:var(--accent-pep-strong); font-size:12.5px; font-weight:600; cursor:pointer; }
+.serum-pan{ touch-action:pan-y; cursor:grab; user-select:none; -webkit-user-select:none; }
+.serum-pan:active{ cursor:grabbing; }
+.serum-nav{ display:flex; justify-content:space-between; align-items:center; gap:8px; margin:6px 0 10px; min-height:30px; }
 .chip-row{ display:flex; gap:6px; flex-wrap:wrap; }
 .chip-btn{ border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
 .chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep-strong); }
@@ -518,6 +524,12 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
           <div id="protocolList"></div>
         </div>
 
+        <div class="card" id="serumCard">
+          <h3 style="font-size:16px;margin-bottom:2px;">Serum level</h3>
+          <p class="footnote" style="margin-bottom:10px;">Estimated amount of each compound still in your body, from your logged doses and half-life.</p>
+          <div id="serumBody"></div>
+        </div>
+
         <div class="card">
           <div class="card-h"><h3>Upcoming doses</h3></div>
           <div id="protocolCalendar" style="margin-bottom:12px;"></div>
@@ -527,12 +539,6 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
         <div class="card">
           <div class="card-h"><h3>Dose history</h3><span class="footnote">Tap a dose to edit or backfill</span></div>
           <div id="recentDoseList"></div>
-        </div>
-
-        <div class="card" id="serumCard">
-          <h3 style="font-size:16px;margin-bottom:2px;">Serum level</h3>
-          <p class="footnote" style="margin-bottom:10px;">Estimated amount of each compound still in your body, from your logged doses and half-life.</p>
-          <div id="serumBody"></div>
         </div>
 
       </section>
