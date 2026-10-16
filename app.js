@@ -407,11 +407,11 @@ const CALC_IDS = {vial:'#calcVial', bac:'#calcBac', dose:'#calcDose', draw:'#cal
 const trimNum = (n, dp)=> String(Math.round(n*Math.pow(10,dp))/Math.pow(10,dp));
 function calcBacMl(){ const v = num($('#calcBac').value,0); return calcBacUnit==='units' ? v/100 : v; }
 function calcDoseMg(){ const v = num($('#calcDose').value,0); return $('#calcDoseUnit').value==='mcg' ? v/1000 : v; }
-// Dose and draw are the working pair: typing a draw recalculates the dose and vice versa.
+// Typing a draw recalculates the BAC water (how much to add for that draw); typing a dose recalculates the draw.
 // Editing vial or water keeps whichever field is currently calculated (a cleared field becomes calculated).
 function calcEdited(f){
   let t = calcOrder[0];
-  if(f==='draw') t = 'dose';
+  if(f==='draw') t = 'bac';
   else if(f==='dose') t = 'draw';
   else if(f===t) t = 'draw';
   calcOrder = [t].concat(['vial','bac','dose','draw'].filter(x=>x!==t));
