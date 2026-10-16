@@ -785,7 +785,7 @@ function doseCardHTML(p, color, day, serum){
       <div class="dc-main">
         <div class="dc-title"><strong class="dc-name">${esc(p.compound||'Untitled')}</strong><span class="dc-chev" aria-hidden="true">${open?'▴':'▾'}</span></div>
         <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span></div>
-        <div class="dc-sub">${[time, lastEv ? `Last ${fmtShortMoment(lastEv.t)}` : 'No doses yet', (!open && vial && vial.remainingMg!=null) ? `${round2(vial.remainingMg)} mg left` : ''].filter(Boolean).map(esc).join(' · ')}</div>
+        ${open ? `<div class="dc-sub">${[time, lastEv ? `Last ${fmtShortMoment(lastEv.t)}` : 'No doses yet'].filter(Boolean).map(esc).join(' · ')}</div>` : ''}
       </div>
       ${logBtn}
     </div>`;
