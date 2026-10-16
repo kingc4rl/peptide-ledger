@@ -790,6 +790,12 @@ function renderProtocols(){
   $$('[data-dose-history]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory)); }));
   $$('[data-edit-protocol]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openProtocolModal(state.protocols.find(p=>p.id===b.dataset.editProtocol)); }));
   $$('[data-goto-checkin]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); setTab('progress'); }));
+  $$('[data-mini]',el).forEach(w=>{
+    const now = Date.now();
+    const ctx = serumCtx(serum.filter(s=>s.p.id===w.dataset.mini), now, false);
+    serumSvgInner(ctx, now + 2*24*HOUR, 7*24*HOUR);   // sets ctx.scale to match the drawn chart
+    attachSerumScrub(w, ctx);
+  });
   $$('[data-full-chart]',el).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
     serumSel = b.dataset.fullChart; lsSet('ledger.serumSel', serumSel); renderSerum();
@@ -863,7 +869,7 @@ function doseCardHTML(p, color, day, serum){
     const now = Date.now();
     const ctx = serumCtx(mine, now, false);
     snap = `<div class="dc-sec"><div class="dc-sec-h"><h4>Estimated level</h4><button type="button" class="link-btn" data-full-chart="${p.id}">Full chart ↗</button></div>
-      <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart dc-mini" role="img" aria-label="Estimated level of ${esc(p.compound||'')} over the last week">${serumSvgInner(ctx, now + 2*24*HOUR, 7*24*HOUR)}</svg>
+      <div class="serum-pan dc-mini-wrap" data-mini="${p.id}"><svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart dc-mini" role="img" aria-label="Estimated level of ${esc(p.compound||'')} over the last week">${serumSvgInner(ctx, now + 2*24*HOUR, 7*24*HOUR)}</svg></div>
       <div class="dc-legend">${mine.map(s=>`<span><i style="background:${s.color}"></i><strong>${esc(s.label)}</strong> ${esc(fmtAmount(levelAt(s.evs, s.hl, now)))} · t½ ${esc(fmtHours(s.hl))}</span>`).join('')}</div>
       <p class="footnote" style="margin-top:4px;">Estimated from logged doses, not a measured level.</p></div>`;
   } else if(!halfLifeOf(p) && !parts){
@@ -1644,6 +1650,21 @@ function serumSvgInner(ctx, t1, winMs){
     g += `<text x="${(X(now)+4).toFixed(1)}" y="${padT+9}" class="ch-mlab" style="fill:var(--muted)">Now</text>`;
   }
   const toPath = (l,pts)=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
+  const base = (H-padB).toFixed(1);
+  lines.forEach(l=>{
+    if(l.past.length>1) g += `<polygon points="${X(l.past[0].t).toFixed(1)},${base} ${toPath(l,l.past)} ${X(l.past[l.past.length-1].t).toFixed(1)},${base}" style="fill:${l.c.s.color};opacity:.13"/>`;
+    if(l.fut.length>1) g += `<polygon points="${X(l.fut[0].t).toFixed(1)},${base} ${toPath(l,l.fut)} ${X(l.fut[l.fut.length-1].t).toFixed(1)},${base}" style="fill:${l.c.s.color};opacity:.06"/>`;
+  });
+  // dose markers along the bottom: filled = logged, hollow = scheduled
+  const seen = new Set();
+  lines.forEach(l=>{
+    if(seen.has(l.c.s.p.id)) return; seen.add(l.c.s.p.id);
+    l.c.all.filter(e=> e.t>=t0 && e.t<=t1).forEach(e=>{
+      const x = X(e.t).toFixed(1), logged = e.t<=now && l.c.s.evs.some(v=>v.t===e.t);
+      g += `<path d="M${x} ${(H-padB-1).toFixed(1)} l-4 7 h8 z" style="fill:${logged?l.c.s.color:'var(--surface)'};stroke:${l.c.s.color};stroke-width:1.2"/>`;
+    });
+  });
+  ctx.scale = {t0, t1, X, Y, val, yMax};
   lines.forEach(l=>{
     if(l.past.length>1) g += `<polyline points="${toPath(l,l.past)}" class="ch-line" style="stroke:${l.c.s.color}"/>`;
     if(l.fut.length>1) g += `<polyline points="${toPath(l,l.fut)}" class="ch-line" style="stroke:${l.c.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
@@ -1653,6 +1674,44 @@ function serumSvgInner(ctx, t1, winMs){
     }
   });
   return g;
+}
+/* Finger/mouse scrub: a crosshair with a readout of every line at the touched moment. */
+function attachSerumScrub(wrap, ctx){
+  const svg = $('svg', wrap);
+  const cross = document.createElement('div'); cross.className = 'scrub-line'; cross.hidden = true;
+  const tip = document.createElement('div'); tip.className = 'scrub-tip'; tip.hidden = true;
+  wrap.append(cross, tip);
+  let dots = [];
+  const hide = ()=>{ cross.hidden = tip.hidden = true; dots.forEach(d=>d.remove()); dots = []; };
+  const show = clientX=>{
+    const sc = ctx.scale; if(!sc) return;
+    const r = svg.getBoundingClientRect();
+    const k = r.width / SV.W;
+    const xv = Math.max(SV.padL, Math.min(SV.W-SV.padR, (clientX - r.left)/k));
+    const t = sc.t0 + (xv-SV.padL)/(SV.W-SV.padL-SV.padR)*(sc.t1-sc.t0);
+    cross.hidden = false; cross.style.left = (xv/SV.W*100)+'%';
+    cross.style.top = (SV.padT/SV.H*100)+'%'; cross.style.height = ((SV.H-SV.padT-SV.padB)/SV.H*100)+'%';
+    dots.forEach(d=>d.remove()); dots = [];
+    const rows = ctx.shown.map(c=>{
+      const y = t<=ctx.now ? levelAt(c.s.evs, c.s.hl, t) : levelAt(c.all, c.s.hl, t);
+      const d = document.createElement('i'); d.className = 'scrub-dot';
+      d.style.left = (xv/SV.W*100)+'%'; d.style.top = (sc.Y(ctx.pct ? y/c.peak*100 : y)/SV.H*100)+'%'; d.style.background = c.s.color;
+      wrap.appendChild(d); dots.push(d);
+      return `<div><i style="background:${c.s.color}"></i>${esc(c.s.label)}<b class="mono">${esc(fmtAmount(y))}${ctx.pct?` <span>${Math.round(y/c.peak*100)}%</span>`:''}</b></div>`;
+    });
+    const d = new Date(t);
+    tip.innerHTML = `<div class="scrub-when">${esc(d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'}))} · ${esc(d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}))}${t>ctx.now?' <span>projected</span>':''}</div>${rows.join('')}`;
+    tip.hidden = false;
+    const left = xv/SV.W*r.width, w = tip.offsetWidth;
+    tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
+  };
+  let active = null;
+  svg.addEventListener('pointerdown', e=>{ active = e.pointerId; try{ svg.setPointerCapture(e.pointerId); }catch(_){} show(e.clientX); });
+  svg.addEventListener('pointermove', e=>{ if(active===e.pointerId || e.pointerType==='mouse') show(e.clientX); });
+  svg.addEventListener('pointerup', ()=>{ active = null; });
+  svg.addEventListener('pointercancel', ()=>{ active = null; hide(); });
+  svg.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') hide(); });
+  return {hide};
 }
 function serumCtx(shownS, now, pct){
   const horizon = now + 31*24*HOUR;
@@ -1695,11 +1754,12 @@ function renderSerum(){
     <div class="chip-row" style="margin-bottom:8px;">${chips}</div>
     <div class="chip-row">${wins}</div>
     <div class="serum-pan">
-      <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart" id="serumSvg" role="img" aria-label="Estimated serum level over time. Drag left or right to move through time.">${serumSvgInner(ctx, t1)}</svg>
+      <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart" id="serumSvg" role="img" aria-label="Estimated serum level over time. Touch and drag to read the level at any moment.">${serumSvgInner(ctx, t1)}</svg>
     </div>
-    <div class="serum-nav"><span class="footnote" id="serumRangeLbl"></span><button type="button" class="btn btn-sm" id="serumNow" ${serumEnd==null?'hidden':''}>↺ Back to now</button></div>
+    <div class="serum-nav"><button type="button" class="btn btn-sm nav-arrow" id="serumBack" aria-label="Earlier">‹</button><span class="footnote" id="serumRangeLbl"></span><button type="button" class="btn btn-sm nav-arrow" id="serumFwd" aria-label="Later">›</button></div>
+    <div style="text-align:center;margin:-4px 0 8px;"><button type="button" class="link-btn" id="serumNow" ${serumEnd==null?'hidden':''}>↺ Back to now</button></div>
     ${rows}
-    <p class="footnote" style="margin-top:8px;">Drag the chart left or right to see past and future levels. ${ctx.pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
+    <p class="footnote" style="margin-top:8px;">Touch and drag across the chart to read the level at any moment. Use ‹ › to move earlier or later. ${ctx.pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
   const svg = $('#serumSvg',el), lbl = $('#serumRangeLbl',el), nowBtn = $('#serumNow',el);
   const rangeText = ()=>{
     const t0 = t1 - serumWinMs();
@@ -1707,26 +1767,11 @@ function renderSerum(){
     lbl.textContent = `${f(t0)} – ${f(t1)}`;
   };
   rangeText();
-  let raf = 0;
-  const draw = ()=>{ raf = 0; svg.innerHTML = serumSvgInner(ctx, t1); rangeText(); nowBtn.hidden = serumEnd==null; };
-  let drag = null;
-  svg.addEventListener('pointerdown', e=>{
-    drag = {x:e.clientX, t1, id:e.pointerId, moved:false};
-    try{ svg.setPointerCapture(e.pointerId); }catch(_){}
-  });
-  svg.addEventListener('pointermove', e=>{
-    if(!drag || e.pointerId!==drag.id) return;
-    const r = svg.getBoundingClientRect();
-    const plotPx = r.width * (SV.W-SV.padL-SV.padR)/SV.W;
-    const dx = e.clientX - drag.x;
-    if(Math.abs(dx) > 3) drag.moved = true;
-    t1 = clampEnd(drag.t1 - dx/plotPx*serumWinMs());
-    serumEnd = t1;
-    if(!raf) raf = requestAnimationFrame(draw);
-  });
-  const endDrag = ()=>{ drag = null; };
-  svg.addEventListener('pointerup', endDrag);
-  svg.addEventListener('pointercancel', endDrag);
+  const scrub = attachSerumScrub($('.serum-pan',el), ctx);
+  const draw = ()=>{ scrub.hide(); svg.innerHTML = serumSvgInner(ctx, t1); rangeText(); nowBtn.hidden = serumEnd==null; };
+  const step = dir=>{ t1 = clampEnd(t1 + dir*serumWinMs()/2); serumEnd = t1; draw(); };
+  $('#serumBack',el).addEventListener('click', ()=> step(-1));
+  $('#serumFwd',el).addEventListener('click', ()=> step(1));
   nowBtn.addEventListener('click', ()=>{ serumEnd = null; t1 = serumFollowEnd(now); draw(); });
   $$('[data-serum-sel]',el).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
   $$('[data-serum-win]',el).forEach(b=> b.addEventListener('click', ()=>{
