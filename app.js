@@ -983,6 +983,7 @@ function renderProtocolManager(){
     const freq = num(p.frequencyDays,null);
     const sched = scheduleLabel(p) || (freq ? (freq===1 ? 'Daily' : `Every ${freq} days`) : 'No schedule set');
     const hl = halfLifeOf(p);
+    const parts = blendParts(p);
     return `<div class="card-flat pm-row ${paused?'paused-row':''}" data-open-protocol="${p.id}">
       <div style="min-width:0;">
         <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
@@ -992,7 +993,7 @@ function renderProtocolManager(){
           ${u!=null?`<span class="pill pill-info">${u} units</span>`:''}
           ${paused?'<span class="pill pill-muted">Paused</span>':notStarted?'<span class="pill pill-muted">Not started</span>':''}
         </div>
-        <div class="footnote" style="margin-top:4px;">${esc(sched)}${splitCount(p)>1?` · split ×${splitCount(p)}`:''}${hl?` · t½ ${esc(fmtHours(hl))}`:''}${titrationSteps(p).length?` · ${titrationSteps(p).length} titration step${titrationSteps(p).length===1?'':'s'}`:''}</div>
+        <div class="footnote" style="margin-top:4px;">${esc(sched)}${splitCount(p)>1?` · split ×${splitCount(p)}`:''}${parts ? ` · blend: ${esc(parts.map(c=>c.name).join(', '))}` : hl?` · t½ ${esc(fmtHours(hl))}`:''}${titrationSteps(p).length?` · ${titrationSteps(p).length} titration step${titrationSteps(p).length===1?'':'s'}`:''}</div>
       </div>
       ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : `<span class="footnote" aria-hidden="true">Edit ›</span>`}
     </div>`;
@@ -1045,7 +1046,7 @@ function openProtocolModal(existing){
     <div class="form-grid">
       <div class="field span2"><label for="pCompound">Compound</label><input id="pCompound" type="text" value="${esc(p.compound||'')}" placeholder="e.g. BPC-157"></div>
       <div class="field"><label for="pDose">Dose (whole dose day)</label><input id="pDose" type="number" inputmode="decimal" step="any" value="${esc(p.dose||'')}"></div>
-      <div class="field"><label for="pDoseUnit">Unit</label><select id="pDoseUnit"><option value="mcg" ${p.doseUnit==='mcg'||!p.doseUnit?'selected':''}>mcg</option><option value="mg" ${p.doseUnit==='mg'?'selected':''}>mg</option></select></div>
+      <div class="field"><label for="pDoseUnit">Unit</label><select id="pDoseUnit">${(()=>{ const u = p.doseUnit || (existing ? 'mcg' : 'mg'); return `<option value="mg" ${u==='mg'?'selected':''}>mg</option><option value="mcg" ${u==='mcg'?'selected':''}>mcg</option>`; })()}</select></div>
       <div class="field span2"><label for="pSplit">Split each dose day into</label>
         <select id="pSplit">${[1,2,3,4].map(k=>`<option value="${k}" ${split===k?'selected':''}>${k===1?'1 injection (no split)':k+' injections'}</option>`).join('')}</select>
         <div class="footnote" id="pSplitOut" style="margin-top:4px;"></div>
@@ -1053,6 +1054,17 @@ function openProtocolModal(existing){
       <div class="field span2"><label for="pHalfLife">Half-life (hours) <span style="font-weight:400;color:var(--muted);">: drives the serum level chart</span></label>
         <input id="pHalfLife" type="number" inputmode="decimal" step="any" min="0" value="${esc(p.halfLifeHours||'')}" placeholder="">
         <div class="footnote" id="pHalfLifeHint" style="margin-top:4px;"></div>
+      </div>
+      <div class="field span2 module-box">
+        <label class="endo-check" style="margin:0;color:var(--ink);"><input type="checkbox" id="pIsBlend" ${blendOf(p)?'checked':''}> 🧬 This is a blend of several peptides</label>
+        <div id="pBlendBox" ${blendOf(p)?'':'hidden'} style="margin-top:10px;">
+          <div class="footnote" style="margin-bottom:8px;">Enter each peptide's amount per vial (from the label) and its half-life. Each dose is split by those amounts, and every peptide gets its own line on the serum chart. The dose above is the whole blend.</div>
+          <div class="chip-row" style="margin-bottom:8px;">${Object.keys(BLEND_PRESETS).map(k=>`<button type="button" class="chip-btn" data-blend-preset="${esc(k)}">Fill ${esc(k)}</button>`).join('')}</div>
+          <div class="blend-head"><span>Peptide</span><span>mg/vial</span><span>t½ (h)</span><span></span></div>
+          <div id="pBlendRows"></div>
+          <button type="button" class="btn btn-sm" id="pAddBlend" style="margin-top:6px;">+ Add peptide</button>
+          <div class="footnote" id="pBlendOut" style="margin-top:8px;"></div>
+        </div>
       </div>
       <div class="field span2"><label for="pActiveVial">Active vial <span style="font-weight:400;color:var(--muted);">: the one you're drawing from. Picking an unopened vial opens it and starts tracking what's left.</span></label>
         <select id="pActiveVial">
@@ -1160,6 +1172,52 @@ function openProtocolModal(existing){
       dowHint();
     });
     dowHint();
+    let blendRows = (Array.isArray(p.blend) ? p.blend : []).map(c=>({...c}));
+    function drawBlend(){
+      $('#pBlendRows',body).innerHTML = blendRows.length ? blendRows.map((c,i)=>{
+        const d = defaultHalfLife(c.name);
+        return `<div class="blend-row" data-i="${i}">
+          <input type="text" data-f="name" value="${esc(c.name||'')}" placeholder="e.g. BPC-157" aria-label="Peptide ${i+1} name">
+          <input type="number" inputmode="decimal" step="any" min="0" data-f="mg" value="${esc(c.mg==null?'':c.mg)}" placeholder="mg" aria-label="Peptide ${i+1} mg per vial">
+          <input type="number" inputmode="decimal" step="any" min="0" data-f="halfLifeHours" value="${esc(c.halfLifeHours==null?'':c.halfLifeHours)}" placeholder="${d?d:'hours'}" aria-label="Peptide ${i+1} half-life in hours">
+          <button type="button" class="icon-btn" data-rm-blend="${i}" aria-label="Remove peptide ${i+1}">✕</button>
+        </div>`; }).join('') : `<p class="footnote" style="margin:0;">No peptides yet. Add them, or fill a preset and check it against your vial's label.</p>`;
+      blendOut();
+    }
+    function blendOut(){
+      const parts = blendParts({blend: blendRows});
+      const dose = parseFloat($('#pDose',body).value), unit = $('#pDoseUnit',body).value;
+      const out = $('#pBlendOut',body);
+      if(!parts){ out.textContent = ''; return; }
+      const total = parts.reduce((s,c)=>s+c.mg,0);
+      out.innerHTML = `Vial total ${Math.round(total*100)/100} mg.` + (isFinite(dose) && dose>0 ? ` Each ${esc(fmtDose(dose, unit))} dose: ` + parts.map(c=>`${esc(c.name)} ${esc(fmtDose(Math.round(dose*c.frac*1000)/1000, unit))}${c.hl?'':' <span style="color:var(--warn)">(needs half-life)</span>'}`).join(', ') + '.' : '');
+    }
+    drawBlend();
+    $('#pIsBlend',body).addEventListener('change', ()=>{
+      const on = $('#pIsBlend',body).checked;
+      $('#pBlendBox',body).hidden = !on;
+      $('#pHalfLife',body).closest('.field').hidden = on;
+      if(on && !blendRows.length){ blendRows.push({name:'',mg:'',halfLifeHours:''}); drawBlend(); }
+    });
+    $('#pHalfLife',body).closest('.field').hidden = $('#pIsBlend',body).checked;
+    const onBlendInput = e=>{
+      const row = e.target.closest('[data-i]'); const f = e.target.dataset.f;
+      if(!row || !f) return;
+      blendRows[+row.dataset.i][f] = e.target.value;
+      if(f==='name'){ const d = defaultHalfLife(e.target.value); row.querySelector('[data-f=halfLifeHours]').placeholder = d ? d : 'hours'; }
+      blendOut();
+    };
+    $('#pBlendRows',body).addEventListener('input', onBlendInput);
+    $('#pBlendRows',body).addEventListener('click', e=>{ const b = e.target.closest('[data-rm-blend]'); if(!b) return; blendRows.splice(+b.dataset.rmBlend,1); drawBlend(); });
+    $('#pAddBlend',body).addEventListener('click', ()=>{ blendRows.push({name:'',mg:'',halfLifeHours:''}); drawBlend(); });
+    $$('[data-blend-preset]',body).forEach(b=> b.addEventListener('click', ()=>{
+      blendRows = BLEND_PRESETS[b.dataset.blendPreset].map(c=>({name:c.name, mg:c.mg, halfLifeHours:''}));
+      if(!$('#pCompound',body).value.trim()) $('#pCompound',body).value = b.dataset.blendPreset.replace(/\s*\(.*\)/,'') + ' blend';
+      const tot = blendRows.reduce((s,c)=>s+num(c.mg,0),0);
+      if(!$('#pVialMg',body).value){ $('#pVialMg',body).value = tot; recalc(); }
+      drawBlend();
+    }));
+    ['#pDose','#pDoseUnit'].forEach(s=> $(s,body).addEventListener('input', blendOut));
     function halfLifeHint(){
       const d = defaultHalfLife($('#pCompound',body).value);
       $('#pHalfLife',body).placeholder = d ? String(d) : 'e.g. 4';
@@ -1275,6 +1333,7 @@ function openProtocolModal(existing){
         sortOrder:$('#pSortOrder',body).value,
         vialMg:$('#pVialMg',body).value, bacMl:$('#pBacMl',body).value,
         halfLifeHours:$('#pHalfLife',body).value,
+        blend: $('#pIsBlend',body).checked ? blendRows.filter(c=> (c.name||'').trim()).map(c=>({name:c.name.trim(), mg:c.mg, halfLifeHours:c.halfLifeHours})) : [],
         activeVialId: newActiveVialId,
         startDate:$('#pStart',body).value, nextDose:$('#pNext',body).value,
         cycleStart:$('#pCycleStart',body).value, cycleOnWeeks:$('#pOn',body).value, cycleOffWeeks:$('#pOff',body).value,
@@ -1331,6 +1390,20 @@ function halfLifeOf(p){
   const own = num(p.halfLifeHours, null);
   return own>0 ? own : defaultHalfLife(p.compound);
 }
+/* Blends: p.blend = [{name, mg (amount per vial), halfLifeHours}]. Each injection splits by mg share. */
+function blendOf(p){
+  const b = Array.isArray(p && p.blend) ? p.blend.filter(c=> c && (c.name||'').trim() && num(c.mg,0)>0) : [];
+  return b.length ? b : null;
+}
+function blendParts(p){
+  const b = blendOf(p); if(!b) return null;
+  const total = b.reduce((s,c)=> s+num(c.mg,0), 0);
+  return b.map(c=>({name:c.name.trim(), frac:num(c.mg,0)/total, mg:num(c.mg,0), hl: num(c.halfLifeHours,null)>0 ? num(c.halfLifeHours) : defaultHalfLife(c.name)}));
+}
+const BLEND_PRESETS = {
+  'KLOW (80 mg)': [{name:'GHK-Cu', mg:50}, {name:'TB-500', mg:10}, {name:'BPC-157', mg:10}, {name:'KPV', mg:10}],
+  'GLOW (70 mg)': [{name:'GHK-Cu', mg:50}, {name:'TB-500', mg:10}, {name:'BPC-157', mg:10}],
+};
 function fmtHours(h){ return h>=48 ? `${Math.round(h/24*10)/10} days` : h<1 ? `${Math.round(h*60)} min` : `${Math.round(h*10)/10} h`; }
 const HOUR = 3600000;
 /* Every injection as {t (ms), mg}. Entries logged before timestamps existed (or backfilled) sit at noon. */
@@ -1381,11 +1454,23 @@ function serumSeries(){
   const colorMap = protocolColorMap();
   const out = [], missing = [];
   state.protocols.filter(p=> p.status!=='archived').forEach(p=>{
-    const hl = halfLifeOf(p);
     const evs = injectionEvents(p).filter(e=>e.mg>0);
-    if(!hl){ if(isActiveP(p)) missing.push(p); return; }
     if(!evs.length && !isActiveP(p)) return;
-    out.push({p, hl, evs, color: colorMap.get(p.id)||PROTOCOL_COLORS[0]});
+    const base = colorMap.get(p.id)||PROTOCOL_COLORS[0];
+    const parts = blendParts(p);
+    if(parts){
+      const bi = PROTOCOL_COLORS.indexOf(base);
+      parts.forEach((c,i)=>{
+        if(!c.hl){ if(isActiveP(p)) missing.push(`${p.compound||'Blend'}: ${c.name}`); return; }
+        out.push({p, id:`${p.id}:${i}`, label:c.name, sub:p.compound||'Blend', frac:c.frac, hl:c.hl,
+          evs: evs.map(e=>({...e, mg:e.mg*c.frac})),
+          color: i===0 || bi<0 ? base : PROTOCOL_COLORS[(bi + i*3) % PROTOCOL_COLORS.length]});
+      });
+      return;
+    }
+    const hl = halfLifeOf(p);
+    if(!hl){ if(isActiveP(p)) missing.push(p.compound||'Untitled'); return; }
+    out.push({p, id:p.id, label:p.compound||'Untitled', sub:'', frac:1, hl, evs, color: base});
   });
   return {series:out, missing};
 }
@@ -1393,7 +1478,7 @@ function renderSerum(){
   const el = $('#serumBody');
   if(!el) return;
   const {series, missing} = serumSeries();
-  const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">No half-life for ${missing.map(p=>esc(p.compound||'Untitled')).join(', ')}. Edit the protocol and enter one to chart it.</p>` : '';
+  const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">No half-life for ${missing.map(m=>esc(m)).join(', ')}. Edit the protocol and enter one to chart it.</p>` : '';
   if(!series.length){
     el.innerHTML = `<div class="empty"><div class="glyph">📉</div><p>Add a protocol and log a dose to see the level of it in your body over time.</p></div>${miss}`;
     return;
@@ -1405,7 +1490,7 @@ function renderSerum(){
   const shown = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
   const STEPS = 160;
   const lines = shown.map(s=>{
-    const future = scheduledEvents(s.p, now, t1);
+    const future = scheduledEvents(s.p, now, t1).map(e=>({...e, mg:e.mg*s.frac}));
     const all = s.evs.concat(future);
     const pts = [];
     for(let i=0;i<=STEPS;i++){
@@ -1419,7 +1504,7 @@ function renderSerum(){
     pts.sort((a,b)=>a.t-b.t);
     return {s, pts, cur: levelAt(s.evs, s.hl, now)};
   });
-  const pct = serumSel==='all' && shown.length>1;   // different compounds: compare as % of each one's own peak in view
+  const pct = serumSel==='all' && new Set(shown.map(s=>s.p.id)).size>1;   // different protocols: compare as % of each one's own peak in view
   const peak = l=> Math.max(1e-12, ...l.pts.map(p=>p.y));
   const val = (l,y)=> pct ? y/peak(l)*100 : y;
   const yMaxRaw = Math.max(1e-12, ...lines.map(l=> Math.max(...l.pts.map(p=>val(l,p.y)))));
@@ -1450,9 +1535,10 @@ function renderSerum(){
     if(past.length>1) g += `<polyline points="${toPath(past)}" class="ch-line" style="stroke:${l.s.color}"/>`;
     if(fut.length>1) g += `<polyline points="${toPath(fut)}" class="ch-line" style="stroke:${l.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
     const cy = Y(val(l, levelAt(l.s.evs, l.s.hl, now)));
-    g += `<circle cx="${X(now).toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" style="fill:${l.s.color}"><title>${esc(l.s.p.compound||'')}: ${esc(fmtAmount(l.cur))} now</title></circle>`;
+    g += `<circle cx="${X(now).toFixed(1)}" cy="${cy.toFixed(1)}" r="4.5" style="fill:${l.s.color}"><title>${esc(l.s.label)}: ${esc(fmtAmount(l.cur))} now</title></circle>`;
   });
-  const chips = [['all','All']].concat(series.map(s=>[s.p.id, s.p.compound||'Untitled'])).map(([id,label])=>
+  const chipIds = [...new Map(series.map(s=>[s.p.id, s.p.compound||'Untitled'])).entries()];
+  const chips = [['all','All']].concat(chipIds).map(([id,label])=>
     `<button type="button" class="chip-btn ${serumSel===id?'on':''}" data-serum-sel="${esc(id)}">${esc(label)}</button>`).join('');
   const ranges = [3,7,14,30].map(d=> `<button type="button" class="chip-btn ${serumRange===d?'on':''}" data-serum-range="${d}">${d}d</button>`).join('');
   const rows = series.map(s=>{
@@ -1460,7 +1546,7 @@ function renderSerum(){
     const lastPeak = Math.max(0, ...s.evs.filter(e=>e.t<=now).map(e=>levelAt(s.evs, s.hl, e.t)));
     const last = s.evs.filter(e=>e.t<=now).sort((a,b)=>b.t-a.t)[0];
     return `<div class="serum-row"><span class="serum-dot" style="background:${s.color}"></span>
-      <span class="serum-name"><strong>${esc(s.p.compound||'Untitled')}</strong><span class="footnote"> · t½ ${esc(fmtHours(s.hl))}${last?'':' · no doses logged'}</span></span>
+      <span class="serum-name"><strong>${esc(s.label)}</strong><span class="footnote">${s.sub?` · ${esc(s.sub)}`:''} · t½ ${esc(fmtHours(s.hl))}${last?'':' · no doses logged'}</span></span>
       <span class="mono serum-val">${esc(fmtAmount(cur))}${lastPeak>0?` <span class="footnote">${Math.round(cur/lastPeak*100)}% of peak</span>`:''}</span></div>`;
   }).join('');
   el.innerHTML = `
@@ -1544,16 +1630,24 @@ function renderVials(){
   }).join('');
   $$('[data-open-vial]',el).forEach(card=> card.addEventListener('click', e=>{ if(e.target.closest('[data-coa]')) return; openVialModal(state.vials.find(v=>v.id===card.dataset.openVial)); }));
 }
-function hasLabTest(v){ return !!(v.testLab || v.testMassMg || v.testPurity || v.testEndo || v.coaUrl); }
+/* Lab tests on a vial: the first lives in flat fields (testLab, testMassMg, …); more go in v.extraTests. */
+function testFilled(t){ return !!(t && (t.lab || t.massMg || t.purity || t.endo || t.coaUrl)); }
+function vialTests(v){
+  const first = {lab:v.testLab||'', massMg:v.testMassMg||'', purity:v.testPurity||'', endo:v.testEndo||'', date:v.testDate||'', coaUrl:v.coaUrl||''};
+  const extra = Array.isArray(v.extraTests) ? v.extraTests : [];
+  return [first].concat(extra).filter(testFilled);
+}
+function hasLabTest(v){ return vialTests(v).length>0; }
 function safeUrl(u){ return /^https?:\/\//i.test(String(u||'').trim()) ? String(u).trim() : ''; }
 function labTestHTML(v){
-  if(!hasLabTest(v)) return '';
-  const bits = [];
-  if(num(v.testMassMg,null)!=null) bits.push(`${num(v.testMassMg)} mg`);
-  if(num(v.testPurity,null)!=null) bits.push(`${num(v.testPurity)}% pure`);
-  if(num(v.testEndo,null)!=null) bits.push(`${num(v.testEndo)} EU/mg`);
-  const coa = safeUrl(v.coaUrl);
-  return `<div class="lab-test"><span class="pill pill-good">🔬 Tested${v.testLab?` · ${esc(v.testLab)}`:''}</span>${bits.length?`<span class="footnote">${esc(bits.join(' · '))}${v.testDate?` · ${esc(fmtDateShort(v.testDate))}`:''}</span>`:''}${coa?`<a href="${esc(coa)}" target="_blank" rel="noopener" data-coa>View COA ↗</a>`:''}</div>`;
+  return vialTests(v).map(t=>{
+    const bits = [];
+    if(num(t.massMg,null)!=null) bits.push(`${num(t.massMg)} mg`);
+    if(num(t.purity,null)!=null) bits.push(`${num(t.purity)}% pure`);
+    if(num(t.endo,null)!=null) bits.push(`${num(t.endo)} EU/mg`);
+    const coa = safeUrl(t.coaUrl);
+    return `<div class="lab-test"><span class="pill pill-good">🔬 Tested${t.lab?` · ${esc(t.lab)}`:''}</span>${bits.length||t.date?`<span class="footnote">${esc(bits.join(' · '))}${t.date?`${bits.length?' · ':''}${esc(fmtDateShort(t.date))}`:''}</span>`:''}${coa?`<a href="${esc(coa)}" target="_blank" rel="noopener" data-coa>View COA ↗</a>`:''}</div>`;
+  }).join('');
 }
 function openVialModal(existing){
   const v = existing || {};
@@ -1571,15 +1665,9 @@ function openVialModal(existing){
       <div class="field"><label for="vBud">BUD (beyond-use date)</label><input id="vBud" type="date" value="${esc(v.bud||'')}"></div>
       <div class="field span2"><label for="vProtocol">Linked protocol (for dose/frequency)</label><select id="vProtocol"><option value="">— none —</option>${protocolOptions}</select></div>
       <details class="field span2 module-box" ${hasLabTest(v)?'open':''}>
-        <summary style="cursor:pointer;font-weight:600;font-size:13px;">🔬 Lab test results <span style="font-weight:400;color:var(--muted);">(optional, if you had it tested)</span></summary>
-        <div class="form-grid" style="margin-top:10px;">
-          <div class="field span2"><label for="vTestLab">Lab name</label><input id="vTestLab" type="text" value="${esc(v.testLab||'')}" placeholder="e.g. Janoshik"></div>
-          <div class="field"><label for="vTestMass">Tested mass (mg)</label><input id="vTestMass" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.testMassMg||'')}" placeholder="e.g. 20.4"></div>
-          <div class="field"><label for="vTestPurity">Purity (%)</label><input id="vTestPurity" type="number" inputmode="decimal" step="any" min="0" max="100" value="${esc(v.testPurity||'')}" placeholder="e.g. 99.2"></div>
-          <div class="field"><label for="vTestEndo">Endotoxin (EU/mg)</label><input id="vTestEndo" type="number" inputmode="decimal" step="any" min="0" value="${esc(v.testEndo||'')}" placeholder="e.g. 0.5"></div>
-          <div class="field"><label for="vTestDate">Test date</label><input id="vTestDate" type="date" value="${esc(v.testDate||'')}"></div>
-          <div class="field span2"><label for="vCoaUrl">COA link</label><input id="vCoaUrl" type="url" inputmode="url" value="${esc(v.coaUrl||'')}" placeholder="https://…"></div>
-        </div>
+        <summary style="cursor:pointer;font-weight:600;font-size:13px;">🔬 Lab test results <span style="font-weight:400;color:var(--muted);">(optional, add one per test)</span></summary>
+        <div id="vTests" style="margin-top:10px;"></div>
+        <button type="button" class="btn btn-sm" id="vAddTest" style="margin-top:10px;">+ Add another test result</button>
       </details>
     </div>
     <div class="form-actions">
@@ -1587,6 +1675,27 @@ function openVialModal(existing){
       <button class="btn" id="vCancel">Cancel</button><button class="btn btn-accent-pep" id="vSave">Save</button>
     </div>
   `, body=>{
+    let tests = vialTests(v).map(t=>({...t}));
+    if(!tests.length) tests.push({lab:'',massMg:'',purity:'',endo:'',date:'',coaUrl:''});
+    const drawTests = ()=>{
+      $('#vTests',body).innerHTML = tests.map((t,i)=>`<div class="test-block" data-i="${i}">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;"><strong style="font-size:12.5px;">Test ${i+1}</strong>${tests.length>1?`<button type="button" class="icon-btn" data-rm-test="${i}" aria-label="Remove test ${i+1}">✕ Remove</button>`:''}</div>
+        <div class="form-grid">
+          <div class="field span2"><label>Lab name</label><input type="text" data-f="lab" value="${esc(t.lab)}" placeholder="e.g. Janoshik"></div>
+          <div class="field"><label>Tested mass (mg)</label><input type="number" inputmode="decimal" step="any" min="0" data-f="massMg" value="${esc(t.massMg)}" placeholder="e.g. 20.4"></div>
+          <div class="field"><label>Purity (%)</label><input type="number" inputmode="decimal" step="any" min="0" max="100" data-f="purity" value="${esc(t.purity)}" placeholder="e.g. 99.2"></div>
+          <div class="field"><label>Endotoxin (EU/mg)</label><input type="number" inputmode="decimal" step="any" min="0" data-f="endo" value="${esc(t.endo)}" placeholder="e.g. 0.5"></div>
+          <div class="field"><label>Test date</label><input type="date" data-f="date" value="${esc(t.date)}"></div>
+          <div class="field span2"><label>COA / test link</label><input type="url" inputmode="url" data-f="coaUrl" value="${esc(t.coaUrl)}" placeholder="https://…"></div>
+        </div>
+      </div>`).join('');
+    };
+    drawTests();
+    const onTest = e=>{ const r = e.target.closest('[data-i]'), f = e.target.dataset.f; if(r && f) tests[+r.dataset.i][f] = e.target.value; };
+    $('#vTests',body).addEventListener('input', onTest);
+    $('#vTests',body).addEventListener('change', onTest);
+    $('#vTests',body).addEventListener('click', e=>{ const b = e.target.closest('[data-rm-test]'); if(!b) return; tests.splice(+b.dataset.rmTest,1); drawTests(); });
+    $('#vAddTest',body).addEventListener('click', ()=>{ tests.push({lab:'',massMg:'',purity:'',endo:'',date:'',coaUrl:''}); drawTests(); });
     if(existing){
       $('#vDelete',body).addEventListener('click', ()=>{ closeModal(); confirmAction('Delete this vial?', ()=> dbDelete('vials', existing.id)); });
     }
@@ -1595,7 +1704,8 @@ function openVialModal(existing){
       const compound = $('#vCompound',body).value.trim();
       if(!compound) return;
       const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:$('#vPharmacy',body).value.trim(),
-        testLab:$('#vTestLab',body).value.trim(), testMassMg:$('#vTestMass',body).value, testPurity:$('#vTestPurity',body).value, testEndo:$('#vTestEndo',body).value, testDate:$('#vTestDate',body).value, coaUrl:$('#vCoaUrl',body).value.trim(),
+        ...(()=>{ const ts = tests.map(t=>({...t, lab:(t.lab||'').trim(), coaUrl:(t.coaUrl||'').trim()})).filter(testFilled); const f = ts[0] || {};
+          return {testLab:f.lab||'', testMassMg:f.massMg||'', testPurity:f.purity||'', testEndo:f.endo||'', testDate:f.date||'', coaUrl:f.coaUrl||'', extraTests: ts.slice(1)}; })(),
         dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
       if(existing) await dbSet('vials', existing.id, data); else await dbAdd('vials', data);
       closeModal();
@@ -2978,10 +3088,10 @@ function stackContextForAsk(){
   return {
     today: todayISO(),
     vendors: state.vendors.map(v=>({name:v.name, url:v.url||null, deal:v.deal||null, notes:v.notes||null})),
-    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTest: hasLabTest(v) ? {lab:v.testLab||null, massMg:num(v.testMassMg,null), purityPct:num(v.testPurity,null), endotoxinEUperMg:num(v.testEndo,null), date:v.testDate||null, coa:safeUrl(v.coaUrl)||null} : null})),
+    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTests: vialTests(v).map(t=>({lab:t.lab||null, massMg:num(t.massMg,null), purityPct:num(t.purity,null), endotoxinEUperMg:num(t.endo,null), date:t.date||null, coa:safeUrl(t.coaUrl)||null}))})),
     protocols: state.protocols.filter(p=>p.status!=='archived').map(p=>{
       const d = doseAt(p, day);
-      return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p),
+      return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p), blend: blendParts(p) ? blendParts(p).map(c=>({peptide:c.name, mgPerVial:c.mg, share:Math.round(c.frac*1000)/1000, halfLifeHours:c.hl||null})) : null,
         startDate: p.startDate||null, titrationSteps: titrationSteps(p),
         injectionsLast30Days: (p.doseLog||[]).filter(x=> x>=addDays(day,-29)).length,
         lastSite: (lastSiteOf(p)||{}).site||null,
