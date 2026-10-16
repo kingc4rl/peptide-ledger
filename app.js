@@ -2781,7 +2781,7 @@ function lineChartSVG(opts){
   const id = 'lc' + (++lineChartSeq);
   LINE_CHARTS.set(id, {W, H, padL, padR, padT, padB, from, to, spanDays, X, Y, fmtY,
     series: opts.series.map(s=>({name:s.name, color:s.color, unit:s.unit||'', points:s.points.filter(p=> p.x>=from && p.x<=to).sort((a,b)=> a.x.localeCompare(b.x))}))});
-  return `<div class="lc-wrap" data-lc="${id}"><svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(opts.label||'Chart')}. Touch and drag to read values.">${g}</svg></div>`;
+  return `<div class="lc-readout" data-lc-out="${id}">Touch and drag across the chart to read values</div><div class="lc-wrap" data-lc="${id}"><svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(opts.label||'Chart')}. Touch and drag to read values.">${g}</svg></div>`;
 }
 const LINE_CHARTS = new Map();
 let lineChartSeq = 0;
@@ -2791,11 +2791,12 @@ function attachLineScrub(root){
     const c = LINE_CHARTS.get(wrap.dataset.lc); if(!c) return;
     const svg = $('svg', wrap);
     const cross = document.createElement('div'); cross.className = 'scrub-line'; cross.hidden = true;
-    const tip = document.createElement('div'); tip.className = 'scrub-tip'; tip.hidden = true;
-    wrap.append(cross, tip);
+    const out = root.querySelector(`[data-lc-out="${wrap.dataset.lc}"]`);
+    const idle = out ? out.innerHTML : '';
+    wrap.append(cross);
     let dots = [];
     const days = [...new Set(c.series.flatMap(s=> s.points.map(p=>p.x)))].sort();
-    const hide = ()=>{ cross.hidden = tip.hidden = true; dots.forEach(d=>d.remove()); dots = []; };
+    const hide = ()=>{ cross.hidden = true; dots.forEach(d=>d.remove()); dots = []; if(out){ out.innerHTML = idle; out.classList.remove('on'); } };
     const show = clientX=>{
       if(!days.length) return;
       const r = svg.getBoundingClientRect(), k = r.width / c.W;
@@ -2813,12 +2814,12 @@ function attachLineScrub(root){
         d.style.left = (x/c.W*100)+'%'; d.style.top = (c.Y(p.y)/c.H*100)+'%'; d.style.background = s.color;
         wrap.appendChild(d); dots.push(d);
         const ch = prev ? Math.round((p.y - prev.y)*10)/10 : null;
-        return `<div><i style="background:${s.color}"></i>${esc(s.name)}<b class="mono">${esc(c.fmtY(p.y))}${s.unit?' '+esc(s.unit):''}${ch!=null && ch!==0 ? ` <span>${ch>0?'+':''}${ch}</span>` : ''}</b></div>`;
+        return `<span class="lc-val"><i style="background:${s.color}"></i>${c.series.length>1?esc(s.name)+' ':''}<b class="mono">${esc(c.fmtY(p.y))}${s.unit?' '+esc(s.unit):''}</b>${ch!=null && ch!==0 ? ` <em>${ch>0?'+':''}${ch}</em>` : ''}</span>`;
       }).join('');
-      tip.innerHTML = `<div class="scrub-when">${esc(new Date(best+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}))}</div>${rows}`;
-      tip.hidden = false;
-      const left = x/c.W*r.width, w = tip.offsetWidth;
-      tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
+      if(out){
+        out.innerHTML = `<span class="lc-date">${esc(new Date(best+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'}))}</span>${rows}`;
+        out.classList.add('on');
+      }
     };
     bindScrub(wrap, show, cancel=> { if(cancel) hide(); });
   });
@@ -3450,7 +3451,7 @@ function setTab(name, opts){
   Object.entries(TABS).forEach(([k,sel])=>{ $(sel).hidden = k!==name; });
   $$('.tabbar [data-tab]').forEach(b=>{ const on = b.dataset.tab===name; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   lsSet('ledger.tab', name);
-  if(name==='tools') runCalc();          // redraw the syringe now that it has a width
+  if(name==='tools'){ runCalc(); showAppVersion(); }          // redraw the syringe now that it has a width
   if(name==='progress') renderProgress();
   if(!(opts && opts.keepScroll)) window.scrollTo(0,0);
 }
@@ -3582,6 +3583,13 @@ function renderInstallCard(){
     ? `<p class="footnote">In Safari, tap the Share button, then <strong>Add to Home Screen</strong>. Open the app from its icon so your data stays in one place.</p>`
     : `<p class="footnote">In Chrome, open the ⋮ menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>`;
 }
+function showAppVersion(){
+  const el = $('#appVersion'); if(!el || !('caches' in window)) return;
+  caches.keys().then(keys=>{
+    const k = keys.filter(x=> x.startsWith('ledger-shell-')).sort().pop();
+    el.textContent = k ? `App version ${k.replace('ledger-shell-','')}` : '';
+  }).catch(()=>{});
+}
 function registerServiceWorker(){
   if(!('serviceWorker' in navigator) || location.protocol==='file:') return;
   navigator.serviceWorker.register('./sw.js').then(reg=>{
@@ -3637,6 +3645,7 @@ async function boot(){
   setTab('dose', {keepScroll:true});   // the app always opens on Dose
   renderAll();
   registerServiceWorker();
+  showAppVersion();
   // Day boundaries: refresh "today" whenever the app comes back to the foreground.
   let lastDay = doseDayISO();
   document.addEventListener('visibilitychange', ()=>{

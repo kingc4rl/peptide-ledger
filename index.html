@@ -397,8 +397,14 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .pc-facts{ margin-top:8px; display:flex; flex-direction:column; gap:2px; font-size:13px; }
 .pc-k{ display:inline-block; min-width:72px; color:var(--muted); font-size:12px; }
 .pc-toggle{ margin-top:10px; background:none; border:none; padding:4px 0; color:var(--accent-pep-strong); font-size:12.5px; font-weight:600; cursor:pointer; }
-.serum-pan{ position:relative; touch-action:pan-y; cursor:crosshair; user-select:none; -webkit-user-select:none; }
-.lc-wrap{ position:relative; touch-action:pan-y; cursor:crosshair; user-select:none; -webkit-user-select:none; margin-top:8px; }
+.serum-pan{ position:relative; -webkit-touch-callout:none; touch-action:pan-y; cursor:crosshair; user-select:none; -webkit-user-select:none; }
+.lc-readout{ display:flex; align-items:center; gap:4px 12px; flex-wrap:wrap; min-height:34px; margin-top:8px; padding:6px 10px; border-radius:10px; background:var(--surface-2); font-size:12.5px; color:var(--muted); }
+.lc-readout.on{ background:var(--ink); color:var(--surface); }
+.lc-date{ font-weight:700; }
+.lc-val{ display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.lc-val i{ width:8px; height:8px; border-radius:50%; display:inline-block; }
+.lc-val em{ font-style:normal; opacity:.7; }
+.lc-wrap{ -webkit-touch-callout:none;  position:relative; touch-action:pan-y; cursor:crosshair; user-select:none; -webkit-user-select:none; margin-top:8px; }
 .lc-wrap .chart{ margin-top:0; }
 .scrub-line{ position:absolute; width:0; border-left:1.5px solid var(--ink); opacity:.55; pointer-events:none; }
 .scrub-dot{ position:absolute; width:11px; height:11px; margin:-5.5px 0 0 -5.5px; border-radius:50%; border:2px solid var(--surface); box-shadow:0 0 0 1px rgba(0,0,0,.15); pointer-events:none; }
@@ -844,6 +850,7 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
         <div class="card">
           <h3 style="font-size:16px;margin-bottom:6px;">App &amp; backup</h3>
           <div id="installInfo"></div>
+          <div class="footnote mono" id="appVersion" style="margin-top:6px;"></div>
           <p class="footnote" style="margin:8px 0 10px;">Your data is stored only in this app on this device. Export a backup now and then, and keep the file somewhere safe.</p>
           <button type="button" class="btn btn-sm" id="openBackupBtn">Backup &amp; restore</button>
         </div>

@@ -1,6 +1,6 @@
 /* Peptide Ledger service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.9.2';
+const VERSION = 'v1.9.3';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
 const SHELL_FILES = [
@@ -10,7 +10,7 @@ const SHELL_FILES = [
 
 self.addEventListener('install', event=>{
   // cache:'reload' skips the browser's HTTP cache, so a new version never stores an older file.
-  event.waitUntil(caches.open(SHELL).then(c=> c.addAll(SHELL_FILES.map(u=> new Request(u, {cache:'reload'}))))));
+  event.waitUntil(caches.open(SHELL).then(c=> c.addAll(SHELL_FILES.map(u=> new Request(u, {cache:'reload'})))));
 });
 
 self.addEventListener('activate', event=>{

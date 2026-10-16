@@ -25,6 +25,7 @@ Do not stop at "branch pushed" or open a PR unless the owner asks for one. After
 - Backup/restore is in the "Backup, restore, install" section of `app.js`.
 
 ## Before publishing a change
+0. Run `node --check app.js && node --check sw.js`. A syntax error in `sw.js` silently blocks every future update on the phone.
 1. Serve the folder locally and test at phone width (390×844) with Playwright, including a reload to confirm data persists.
 2. Check no horizontal overflow and no console errors (blocked Google Fonts in the sandbox are expected).
 3. Bump `VERSION` in `sw.js`, commit to `main`, push `main` (see Publishing above). Pages redeploys in about a minute; the app shows "A new version of the app is ready" → Reload.
