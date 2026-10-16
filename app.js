@@ -742,9 +742,14 @@ function renderProtocols(){
 }
 const SYRINGE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2l4 4"/><path d="M17 7l3-3"/><path d="M19 9L8.7 19.3a2.4 2.4 0 0 1-3.4 0l-.6-.6a2.4 2.4 0 0 1 0-3.4L15 5"/><path d="M9 11l4 4"/><path d="M5 19l-3 3"/><path d="M14 4l6 6"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function fmtShortMoment(t){
+  const d = new Date(t);
+  const ds = d.toLocaleDateString(undefined,{weekday:'short', month:'numeric', day:'numeric'});
+  return `${ds}, ${d.toLocaleTimeString(undefined, d.getMinutes() ? {hour:'numeric', minute:'2-digit'} : {hour:'numeric'})}`;
+}
 function scheduleTag(p){
   const w = weekdaysOf(p);
-  if(w) return w.length===7 ? 'Daily' : w.slice().sort((x,y)=>x-y).map(i=>DOW[i]).join(' · ');
+  if(w) return w.length===7 ? 'Daily' : w.slice().sort((x,y)=>x-y).map(i=>DOW[i]).join('/');
   const f = num(p.frequencyDays,null);
   if(!f) return 'As needed';
   return f===1 ? 'Daily' : f===7 ? 'Weekly' : `Every ${f} days`;
@@ -778,11 +783,10 @@ function doseCardHTML(p, color, day, serum){
       ${open ? `<div class="dc-ring" style="border-color:${color}"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`
              : `<div class="dc-amt"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`}
       <div class="dc-main">
-        <div class="dc-title"><strong class="dc-name">${esc(p.compound||'Untitled')}</strong>${time?`<span class="dc-tag">${esc(time)}</span>`:''}</div>
-        <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span>${u!=null?`<span class="mono dc-small">${u}u</span>`:''}</div>
-        ${open ? '' : `<div class="dc-sub">${lastEv ? `Last ${esc(fmtMoment(lastEv.t))}` : 'No doses logged'}${vial && vial.remainingMg!=null ? ` · ${round2(vial.remainingMg)} mg left` : ''}</div>`}
+        <div class="dc-title"><strong class="dc-name">${esc(p.compound||'Untitled')}</strong><span class="dc-chev" aria-hidden="true">${open?'▴':'▾'}</span></div>
+        <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span></div>
+        <div class="dc-sub">${[time, lastEv ? `Last ${fmtShortMoment(lastEv.t)}` : 'No doses yet', (!open && vial && vial.remainingMg!=null) ? `${round2(vial.remainingMg)} mg left` : ''].filter(Boolean).map(esc).join(' · ')}</div>
       </div>
-      <span class="dc-chev" aria-hidden="true">${open?'⌃':'⌄'}</span>
       ${logBtn}
     </div>`;
   if(!open) return `<div class="dc" style="--pc:${color}">${head}</div>`;
