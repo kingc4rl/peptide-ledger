@@ -714,86 +714,122 @@ function renderProtocols(){
     return num(a.sortOrder,999)-num(b.sortOrder,999);
   });
   const colorMap = protocolColorMap();
-  const today = todayISO(), day = doseDayISO();
-  let html = ordered.map(p=>{
-    const cyc = (p.cycleStart && p.cycleOnWeeks!=null) ? cyclePosition(p) : null;
-    const notStarted = p.startDate && p.startDate > today;
-    const color = colorMap.get(p.id);
-    const n = splitCount(p);
-    const done = injectionsOn(p, day);
-    const complete = done >= n;
-    const d = doseAt(p, day);
-    const perInj = num(d.dose,null)!=null ? num(d.dose)/n : null;
-    const u = unitsPerInjection(p, day);
-    const lastEv = injectionEvents(p).sort((x,y)=> y.t-x.t)[0];
-    const nextT = nextDoseMoment(p);
-    const open = expandedCards.has(p.id);
-    const activeVial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
-    const markLabel = complete ? '✓ Taken' : (n>1 ? `💉 ${done}/${n} taken` : '💉 Mark taken');
-    return `<div class="card-flat supply-item-card" data-open-protocol="${p.id}" style="margin-bottom:10px;cursor:pointer;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:10px;">
-        <div style="min-width:0;">
-          <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-            <strong style="font-size:15.5px;">${esc(p.compound||'Untitled compound')}</strong>
-            <span class="pill pill-pep">${esc(fmtDose(d.dose, d.doseUnit))}</span>
-            ${n>1 && perInj!=null ? `<span class="pill pill-muted">${n} × ${esc(fmtDose(perInj, d.doseUnit))}</span>` : ''}
-            ${u!=null ? `<span class="pill pill-info">${u} units${n>1?' each':''}</span>` : ''}
-          </div>
-          <div class="pc-facts">
-            <div><span class="pc-k">Last dose</span> ${lastEv ? `${esc(fmtMoment(lastEv.t))} · ${esc(fmtAmount(lastEv.mg))}` : '<span class="footnote">none logged</span>'}</div>
-            <div><span class="pc-k">Next dose</span> ${nextT ? esc(fmtMoment(nextT, !!p.doseTime)) : (notStarted ? `starts ${esc(fmtDateShort(p.startDate))}` : '<span class="footnote">no schedule set</span>')}</div>
-          </div>
-          ${activeVial? `<div class="footnote" style="margin-top:4px;">Vial: ${activeVial.remainingMg!=null? `${Math.round(activeVial.remainingMg*10)/10}mg left of ${num(activeVial.mgPerVial,0)}mg` : 'not yet opened'}${activeVial.pharmacy? ` (${esc(activeVial.pharmacy)})` : ''}</div>` : ''}
-        </div>
-        ${notStarted ? '' : `<div class="dose-actions">
-          <button class="dose-check-btn ${complete?'taken':''}" data-mark-dose="${p.id}" title="${complete? 'Marked taken. Tap to undo the last injection' : 'Log an injection for today'}">${markLabel}</button>
-          <button class="hist-btn" data-dose-history="${p.id}" title="Dose history and backfill">🗓 History</button>
-        </div>`}
-      </div>
-      <button type="button" class="pc-toggle" data-toggle-card="${p.id}" aria-expanded="${open}">${open ? 'Hide syringe &amp; details ▴' : 'Show syringe &amp; details ▾'}</button>
-      <div class="pc-more" ${open?'':'hidden'}>
-      ${scheduleLabel(p) ? `<div class="footnote" style="margin-top:10px;">Schedule: ${esc(scheduleLabel(p))}</div>` : ''}
-      ${cyc ? `
-      <div style="margin-top:12px;">
-        <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:4px;">
-          <span>${cyc.phase==='on'?'On cycle':'Off cycle'}: day ${cyc.dayInPhase} of ${cyc.phaseLen}</span>
-          <span>${cyc.daysToSwitch}d to ${cyc.phase==='on'?'off':'on'}</span>
-        </div>
-        <div class="progress-track"><div class="progress-fill" style="width:${Math.min(100,(cyc.dayInPhase/cyc.phaseLen)*100)}%;background:${cyc.phase==='on'?'var(--accent-pep)':'var(--muted)'};"></div></div>
-      </div>` : ''}
-      ${u!=null ? `
-      <div class="protocol-syringe">
-        <div class="syringe-caption"><span>${syringeMl(p)} mL · U-100</span><span>${u} of ${syringeCapacityUnits(p)} units${n>1?' per injection':''}</span></div>
-        <div class="syringe-wrap" data-syr-units="${u}" data-syr-color="${esc(color||'')}" data-syr-cap="${syringeCapacityUnits(p)}"></div>
-      </div>` : ''}
-      ${siteRowHTML(p)}
-      </div>
-    </div>`;
-  }).join('');
-  el.innerHTML = html;
-  bindProtocolExtras(el);
-  $$('[data-toggle-card]',el).forEach(b=> b.addEventListener('click', e=>{
-    e.stopPropagation();
-    const id = b.dataset.toggleCard, more = b.nextElementSibling;
-    const open = !expandedCards.has(id);
-    if(open) expandedCards.add(id); else expandedCards.delete(id);
-    more.hidden = !open; b.setAttribute('aria-expanded', open);
-    b.innerHTML = open ? 'Hide syringe &amp; details ▴' : 'Show syringe &amp; details ▾';
-  }));
+  const day = doseDayISO();
+  const serum = serumSeries().series;
+  el.innerHTML = ordered.map(p=> doseCardHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, serum)).join('');
   $$('[data-syr-units]',el).forEach(w=> renderSyringeInto(w, num(w.dataset.syrUnits,0), num(w.dataset.syrCap,100), {compact:true, color: w.dataset.syrColor||undefined}));
-  $$('[data-open-protocol]',el).forEach(card=> card.addEventListener('click', ()=> openProtocolModal(state.protocols.find(p=>p.id===card.dataset.openProtocol))));
-  $$('[data-mark-dose]',el).forEach(b=> b.addEventListener('click', (e)=>{
-    e.stopPropagation();
-    markDoseTaken(state.protocols.find(p=>p.id===b.dataset.markDose));
+  $$('[data-card-toggle]',el).forEach(h=> h.addEventListener('click', ()=>{
+    const id = h.dataset.cardToggle;
+    if(expandedCards.has(id)) expandedCards.delete(id); else expandedCards.add(id);
+    renderProtocols();
   }));
-  $$('[data-dose-history]',el).forEach(b=> b.addEventListener('click', (e)=>{
+  $$('[data-card-toggle]',el).forEach(h=> h.addEventListener('keydown', e=>{ if(e.target===h && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); h.click(); } }));
+  $$('[data-mark-dose]',el).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
-    openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory));
+    const p = state.protocols.find(x=>x.id===b.dataset.markDose);
+    if(!p) return;
+    if(injectionsOn(p, doseDayISO()) >= splitCount(p)) confirmAction(`Undo today's logged ${p.compound||''} dose?`, ()=> markDoseTaken(p), 'Undo dose');
+    else markDoseTaken(p);
   }));
-  $$('[data-resume-protocol]',el).forEach(b=> b.addEventListener('click', (e)=>{
+  $$('[data-dose-history]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory)); }));
+  $$('[data-edit-protocol]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openProtocolModal(state.protocols.find(p=>p.id===b.dataset.editProtocol)); }));
+  $$('[data-goto-checkin]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); setTab('progress'); }));
+  $$('[data-full-chart]',el).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
-    resumeProtocol(state.protocols.find(p=>p.id===b.dataset.resumeProtocol));
+    serumSel = b.dataset.fullChart; lsSet('ledger.serumSel', serumSel); renderSerum();
+    const c = $('#serumCard'); if(c) c.scrollIntoView({behavior:'smooth', block:'start'});
   }));
+}
+const SYRINGE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2l4 4"/><path d="M17 7l3-3"/><path d="M19 9L8.7 19.3a2.4 2.4 0 0 1-3.4 0l-.6-.6a2.4 2.4 0 0 1 0-3.4L15 5"/><path d="M9 11l4 4"/><path d="M5 19l-3 3"/><path d="M14 4l6 6"/></svg>';
+const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
+function scheduleTag(p){
+  const w = weekdaysOf(p);
+  if(w) return w.length===7 ? 'Daily' : w.slice().sort((x,y)=>x-y).map(i=>DOW[i]).join(' · ');
+  const f = num(p.frequencyDays,null);
+  if(!f) return 'As needed';
+  return f===1 ? 'Daily' : f===7 ? 'Weekly' : `Every ${f} days`;
+}
+/* One active protocol on the Dose tab: a compact header that always shows the dose,
+   and an expandable body with due info, quick actions, composition, syringe and a mini level chart. */
+function doseCardHTML(p, color, day, serum){
+  const n = splitCount(p);
+  const done = injectionsOn(p, day);
+  const complete = done >= n;
+  const notStarted = p.startDate && p.startDate > todayISO();
+  const d = doseAt(p, day);
+  const perInj = num(d.dose,null)!=null ? num(d.dose)/n : null;
+  const amt = perInj!=null ? fmtDose(Math.round(perInj*1000)/1000, d.doseUnit).replace(' ','') : '—';
+  const u = unitsPerInjection(p, day);
+  const time = fmtClock(p.doseTime);
+  const scheduledToday = doseDatesInRange(p, day, day).length>0;
+  const nextT = nextDoseMoment(p);
+  let status, stCls;
+  if(notStarted){ status = `Starts ${fmtDateShort(p.startDate)}`; stCls = 'muted'; }
+  else if(complete && done>0){ status = n>1 ? `Done ${done}/${n}` : 'Done'; stCls = 'good'; }
+  else if(scheduledToday){ status = n>1 ? `Due ${done}/${n}` : 'Due'; stCls = 'due'; }
+  else if(p.nextDose && p.nextDose < day){ status = 'Overdue'; stCls = 'bad'; }
+  else if(nextT){ status = 'Next ' + new Date(nextT).toLocaleDateString(undefined,{weekday:'short'}); stCls = 'muted'; }
+  else { status = 'Not scheduled'; stCls = 'muted'; }
+  const lastEv = injectionEvents(p).sort((x,y)=> y.t-x.t)[0];
+  const vial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
+  const open = expandedCards.has(p.id);
+  const logBtn = notStarted ? '' : `<button type="button" class="dc-log ${complete&&done>0?'done':''}" data-mark-dose="${p.id}" aria-label="${complete&&done>0?'Dose logged today. Tap to undo':'Log dose now'}" title="${complete&&done>0?'Logged. Tap to undo':'Log dose'}">${complete&&done>0 ? CHECK_ICON : SYRINGE_ICON}</button>`;
+  const head = `<div class="dc-head" data-card-toggle="${p.id}" role="button" tabindex="0" aria-expanded="${open}">
+      ${open ? `<div class="dc-ring" style="border-color:${color}"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`
+             : `<div class="dc-amt"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`}
+      <div class="dc-main">
+        <div class="dc-title"><strong class="dc-name">${esc(p.compound||'Untitled')}</strong>${time?`<span class="dc-tag">${esc(time)}</span>`:''}</div>
+        <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span>${u!=null?`<span class="mono dc-small">${u}u</span>`:''}</div>
+        ${open ? '' : `<div class="dc-sub">${lastEv ? `Last ${esc(fmtMoment(lastEv.t))}` : 'No doses logged'}${vial && vial.remainingMg!=null ? ` · ${round2(vial.remainingMg)} mg left` : ''}</div>`}
+      </div>
+      <span class="dc-chev" aria-hidden="true">${open?'⌃':'⌄'}</span>
+      ${logBtn}
+    </div>`;
+  if(!open) return `<div class="dc" style="--pc:${color}">${head}</div>`;
+  // ---- expanded body
+  const dueText = notStarted ? `Starts ${fmtDateShort(p.startDate)}`
+    : (complete && done>0) ? `Done today${nextT ? ` · next ${fmtMoment(nextT, !!p.doseTime)}` : ''}`
+    : nextT ? `${fmtMoment(nextT, !!p.doseTime)} · ${scheduledToday ? 'Due' : 'Upcoming'}` : 'No schedule set';
+  const remaining = vial ? (vial.remainingMg!=null ? `${round2(vial.remainingMg)} mg <span class="footnote">of ${num(vial.mgPerVial,0)} mg</span>` : `Unopened ${num(vial.mgPerVial,0)} mg vial`) : '<span class="footnote">No active vial set</span>';
+  const parts = blendParts(p);
+  const comp = parts ? `<div class="dc-sec"><h4>Dose composition</h4>${parts.map((c,i)=>`<div class="dc-comp"><span><i style="background:${serum.find(s=>s.id===`${p.id}:${i}`)?.color || color}"></i>${esc(c.name)}</span><span class="mono">${perInj!=null ? esc(fmtDose(Math.round(perInj*c.frac*1000)/1000, d.doseUnit)) : '—'}</span></div>`).join('')}</div>` : '';
+  const syr = u!=null ? `<div class="dc-sec"><div class="dc-sec-h"><h4>Syringe guide</h4><span class="mono dc-small">Draw to the ${u} unit mark</span></div>
+      <div class="syringe-wrap" data-syr-units="${u}" data-syr-color="${esc(color)}" data-syr-cap="${syringeCapacityUnits(p)}"></div>
+      <div class="footnote mono" style="text-align:center;margin-top:2px;">${syringeMl(p)} mL U-100 syringe</div></div>` : '';
+  // mini level chart for just this protocol
+  const mine = serum.filter(s=>s.p.id===p.id);
+  let snap = '';
+  if(mine.length){
+    const now = Date.now();
+    const ctx = serumCtx(mine, now, false);
+    snap = `<div class="dc-sec"><div class="dc-sec-h"><h4>Estimated level</h4><button type="button" class="link-btn" data-full-chart="${p.id}">Full chart ↗</button></div>
+      <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart dc-mini" role="img" aria-label="Estimated level of ${esc(p.compound||'')} over the last week">${serumSvgInner(ctx, now + 2*24*HOUR, 7*24*HOUR)}</svg>
+      <div class="dc-legend">${mine.map(s=>`<span><i style="background:${s.color}"></i><strong>${esc(s.label)}</strong> ${esc(fmtAmount(levelAt(s.evs, s.hl, now)))} · t½ ${esc(fmtHours(s.hl))}</span>`).join('')}</div>
+      <p class="footnote" style="margin-top:4px;">Estimated from logged doses, not a measured level.</p></div>`;
+  } else if(!halfLifeOf(p) && !parts){
+    snap = `<div class="dc-sec"><p class="footnote">Add a half-life to this protocol to see its estimated level.</p></div>`;
+  }
+  const body = `<div class="dc-body">
+      <div class="dc-grid">
+        <div class="dc-cell"><span class="dc-k">Due</span><span class="dc-v">${dueText}</span></div>
+        <div class="dc-cell"><span class="dc-k">Protocol</span><span class="dc-v">${esc(scheduleTag(p))}${n>1?` · ${n} injections`:''}</span></div>
+        <div class="dc-cell"><span class="dc-k">Last dose</span><span class="dc-v">${lastEv ? `${esc(fmtMoment(lastEv.t))} · ${esc(fmtAmount(lastEv.mg))}` : 'None logged'}</span></div>
+        <div class="dc-cell"><span class="dc-k">Remaining</span><span class="dc-v">${remaining}</span></div>
+      </div>
+      <div class="dc-sec"><h4>Quick actions</h4>
+        <div class="qa-grid">
+          ${notStarted ? '' : `<button type="button" class="qa-btn primary" data-mark-dose="${p.id}">${complete&&done>0 ? CHECK_ICON+'<span>Undo dose</span>' : SYRINGE_ICON+'<span>Log dose</span>'}</button>`}
+          <button type="button" class="qa-btn" data-dose-history="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><span>History &amp; backfill</span></button>
+          <button type="button" class="qa-btn" data-goto-checkin><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Add check-in</span></button>
+          <button type="button" class="qa-btn" data-edit-protocol="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7"/></svg><span>Protocol</span></button>
+        </div>
+      </div>
+      ${comp}
+      ${syr}
+      <div class="dc-sec">${siteRowHTML(p).replace('class="site-row"','class="site-row" style="margin-top:0"')}</div>
+      ${snap}
+    </div>`;
+  return `<div class="dc open" style="--pc:${color}">${head}${body}</div>`;
 }
 const round2 = n => Math.round(n*100)/100;
 /* The card button logs the next injection for today; once the day is complete it undoes the last one. */
@@ -1515,9 +1551,9 @@ function serumAxisLabel(t){
 }
 const SV = {W:360, H:220, padL:46, padR:12, padT:14, padB:28};
 /* Draws the visible slice [t1 - window, t1]. ctx holds per-series event lists computed once per render. */
-function serumSvgInner(ctx, t1){
+function serumSvgInner(ctx, t1, winMs){
   const {W,H,padL,padR,padT,padB} = SV;
-  const now = ctx.now, t0 = t1 - serumWinMs();
+  const now = ctx.now, t0 = t1 - (winMs || serumWinMs());
   const STEPS = 160;
   const lines = ctx.shown.map(c=>{
     const pts = [];
@@ -1558,6 +1594,15 @@ function serumSvgInner(ctx, t1){
   });
   return g;
 }
+function serumCtx(shownS, now, pct){
+  const horizon = now + 31*24*HOUR;
+  return {now, pct, shown: shownS.map(s=>{
+    const all = s.evs.concat(scheduledEvents(s.p, now, horizon).map(e=>({...e, mg:e.mg*s.frac})));
+    // peak used for the % view: highest level right after any injection
+    const peak = Math.max(1e-12, ...all.map(e=> levelAt(all, s.hl, e.t)));
+    return {s, all, peak};
+  })};
+}
 function renderSerum(){
   const el = $('#serumBody');
   if(!el) return;
@@ -1570,14 +1615,7 @@ function renderSerum(){
   if(serumSel!=='all' && !series.some(s=>s.p.id===serumSel)) serumSel = 'all';
   const now = Date.now();
   const shownS = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
-  const horizon = now + 31*24*HOUR;
-  const ctx = {now, pct: serumSel==='all' && new Set(shownS.map(s=>s.p.id)).size>1,
-    shown: shownS.map(s=>{
-      const all = s.evs.concat(scheduledEvents(s.p, now, horizon).map(e=>({...e, mg:e.mg*s.frac})));
-      // peak used for the % view: highest level right after any injection
-      const peak = Math.max(1e-12, ...all.map(e=> levelAt(all, s.hl, e.t)));
-      return {s, all, peak};
-    })};
+  const ctx = serumCtx(shownS, now, serumSel==='all' && new Set(shownS.map(s=>s.p.id)).size>1);
   const earliest = Math.min(now, ...series.flatMap(s=> s.evs.map(e=>e.t)));
   const clampEnd = t1=> Math.max(earliest + serumWinMs()*0.25, Math.min(now + 30*24*HOUR, t1));
   let t1 = serumEnd==null ? serumFollowEnd(now) : clampEnd(serumEnd);
