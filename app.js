@@ -2758,7 +2758,56 @@ function lineChartSVG(opts){
       g += `<text x="${(lx + (anchor==='end'?-8:8)).toFixed(1)}" y="${(Y(lp.y)-8).toFixed(1)}" class="ch-lastlab" text-anchor="${anchor}" style="fill:${s.color}">${esc(fmtY(lp.y))}</text>`;
     }
   });
-  return `<svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(opts.label||'Chart')}">${g}</svg>`;
+  // remember the geometry so a finger drag can read values back (see attachLineScrub)
+  const id = 'lc' + (++lineChartSeq);
+  LINE_CHARTS.set(id, {W, H, padL, padR, padT, padB, from, to, spanDays, X, Y, fmtY,
+    series: opts.series.map(s=>({name:s.name, color:s.color, unit:s.unit||'', points:s.points.filter(p=> p.x>=from && p.x<=to).sort((a,b)=> a.x.localeCompare(b.x))}))});
+  return `<div class="lc-wrap" data-lc="${id}"><svg viewBox="0 0 ${W} ${H}" class="chart" role="img" aria-label="${esc(opts.label||'Chart')}. Touch and drag to read values.">${g}</svg></div>`;
+}
+const LINE_CHARTS = new Map();
+let lineChartSeq = 0;
+/* Drag across a date chart: snaps to the nearest logged day and shows each series' value there. */
+function attachLineScrub(root){
+  $$('[data-lc]', root).forEach(wrap=>{
+    const c = LINE_CHARTS.get(wrap.dataset.lc); if(!c) return;
+    const svg = $('svg', wrap);
+    const cross = document.createElement('div'); cross.className = 'scrub-line'; cross.hidden = true;
+    const tip = document.createElement('div'); tip.className = 'scrub-tip'; tip.hidden = true;
+    wrap.append(cross, tip);
+    let dots = [];
+    const days = [...new Set(c.series.flatMap(s=> s.points.map(p=>p.x)))].sort();
+    const hide = ()=>{ cross.hidden = tip.hidden = true; dots.forEach(d=>d.remove()); dots = []; };
+    const show = clientX=>{
+      if(!days.length) return;
+      const r = svg.getBoundingClientRect(), k = r.width / c.W;
+      const xv = (clientX - r.left)/k;
+      let best = days[0], bd = Infinity;
+      days.forEach(d=>{ const dd = Math.abs(c.X(d) - xv); if(dd < bd){ bd = dd; best = d; } });
+      const x = c.X(best);
+      cross.hidden = false; cross.style.left = (x/c.W*100)+'%';
+      cross.style.top = (c.padT/c.H*100)+'%'; cross.style.height = ((c.H-c.padT-c.padB)/c.H*100)+'%';
+      dots.forEach(d=>d.remove()); dots = [];
+      const rows = c.series.map(s=>{
+        const i = s.points.findIndex(p=> p.x===best); if(i<0) return '';
+        const p = s.points[i], prev = s.points[i-1];
+        const d = document.createElement('i'); d.className = 'scrub-dot';
+        d.style.left = (x/c.W*100)+'%'; d.style.top = (c.Y(p.y)/c.H*100)+'%'; d.style.background = s.color;
+        wrap.appendChild(d); dots.push(d);
+        const ch = prev ? Math.round((p.y - prev.y)*10)/10 : null;
+        return `<div><i style="background:${s.color}"></i>${esc(s.name)}<b class="mono">${esc(c.fmtY(p.y))}${s.unit?' '+esc(s.unit):''}${ch!=null && ch!==0 ? ` <span>${ch>0?'+':''}${ch}</span>` : ''}</b></div>`;
+      }).join('');
+      tip.innerHTML = `<div class="scrub-when">${esc(new Date(best+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric', year:'numeric'}))}</div>${rows}`;
+      tip.hidden = false;
+      const left = x/c.W*r.width, w = tip.offsetWidth;
+      tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
+    };
+    let active = null;
+    svg.addEventListener('pointerdown', e=>{ active = e.pointerId; try{ svg.setPointerCapture(e.pointerId); }catch(_){} show(e.clientX); });
+    svg.addEventListener('pointermove', e=>{ if(active===e.pointerId || e.pointerType==='mouse') show(e.clientX); });
+    svg.addEventListener('pointerup', ()=>{ active = null; });
+    svg.addEventListener('pointercancel', ()=>{ active = null; hide(); });
+    svg.addEventListener('pointerleave', e=>{ if(e.pointerType==='mouse') hide(); });
+  });
 }
 
 /* ===================== Progress: daily check-ins ===================== */
@@ -2846,6 +2895,7 @@ function renderTrendControls(){
 function renderProgress(){
   renderTrendControls();
   const el = $('#trendCharts'); if(!el) return;
+  LINE_CHARTS.clear();
   const {from, to} = trendWindow();
   const wu = weightUnit();
   const cw = el.clientWidth || Math.min(640, window.innerWidth - 64);
@@ -2874,6 +2924,7 @@ function renderProgress(){
   } else html += `</div><div class="empty" style="padding:14px 8px;"><p>No mood or energy scores in this range.</p></div>`;
   html += `</div>`;
   el.innerHTML = html;
+  attachLineScrub(el);
   $('#trendRangeLabel').textContent = `${fmtDate(from)} to ${fmtDate(to)}`;
   renderCheckinList();
   renderPhotos();
