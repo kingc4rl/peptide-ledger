@@ -295,6 +295,7 @@ function populatePresetSelect(){
     $('#calcVial').value = p.vial;
     $('#calcDose').value = p.doseUnit==='mcg' ? Math.round(p.doseLow)/1000 : p.doseLow;   // the calculator works in mg by default
     $('#calcDoseUnit').value = 'mg';
+    calcEdited('dose');
     note.textContent = `Typical range: ${p.doseLow}–${p.doseHigh} ${p.doseUnit}, ${p.freq}. Prefilled with the low end — adjust to your actual protocol.`;
     runCalc();
   });
@@ -398,26 +399,81 @@ function updateCalcSyringe(units){
   }
 }
 
-function runCalc(){
-  const vial = num($('#calcVial').value,0);
-  const bac = num($('#calcBac').value,0);
-  const doseVal = num($('#calcDose').value,0);
-  const unit = $('#calcDoseUnit').value;
-  const doseMg = unit==='mcg' ? doseVal/1000 : doseVal;
-  const conc = bac>0 ? vial/bac : 0; // mg/mL
-  const volMl = conc>0 ? doseMg/conc : 0;
-  const units = volMl*100; // IU, U-100
-  const dosesPerVial = doseMg>0 ? vial/doseMg : 0;
-  const perIuMcg = conc>0 ? (conc/100)*1000 : 0;
-
-  $('#calcConc').textContent = conc? conc.toFixed(2)+' mg/mL' : '—';
-  $('#calcUnits').textContent = units? units.toFixed(1) : '—';
-  $('#calcMl').textContent = volMl? volMl.toFixed(3)+' mL per dose' : '—';
-  $('#calcPerIu').textContent = perIuMcg? perIuMcg.toFixed(1)+' mcg' : '—';
-  $('#calcDosesPerVial').textContent = dosesPerVial? Math.floor(dosesPerVial)+' doses' : '—';
-  updateCalcSyringe(units);
+/* Four linked fields: vial mg, BAC water, dose, syringe draw (units). units = dose / (vial / water) × 100.
+   One field is calculated from the other three; see calcEdited for which. */
+let calcBacUnit = 'ml';
+let calcOrder = ['draw','vial','bac','dose'];   // [0] is the calculated field
+const CALC_IDS = {vial:'#calcVial', bac:'#calcBac', dose:'#calcDose', draw:'#calcDraw'};
+const trimNum = (n, dp)=> String(Math.round(n*Math.pow(10,dp))/Math.pow(10,dp));
+function calcBacMl(){ const v = num($('#calcBac').value,0); return calcBacUnit==='units' ? v/100 : v; }
+function calcDoseMg(){ const v = num($('#calcDose').value,0); return $('#calcDoseUnit').value==='mcg' ? v/1000 : v; }
+// Dose and draw are the working pair: typing a draw recalculates the dose and vice versa.
+// Editing vial or water keeps whichever field is currently calculated (a cleared field becomes calculated).
+function calcEdited(f){
+  let t = calcOrder[0];
+  if(f==='draw') t = 'dose';
+  else if(f==='dose') t = 'draw';
+  else if(f===t) t = 'draw';
+  calcOrder = [t].concat(['vial','bac','dose','draw'].filter(x=>x!==t));
 }
-['calcVial','calcBac','calcDose','calcDoseUnit'].forEach(id=> $('#'+id).addEventListener('input', runCalc));
+function calcSolve(){
+  const target = calcOrder[0];
+  const vial = num($('#calcVial').value,0), bac = calcBacMl(), dose = calcDoseMg(), draw = num($('#calcDraw').value,0);
+  let out = null;
+  if(target==='draw' && vial>0 && bac>0 && dose>0) out = trimNum(dose*bac*100/vial, 2);
+  if(target==='dose' && vial>0 && bac>0 && draw>0){ const mg = draw*vial/(bac*100); out = trimNum($('#calcDoseUnit').value==='mcg' ? mg*1000 : mg, $('#calcDoseUnit').value==='mcg' ? 1 : 4); }
+  if(target==='bac' && vial>0 && dose>0 && draw>0){ const ml = draw*vial/(dose*100); out = trimNum(calcBacUnit==='units' ? ml*100 : ml, calcBacUnit==='units' ? 1 : 3); }
+  if(target==='vial' && bac>0 && dose>0 && draw>0) out = trimNum(dose*bac*100/draw, 3);
+  $(CALC_IDS[target]).value = out==null ? '' : out;
+  $$('.cf').forEach(c=>{ const on = c.dataset.cf===target; c.classList.toggle('calc', on); $('.cf-badge',c).hidden = !on; });
+}
+function runCalc(){
+  calcSolve();
+  const vial = num($('#calcVial').value,0), bac = calcBacMl(), dose = calcDoseMg(), draw = num($('#calcDraw').value,0);
+  const conc = vial>0 && bac>0 ? vial/bac : 0;
+  const volMl = draw>0 ? draw/100 : 0;
+  const f = (n,dp)=> trimNum(n, dp===undefined?2:dp);
+  const mgTxt = mg=> mg>=1 ? `${f(mg,3)} mg` : `${f(mg*1000,1)} mcg (${f(mg,4)} mg)`;
+  $('#calcVialConv').textContent = vial>0 && bac>0 ? `≈ ${f(bac,3)} mL · ${f(bac*100,1)} units (full vial)` : '';
+  $('#calcBacConv').textContent = bac>0 ? `≈ ${calcBacUnit==='units' ? f(bac,3)+' mL' : f(bac*100,1)+' units'}${vial>0 ? ` · holds ${f(vial,3)} mg peptide` : ''}` : '';
+  $('#calcDoseConv').textContent = dose>0 && conc>0 ? `≈ ${f(dose/conc,3)} mL · ${f(dose/conc*100,2)} units` : '';
+  $('#calcDrawConv').textContent = draw>0 && conc>0 ? `≈ ${mgTxt(draw/100*conc)} · ${f(volMl,3)} mL` : '';
+  $('#calcConc').textContent = conc ? f(conc,2) : '—';
+  $('#calcMl').textContent = volMl ? f(volMl,3) : '—';
+  $('#calcDosesPerVial').textContent = dose>0 && vial>0 ? f(vial/dose,1) : '—';
+  $('#calcPerUnit').textContent = conc ? `1 unit = ${f(conc*10,2)} mcg (${f(conc/100,4)} mg)` : '';
+  updateCalcSyringe(draw);
+  if(typeof runEndo==='function') runEndo();
+}
+Object.entries(CALC_IDS).forEach(([k,sel])=> $(sel).addEventListener('input', ()=>{ calcEdited(k); runCalc(); }));
+$('#calcDoseUnit').addEventListener('change', ()=>{
+  // keep the same amount, just shown in the other unit
+  const v = num($('#calcDose').value,null);
+  if(v!=null && calcOrder[0]!=='dose') $('#calcDose').value = trimNum($('#calcDoseUnit').value==='mcg' ? v*1000 : v/1000, 4);
+  runCalc();
+});
+$$('[data-bac-unit]').forEach(b=> b.addEventListener('click', ()=>{
+  const u = b.dataset.bacUnit; if(u===calcBacUnit) return;
+  const v = num($('#calcBac').value,null);
+  calcBacUnit = u;
+  if(v!=null) $('#calcBac').value = trimNum(u==='units' ? v*100 : v/100, u==='units' ? 1 : 3);
+  $$('[data-bac-unit]').forEach(x=> x.classList.toggle('on', x.dataset.bacUnit===u));
+  runCalc();
+}));
+$$('[data-clear]').forEach(b=> b.addEventListener('click', ()=>{
+  const k = b.dataset.clear;
+  $(CALC_IDS[k]).value = '';
+  calcOrder = [k].concat(calcOrder.filter(x=>x!==k));   // a cleared field becomes the calculated one
+  runCalc();
+  $(CALC_IDS[k]).focus();
+}));
+$('#calcReset').addEventListener('click', ()=>{
+  $('#calcVial').value = 5; $('#calcDose').value = 0.25; $('#calcDoseUnit').value = 'mg';
+  calcBacUnit = 'ml'; $('#calcBac').value = 2; $$('[data-bac-unit]').forEach(x=> x.classList.toggle('on', x.dataset.bacUnit==='ml'));
+  $('#calcPreset').value = ''; $('#calcPresetNote').textContent = '';
+  calcOrder = ['draw','vial','bac','dose']; calcSyringeCap = null;
+  runCalc();
+});
 
 
 
@@ -453,7 +509,7 @@ function renderEndoStack(){
 function runEndo(){
   const el = $('#endoResult'); if(!el) return;
   const kg = num($('#endoWeight').value,0), totalEU = num($('#endoEU').value,0), route = $('#endoRoute').value;
-  const vialMg = num($('#calcVial').value,0), bac = num($('#calcBac').value,0);
+  const vialMg = num($('#calcVial').value,0), bac = calcBacMl();
   const unit = $('#calcDoseUnit').value;
   const doseVal = num($('#calcDose').value,0);
   const doseMg = unit==='mg' ? doseVal : doseVal/1000;
@@ -509,7 +565,7 @@ function runEndo(){
       <div class="endo-stat"><div class="v">${perKgDose.toFixed(3)}</div><div class="l">EU/kg</div></div>
       <div class="endo-stat"><div class="v">${pct<10?pct.toFixed(1):Math.round(pct)}%</div><div class="l">of ${perKg} EU/kg limit</div></div>
       <div class="endo-stat"><div class="v">${volMl?volMl.toFixed(3):'—'}</div><div class="l">mL drawn</div></div>
-      ${clicks!=null?`<div class="endo-stat"><div class="v">${clicks}</div><div class="l">pen clicks (${ic} IU each)</div></div>`:''}
+      ${clicks!=null?`<div class="endo-stat"><div class="v">${clicks}</div><div class="l">pen clicks (${ic} units each)</div></div>`:''}
       <div class="endo-stat"><div class="v">${doses}</div><div class="l">doses in vial</div></div>
     </div>
     <div class="endo-meter ${tier.cls==='ok'?'':tier.cls}"><i style="width:${Math.min(100,pct)}%"></i></div>
@@ -541,7 +597,7 @@ function runEndo(){
   $('#endoCompoundNote').addEventListener('click', e=>{
     if(e.target.id!=='endoUseTypical') return; e.preventDefault();
     const row = endoFind($('#endoCompound').value); if(!row) return;
-    $('#calcDose').value = row[1]; $('#calcDoseUnit').value = row[2]; runCalc(); runEndo();
+    $('#calcDose').value = row[1]; $('#calcDoseUnit').value = row[2]; calcEdited('dose'); runCalc();
   });
   runEndo();
 })();
@@ -1149,7 +1205,7 @@ function openProtocolModal(existing){
         </div>
         <div class="footnote" id="pConcOut" style="margin-top:6px;min-height:14px;"></div>
       </div>
-      <div class="field"><label for="pUnits">Syringe units, whole dose (IU)</label><input id="pUnits" type="number" inputmode="decimal" step="any" value="${esc(p.units||'')}" placeholder="e.g. 20"></div>
+      <div class="field"><label for="pUnits">Syringe units, whole dose</label><input id="pUnits" type="number" inputmode="decimal" step="any" value="${esc(p.units||'')}" placeholder="e.g. 20"></div>
       <div class="field"><label for="pSyringeMl">Syringe size</label>
         <select id="pSyringeMl">
           ${SYRINGE_SIZES.map(s=>`<option value="${s.ml}" ${parseFloat(s.ml)===curSyr?'selected':''}>${s.ml} mL (${s.cap} units): ${s.tag}</option>`).join('')}

@@ -443,6 +443,28 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .dc-legend{ display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px; margin-top:4px; }
 .dc-mini{ background:var(--surface-2); border-radius:12px; margin-top:0; }
 .link-btn{ background:none; border:none; padding:0; color:var(--info); font-size:13px; font-weight:600; cursor:pointer; }
+.cf-list{ display:flex; flex-direction:column; }
+.cf{ padding:14px 0; border-bottom:1px solid var(--line); }
+.cf:first-child{ padding-top:4px; }
+.cf-h{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.cf-h label{ font-size:14.5px; font-weight:700; color:var(--ink); margin:0; flex:1; }
+.cf-clear{ background:none; border:none; color:var(--muted); font-size:12.5px; cursor:pointer; padding:2px 4px; }
+.cf-badge{ font-size:11.5px; font-weight:700; color:var(--accent-pep-strong); background:var(--accent-pep-soft); border-radius:99px; padding:3px 10px; }
+.cf-row{ display:flex; align-items:center; gap:10px; }
+.cf-row input{ flex:1; min-width:0; font:600 20px "IBM Plex Mono",monospace; padding:10px 12px; border-radius:10px; background:var(--surface-2); }
+.cf-row select{ width:84px; flex:none; font-weight:600; }
+.cf-unit{ flex:none; width:52px; font-weight:700; color:var(--muted); }
+.cf.calc .cf-row input{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep-strong); }
+.cf-help{ font-size:12.5px; color:var(--muted); margin-top:6px; }
+.cf-conv{ font-size:13px; font-weight:700; color:var(--accent-pep-strong); margin-top:3px; min-height:18px; }
+.seg{ flex:none; display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; }
+.seg button{ border:none; background:var(--surface); color:var(--muted); font-weight:600; font-size:13px; padding:9px 11px; cursor:pointer; }
+.seg button.on{ background:var(--ink); color:var(--surface); }
+.cf-foot{ display:flex; justify-content:space-between; align-items:center; gap:10px; margin:12px 0; }
+.cf-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.cf-stats > div{ background:var(--surface-2); border:1px solid var(--line); border-radius:12px; padding:10px 6px; text-align:center; display:flex; flex-direction:column; gap:2px; }
+.cf-stats strong{ font-size:17px; }
+.cf-stats span{ font-size:11.5px; color:var(--muted); }
 .chip-row{ display:flex; gap:6px; flex-wrap:wrap; }
 .chip-btn{ border:1px solid var(--line); background:var(--surface); color:var(--muted); border-radius:99px; padding:6px 12px; font-size:12.5px; font-weight:600; cursor:pointer; }
 .chip-btn.on{ background:var(--accent-pep-soft); border-color:var(--accent-pep); color:var(--accent-pep-strong); }
@@ -682,36 +704,48 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
       <section id="pepCalcView" class="view" hidden>
 
       <div class="card">
-        <h3 style="font-size:16px;margin-bottom:4px;">Reconstitution &amp; dosing calculator</h3>
-        <p class="footnote" style="margin-bottom:14px;">Same math as PeptideDeck's calculator, rebuilt so it doesn't depend on an outside site.</p>
-        <div class="calc-layout">
-          <div style="display:flex;flex-direction:column;gap:12px;">
-            <div class="field">
-              <label for="calcPreset">Peptide</label>
-              <select id="calcPreset"></select>
-              <div class="footnote" id="calcPresetNote" style="margin-top:4px;"></div>
-            </div>
-            <div class="field"><label for="calcVial">Vial size (mg)</label><input type="number" id="calcVial" inputmode="decimal" value="5" min="0" step="any"></div>
-            <div class="field"><label for="calcBac">BAC water added (mL)</label><input type="number" id="calcBac" inputmode="decimal" value="2" min="0" step="any"></div>
-            <div class="field">
-              <label for="calcDose">Desired dose</label>
-              <div style="display:flex;gap:8px;">
-                <input type="number" id="calcDose" inputmode="decimal" value="0.25" min="0" step="any" style="flex:1;">
-                <select id="calcDoseUnit" style="width:90px;"><option value="mg" selected>mg</option><option value="mcg">mcg</option></select>
-              </div>
-            </div>
+        <h3 style="font-size:16px;margin-bottom:4px;">Dose calculator</h3>
+        <p class="footnote" style="margin-bottom:14px;">Based on a standard U-100 insulin syringe (100 units = 1 mL).</p>
+        <div class="field" style="margin-bottom:12px;">
+          <label for="calcPreset">Peptide (optional, fills typical values)</label>
+          <select id="calcPreset"></select>
+          <div class="footnote" id="calcPresetNote" style="margin-top:4px;"></div>
+        </div>
+        <div class="cf-list">
+          <div class="cf" data-cf="vial">
+            <div class="cf-h"><label for="calcVial">Peptide in vial</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="vial">✕ Clear</button></div>
+            <div class="cf-row"><input type="number" id="calcVial" inputmode="decimal" value="5" min="0" step="any"><span class="cf-unit">mg</span></div>
+            <div class="cf-help">Total mg of peptide in the dry vial</div>
+            <div class="cf-conv" id="calcVialConv"></div>
           </div>
-          <div class="calc-result">
-            <div>
-              <div class="lbl">Draw to</div>
-              <div class="big"><span id="calcUnits">—</span> <span style="font-size:15px;font-weight:500;">IU</span></div>
-              <div class="footnote" id="calcMl">—</div>
-            </div>
-            <div class="calc-sub-row"><span>Concentration</span><strong class="mono" id="calcConc">—</strong></div>
-            <div class="calc-sub-row"><span>1 IU equals</span><strong class="mono" id="calcPerIu">—</strong></div>
-            <div class="calc-sub-row"><span>Doses per vial</span><strong class="mono" id="calcDosesPerVial">—</strong></div>
+          <div class="cf" data-cf="bac">
+            <div class="cf-h"><label for="calcBac">BAC water added</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="bac">✕ Clear</button></div>
+            <div class="cf-row"><input type="number" id="calcBac" inputmode="decimal" value="2" min="0" step="any">
+              <div class="seg" role="group" aria-label="BAC water unit"><button type="button" class="on" data-bac-unit="ml">mL</button><button type="button" data-bac-unit="units">units</button></div></div>
+            <div class="cf-help">Bacteriostatic water used to reconstitute</div>
+            <div class="cf-conv" id="calcBacConv"></div>
+          </div>
+          <div class="cf" data-cf="dose">
+            <div class="cf-h"><label for="calcDose">Desired dose</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="dose">✕ Clear</button></div>
+            <div class="cf-row"><input type="number" id="calcDose" inputmode="decimal" value="0.25" min="0" step="any">
+              <select id="calcDoseUnit" aria-label="Dose unit"><option value="mg" selected>mg</option><option value="mcg">mcg</option></select></div>
+            <div class="cf-help">Amount you want per injection</div>
+            <div class="cf-conv" id="calcDoseConv"></div>
+          </div>
+          <div class="cf" data-cf="draw">
+            <div class="cf-h"><label for="calcDraw">Syringe draw</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="draw">✕ Clear</button></div>
+            <div class="cf-row"><input type="number" id="calcDraw" inputmode="decimal" min="0" step="any"><span class="cf-unit">units</span></div>
+            <div class="cf-help">Tick marks on a U-100 insulin syringe</div>
+            <div class="cf-conv" id="calcDrawConv"></div>
           </div>
         </div>
+        <div class="cf-foot"><span class="footnote">Fill in any three. The fourth is calculated, and changing any field updates the others.</span><button type="button" class="btn btn-sm" id="calcReset">Reset</button></div>
+        <div class="cf-stats">
+          <div><strong class="mono" id="calcConc">—</strong><span>mg/mL concentration</span></div>
+          <div><strong class="mono" id="calcMl">—</strong><span>mL per injection</span></div>
+          <div><strong class="mono" id="calcDosesPerVial">—</strong><span>doses in vial</span></div>
+        </div>
+        <div class="footnote" id="calcPerUnit" style="margin-top:8px;text-align:center;"></div>
 
         <div style="margin-top:16px;">
           <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Syringe size</label>
@@ -749,9 +783,9 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
         <div class="endo-opt">
           <label class="endo-check"><input type="checkbox" id="endoPen"> Using a pen injector</label>
           <div id="endoPenBox" hidden>
-            <div class="field" style="max-width:340px;"><label for="endoClick">IU delivered per click</label>
-              <select id="endoClick"><option value="0.5">0.5 IU per click (0.005 mL)</option><option value="1" selected>1 IU per click (0.01 mL), most common</option><option value="2">2 IU per click (0.02 mL)</option></select></div>
-            <div class="footnote" style="margin-top:4px;">Check your pen's dial markings. Standard U100 pens: 1 IU = 0.01 mL.</div>
+            <div class="field" style="max-width:340px;"><label for="endoClick">Units delivered per click</label>
+              <select id="endoClick"><option value="0.5">0.5 units per click (0.005 mL)</option><option value="1" selected>1 unit per click (0.01 mL), most common</option><option value="2">2 units per click (0.02 mL)</option></select></div>
+            <div class="footnote" style="margin-top:4px;">Check your pen's dial markings. Standard U-100 pens: 1 unit = 0.01 mL.</div>
           </div>
         </div>
 
