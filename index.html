@@ -398,6 +398,28 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .pc-k{ display:inline-block; min-width:72px; color:var(--muted); font-size:12px; }
 .pc-toggle{ margin-top:10px; background:none; border:none; padding:4px 0; color:var(--accent-pep-strong); font-size:12.5px; font-weight:600; cursor:pointer; }
 .serum-pan{ position:relative; -webkit-touch-callout:none; touch-action:pan-y; cursor:crosshair; user-select:none; -webkit-user-select:none; }
+.cmp{ position:fixed; inset:0; z-index:70; background:#111; color:#f4f4f5; display:flex; flex-direction:column; padding:calc(env(safe-area-inset-top,0px) + 10px) 12px calc(env(safe-area-inset-bottom,0px) + 12px); }
+.cmp-top{ display:flex; align-items:center; gap:10px; }
+.cmp-top h3{ font-family:"Space Grotesk","Inter",sans-serif; font-size:16px; flex:1; color:#fff; }
+.cmp-x{ background:rgba(255,255,255,.12); border:none; color:#fff; width:36px; height:36px; border-radius:50%; font-size:16px; cursor:pointer; }
+.cmp-modes{ display:flex; margin:10px 0; background:rgba(255,255,255,.1); border-radius:10px; padding:3px; }
+.cmp-modes button{ flex:1; border:none; background:none; color:#d4d4d8; font-weight:600; font-size:13px; padding:8px 4px; border-radius:8px; cursor:pointer; }
+.cmp-modes button.on{ background:#fff; color:#111; }
+.cmp-stage{ flex:1; min-height:0; position:relative; display:flex; gap:6px; }
+.cmp-stage.side figure{ flex:1; min-width:0; margin:0; display:flex; flex-direction:column; }
+.cmp-stage.side img{ flex:1; min-height:0; width:100%; object-fit:contain; background:#000; border-radius:8px; }
+.cmp-stage figcaption{ font-size:12px; color:#d4d4d8; text-align:center; margin-top:4px; }
+.cmp-stack{ position:relative; flex:1; min-height:0; touch-action:pan-y; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; overflow:hidden; border-radius:8px; background:#000; }
+.cmp-stack img{ position:absolute; inset:0; width:100%; height:100%; object-fit:contain; pointer-events:none; }
+.cmp-wipe-line{ position:absolute; top:0; bottom:0; width:0; border-left:2px solid #fff; pointer-events:none; box-shadow:0 0 6px rgba(0,0,0,.6); }
+.cmp-wipe-line::after{ content:'⟷'; position:absolute; top:50%; left:-17px; width:32px; height:32px; margin-top:-16px; border-radius:50%; background:#fff; color:#111; display:flex; align-items:center; justify-content:center; font-size:15px; font-weight:700; }
+.cmp-tag{ position:absolute; top:8px; padding:3px 9px; border-radius:99px; background:rgba(0,0,0,.6); color:#fff; font-size:11.5px; font-weight:700; pointer-events:none; }
+.cmp-ctrl{ margin-top:10px; display:flex; flex-direction:column; gap:8px; }
+.cmp-ctrl .seg2{ display:flex; gap:8px; }
+.cmp-ctrl .seg2 button{ flex:1; border:1px solid rgba(255,255,255,.25); background:none; color:#fff; border-radius:10px; padding:10px; font-weight:600; font-size:13.5px; cursor:pointer; }
+.cmp-ctrl .seg2 button.on{ background:var(--accent-pep); border-color:var(--accent-pep); color:#1c1005; }
+.cmp-ctrl input[type=range]{ width:100%; accent-color:var(--accent-pep); }
+.cmp-hint{ font-size:12px; color:#a1a1aa; text-align:center; }
 .lc-readout{ display:flex; align-items:center; gap:4px 12px; flex-wrap:wrap; min-height:34px; margin-top:8px; padding:6px 10px; border-radius:10px; background:var(--surface-2); font-size:12.5px; color:var(--muted); }
 .lc-readout.on{ background:var(--ink); color:var(--surface); }
 .lc-date{ font-weight:700; }
@@ -680,16 +702,12 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 
       <section id="progressView" class="view" hidden>
         <div class="card" id="checkinCard">
-          <div class="card-h"><h3>Daily check-in</h3><span class="footnote">Pick an earlier date to fill in a missed day</span></div>
+          <div class="card-h"><h3>Log weight</h3><span class="footnote">Pick an earlier date to fill in a missed day</span></div>
           <div class="form-grid">
             <div class="field"><label for="ciDate">Date</label><input type="date" id="ciDate"></div>
-            <div class="field"><label for="ciWeight">Weight</label>
-              <div style="display:flex;gap:8px;"><input type="number" id="ciWeight" inputmode="decimal" step="any" min="0" placeholder="e.g. 182.4" style="flex:1;min-width:0;"><select id="ciUnit" aria-label="Weight unit" style="width:74px;"><option value="lb">lb</option><option value="kg">kg</option></select></div></div>
-            <div class="field span2"><span class="lbl" id="ciMoodLbl">Mood</span><div class="mood-faces" id="ciMood" role="group" aria-labelledby="ciMoodLbl"></div></div>
-            <div class="field span2"><span class="lbl" id="ciEnergyLbl">Energy</span><div class="energy-row" id="ciEnergy" role="group" aria-labelledby="ciEnergyLbl"></div></div>
-            <div class="field span2"><label for="ciNote">Note (optional)</label><input type="text" id="ciNote" maxlength="200" placeholder="Sleep, appetite, side effects…"></div>
+            <div class="field"><label for="ciWeight">Weight (lb)</label><input type="number" id="ciWeight" inputmode="decimal" step="any" min="0" placeholder="e.g. 182.4"></div>
           </div>
-          <div class="form-actions"><button type="button" class="btn btn-danger" id="ciDelete" style="margin-right:auto;" hidden>Delete</button><button type="button" class="btn btn-accent-pep" id="ciSave">Save check-in</button></div>
+          <div class="form-actions"><button type="button" class="btn btn-danger" id="ciDelete" style="margin-right:auto;" hidden>Delete</button><button type="button" class="btn btn-accent-pep" id="ciSave">Save weight</button></div>
           <div class="footnote" id="ciStatus" role="status" style="margin-top:6px;min-height:16px;"></div>
         </div>
 
@@ -702,11 +720,6 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
           </div>
           <label class="endo-check" style="margin-top:12px;font-weight:500;color:var(--muted);"><input type="checkbox" id="trendMarkers" checked> Show protocol starts and dose changes</label>
           <div id="trendCharts"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h3>Recent check-ins</h3><span class="footnote">Tap one to edit</span></div>
-          <div id="checkinList"></div>
         </div>
 
         <div class="card">

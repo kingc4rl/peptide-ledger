@@ -2826,51 +2826,37 @@ function attachLineScrub(root){
 }
 
 /* ===================== Progress: daily check-ins ===================== */
-const ENERGY_LEVELS = [1,2,3,4,5];
-function weightUnit(){ return lsGet('ledger.weightUnit','lb')==='kg' ? 'kg' : 'lb'; }
+function weightUnit(){ return 'lb'; }   // weight is tracked in pounds only; older kg entries are converted for display
 function toUnit(w, from, to){ const n = num(w,null); if(n==null) return null; if(from===to) return n; return to==='kg' ? n*0.45359237 : n/0.45359237; }
 function checkinFor(iso){ return state.checkins.find(c=>c.date===iso) || null; }
-let ciMood = null, ciEnergy = null;
 function loadCheckinForm(iso){
   const c = checkinFor(iso);
   $('#ciDate').value = iso;
   const wu = weightUnit();
-  $('#ciUnit').value = wu;
   const w = c ? toUnit(c.weight, c.weightUnit||wu, wu) : null;
   $('#ciWeight').value = w!=null ? Math.round(w*10)/10 : '';
-  ciMood = c ? (c.mood||null) : null;
-  ciEnergy = c ? (c.energy||null) : null;
-  $('#ciNote').value = c ? (c.note||'') : '';
   $('#ciStatus').textContent = c ? `Editing the entry for ${fmtDateShort(iso)}.` : '';
   $('#ciDelete').hidden = !c;
-  drawCheckinScales();
-}
-function drawCheckinScales(){
-  $('#ciMood').innerHTML = MOOD_FACES.map(f=>`<button type="button" class="mood-btn ${ciMood===f.score?'on':''}" data-ci-mood="${f.score}" aria-label="Mood: ${f.label}" aria-pressed="${ciMood===f.score}">${f.face}</button>`).join('');
-  $('#ciEnergy').innerHTML = ENERGY_LEVELS.map(n=>`<button type="button" class="energy-btn ${ciEnergy===n?'on':''}" data-ci-energy="${n}" aria-label="Energy ${n} of 5" aria-pressed="${ciEnergy===n}"><span class="bolts">${'⚡'.repeat(Math.min(n,3))}</span><span class="mono">${n}</span></button>`).join('');
 }
 function initCheckinForm(){
   const maxISO = todayISO();
   $('#ciDate').max = maxISO;
   loadCheckinForm(maxISO);
   $('#ciDate').addEventListener('change', ()=>{ const v = $('#ciDate').value; if(v) loadCheckinForm(v > maxISO ? maxISO : v); });
-  $('#ciUnit').addEventListener('change', ()=>{ lsSet('ledger.weightUnit', $('#ciUnit').value); renderProgress(); });
-  $('#ciMood').addEventListener('click', e=>{ const b = e.target.closest('[data-ci-mood]'); if(!b) return; const v = +b.dataset.ciMood; ciMood = ciMood===v ? null : v; drawCheckinScales(); });
-  $('#ciEnergy').addEventListener('click', e=>{ const b = e.target.closest('[data-ci-energy]'); if(!b) return; const v = +b.dataset.ciEnergy; ciEnergy = ciEnergy===v ? null : v; drawCheckinScales(); });
   $('#ciSave').addEventListener('click', async ()=>{
     const date = $('#ciDate').value || todayISO();
     const weight = $('#ciWeight').value.trim();
-    const note = $('#ciNote').value.trim();
-    if(!weight && !ciMood && !ciEnergy && !note){ $('#ciStatus').textContent = 'Add a weight, mood, energy or note first.'; return; }
-    const data = {date, weight: weight ? num(weight) : null, weightUnit: $('#ciUnit').value, mood: ciMood, energy: ciEnergy, note};
+    if(!weight){ $('#ciStatus').textContent = 'Enter a weight first.'; $('#ciWeight').focus(); return; }
     const existing = checkinFor(date);
+    // keep any mood, energy or note an older entry already has
+    const data = {...(existing ? stripId(existing) : {}), date, weight: num(weight), weightUnit: 'lb'};
     if(existing) await dbSet('checkins', existing.id, data); else await dbAdd('checkins', data);
     $('#ciStatus').textContent = `Saved for ${fmtDateShort(date)}.`;
     $('#ciDelete').hidden = false;
   });
   $('#ciDelete').addEventListener('click', ()=>{
     const c = checkinFor($('#ciDate').value); if(!c) return;
-    confirmAction(`Delete the check-in for ${fmtDateShort(c.date)}?`, async ()=>{ await dbDelete('checkins', c.id); loadCheckinForm(c.date); });
+    confirmAction(`Delete the weight for ${fmtDateShort(c.date)}?`, async ()=>{ await dbDelete('checkins', c.id); loadCheckinForm(c.date); });
   });
 }
 
@@ -2916,10 +2902,7 @@ function renderProgress(){
   const cw = el.clientWidth || Math.min(640, window.innerWidth - 64);
   const inRange = state.checkins.filter(c=> c.date>=from && c.date<=to).sort((a,b)=> a.date.localeCompare(b.date));
   const wPts = inRange.filter(c=> num(c.weight,null)!=null).map(c=>({x:c.date, y: Math.round(toUnit(c.weight, c.weightUnit||wu, wu)*10)/10}));
-  const mPts = inRange.filter(c=> c.mood).map(c=>({x:c.date, y:c.mood}));
-  const ePts = inRange.filter(c=> c.energy).map(c=>({x:c.date, y:c.energy}));
   const markers = protocolMarkers();
-  const avg = a => a.length ? (a.reduce((s,p)=>s+p.y,0)/a.length) : null;
   let html = '';
   // Weight
   html += `<div class="trend-block"><div class="trend-head"><h4>Weight</h4>`;
@@ -2929,34 +2912,10 @@ function renderProgress(){
     html += lineChartSVG({series:[{name:'Weight', color:'var(--accent-pep)', points:wPts, unit:wu}], from, to, markers, width:cw, label:`Weight from ${fmtDateShort(from)} to ${fmtDateShort(to)}`, fmtY: v=> String(Math.round(v*10)/10)});
   } else html += `</div><div class="empty" style="padding:14px 8px;"><p>No weights logged in this range.</p></div>`;
   html += `</div>`;
-  // Mood & energy
-  html += `<div class="trend-block"><div class="trend-head"><h4>Mood &amp; energy</h4>`;
-  if(mPts.length || ePts.length){
-    const am = avg(mPts), ae = avg(ePts);
-    html += `<div class="trend-stats">${am!=null?`<span><strong class="mono">${am.toFixed(1)}</strong> avg mood</span>`:''}${ae!=null?`<span><strong class="mono">${ae.toFixed(1)}</strong> avg energy</span>`:''}</div></div>`;
-    html += lineChartSVG({series:[{name:'Mood', color:'var(--accent-pep)', points:mPts}, {name:'Energy', color:'var(--info)', points:ePts}], from, to, markers, width:cw, yFixed:[1,5], yTicks:[1,2,3,4,5], label:'Mood and energy, scored 1 to 5', labelLast:false, height:180});
-    html += `<div class="chart-legend"><span><i style="background:var(--accent-pep)"></i>Mood (1 ${moodFace(1)} to 5 ${moodFace(5)})</span><span><i style="background:var(--info)"></i>Energy (1 to 5)</span></div>`;
-  } else html += `</div><div class="empty" style="padding:14px 8px;"><p>No mood or energy scores in this range.</p></div>`;
-  html += `</div>`;
   el.innerHTML = html;
   attachLineScrub(el);
   $('#trendRangeLabel').textContent = `${fmtDate(from)} to ${fmtDate(to)}`;
-  renderCheckinList();
   renderPhotos();
-}
-function renderCheckinList(){
-  const el = $('#checkinList'); if(!el) return;
-  const list = state.checkins.slice().sort((a,b)=> b.date.localeCompare(a.date)).slice(0,14);
-  if(!list.length){ el.innerHTML = `<div class="empty" style="padding:14px 8px;"><p>No check-ins yet. Log today's above. You can also pick an earlier date to fill in past days.</p></div>`; return; }
-  const wu = weightUnit();
-  el.innerHTML = list.map(c=>{
-    const w = num(c.weight,null)!=null ? Math.round(toUnit(c.weight, c.weightUnit||wu, wu)*10)/10 : null;
-    return `<button type="button" class="ci-row" data-edit-ci="${c.date}">
-      <span class="ci-date"><strong>${fmtDateShort(c.date)}</strong></span>
-      <span class="ci-vals">${w!=null?`<span class="mono">${w} ${wu}</span>`:''}${c.mood?`<span>${moodFace(c.mood)}</span>`:''}${c.energy?`<span class="mono">⚡${c.energy}</span>`:''}</span>
-      ${c.note?`<span class="ci-note">${esc(c.note)}</span>`:''}
-    </button>`;
-  }).join('');
 }
 
 /* ===================== Progress: photos ===================== */
@@ -3086,15 +3045,59 @@ async function openPhotoViewer(id){
     });
   });
 }
+/* Full-screen photo comparison: side by side, stacked (tap or slide to switch / fade), or a wipe slider. */
+let cmpMode = lsGet('ledger.cmpMode','side');
 async function openCompareModal(ids){
   const ps = ids.map(id=> state.photos.find(x=>x.id===id)).filter(Boolean).sort((a,b)=> a.date.localeCompare(b.date));
   if(ps.length!==2) return;
   const urls = await Promise.all(ps.map(p=> blobUrl(p.id)));
   const gap = daysBetween(ps[0].date, ps[1].date);
-  openModal(`Compare: ${gap} day${gap===1?'':'s'} apart`, `
-    <div class="ph-compare">${ps.map((p,i)=>`<figure>${urls[i]?`<img src="${urls[i]}" alt="${esc(p.angle)} photo from ${fmtDate(p.date)}">`:''}<figcaption><strong>${i===0?'Before':'After'}</strong> · ${fmtDateShort(p.date)} · ${esc(p.angle)}</figcaption></figure>`).join('')}</div>
-    <div class="form-actions"><button class="btn btn-accent-pep" id="cmpClose">Close</button></div>
-  `, body=> $('#cmpClose',body).addEventListener('click', closeModal));
+  const cap = i=> `${i===0?'Before':'After'} · ${fmtDateShort(ps[i].date)}`;
+  const img = (i, extra)=> urls[i] ? `<img src="${urls[i]}" alt="${esc(ps[i].angle)} photo from ${fmtDate(ps[i].date)}" ${extra||''}>` : '';
+  const ov = document.createElement('div');
+  ov.className = 'cmp'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true'); ov.setAttribute('aria-label','Compare photos');
+  document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+  const close = ()=>{ ov.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); };
+  let stackShow = 1, fade = 100, wipe = 50;
+  const onKey = e=>{ if(e.key==='Escape') close(); if(cmpMode==='stack' && (e.key==='ArrowLeft'||e.key==='ArrowRight')){ fade = fade>=50 ? 0 : 100; draw(); } };
+  document.addEventListener('keydown', onKey);
+  function draw(){
+    let stage = '', ctrl = '';
+    if(cmpMode==='side'){
+      stage = `<div class="cmp-stage side">${[0,1].map(i=>`<figure>${img(i)}<figcaption>${esc(cap(i))}</figcaption></figure>`).join('')}</div>`;
+    } else if(cmpMode==='stack'){
+      stage = `<div class="cmp-stage"><div class="cmp-stack" id="cmpStack">${img(0)}${img(1, `style="opacity:${fade/100}"`)}<span class="cmp-tag" style="left:8px;">${esc(fade>=50 ? cap(1) : cap(0))}</span></div></div>`;
+      ctrl = `<div class="cmp-ctrl"><div class="seg2"><button type="button" data-show="0" class="${fade<50?'on':''}">Before · ${esc(fmtDateShort(ps[0].date))}</button><button type="button" data-show="1" class="${fade>=50?'on':''}">After · ${esc(fmtDateShort(ps[1].date))}</button></div>
+        <input type="range" id="cmpFade" min="0" max="100" value="${fade}" aria-label="Fade between before and after">
+        <div class="cmp-hint">Tap the photo to flip between them, or slide to fade one into the other.</div></div>`;
+    } else {
+      stage = `<div class="cmp-stage"><div class="cmp-stack" id="cmpWipe">${img(0)}${img(1, `style="clip-path:inset(0 0 0 ${wipe}%)"`)}<div class="cmp-wipe-line" style="left:${wipe}%"></div><span class="cmp-tag" style="left:8px;">Before</span><span class="cmp-tag" style="right:8px;">After</span></div></div>`;
+      ctrl = `<div class="cmp-ctrl"><div class="cmp-hint">Drag across the photo to wipe between ${esc(fmtDateShort(ps[0].date))} and ${esc(fmtDateShort(ps[1].date))}.</div></div>`;
+    }
+    ov.innerHTML = `<div class="cmp-top"><h3>${gap} day${gap===1?'':'s'} apart · ${esc(ps[1].angle)}</h3><button type="button" class="cmp-x" aria-label="Close">✕</button></div>
+      <div class="cmp-modes" role="tablist">${[['side','Side by side'],['stack','Stack'],['wipe','Slider']].map(([k,l])=>`<button type="button" role="tab" aria-selected="${cmpMode===k}" class="${cmpMode===k?'on':''}" data-mode="${k}">${l}</button>`).join('')}</div>
+      ${stage}${ctrl}`;
+    $('.cmp-x',ov).addEventListener('click', close);
+    $$('[data-mode]',ov).forEach(b=> b.addEventListener('click', ()=>{ cmpMode = b.dataset.mode; lsSet('ledger.cmpMode', cmpMode); draw(); }));
+    if(cmpMode==='stack'){
+      const top = $('#cmpStack img:nth-of-type(2)',ov), tag = $('#cmpStack .cmp-tag',ov), range = $('#cmpFade',ov);
+      const apply = ()=>{ if(top) top.style.opacity = fade/100; tag.textContent = fade>=50 ? cap(1) : cap(0); range.value = fade;
+        $$('[data-show]',ov).forEach(b=> b.classList.toggle('on', (+b.dataset.show===1) === (fade>=50))); };
+      $('#cmpStack',ov).addEventListener('click', ()=>{ fade = fade>=50 ? 0 : 100; apply(); });
+      $$('[data-show]',ov).forEach(b=> b.addEventListener('click', ()=>{ fade = +b.dataset.show ? 100 : 0; apply(); }));
+      range.addEventListener('input', ()=>{ fade = +range.value; apply(); });
+    }
+    if(cmpMode==='wipe'){
+      const box = $('#cmpWipe',ov), top = $('#cmpWipe img:nth-of-type(2)',ov), line = $('.cmp-wipe-line',ov);
+      bindScrub(box, x=>{
+        const r = box.getBoundingClientRect();
+        wipe = Math.max(0, Math.min(100, (x - r.left)/r.width*100));
+        if(top) top.style.clipPath = `inset(0 0 0 ${wipe}%)`; line.style.left = wipe+'%';
+      }, ()=>{});
+    }
+  }
+  draw();
+  $('.cmp-x',ov).focus();
 }
 function initProgress(){
   initCheckinForm();
@@ -3106,11 +3109,6 @@ function initProgress(){
     renderProgress();
   });
   ['#trendFrom','#trendTo','#trendMarkers'].forEach(s=> $(s).addEventListener('change', renderProgress));
-  $('#checkinList').addEventListener('click', e=>{
-    const b = e.target.closest('[data-edit-ci]'); if(!b) return;
-    loadCheckinForm(b.dataset.editCi);
-    $('#checkinCard').scrollIntoView({behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block:'start'});
-  });
 }
 
 /* ===================== Labs: blood work ===================== */
@@ -3622,7 +3620,7 @@ function renderAll(){
   renderSupplyVendors();
   renderCostTracking();
   renderResearch();
-  if(currentTab==='progress') renderProgress(); else { renderCheckinList(); }
+  if(currentTab==='progress') renderProgress();
   renderBackupNudge();
 }
 
