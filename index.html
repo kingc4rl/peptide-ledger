@@ -330,7 +330,7 @@ a.btn{ text-decoration:none; }
 button:disabled{ opacity:.45; cursor:default; }
 
 /* Bottom tab bar */
-.tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:40; display:grid; grid-template-columns:repeat(6,1fr);
+.tabbar{ position:fixed; left:0; right:0; bottom:0; z-index:40; display:grid; grid-template-columns:repeat(7,1fr);
   background:var(--head-bg); -webkit-backdrop-filter:blur(14px); backdrop-filter:blur(14px); border-top:1px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom, 0px); padding-left:env(safe-area-inset-left, 0px); padding-right:env(safe-area-inset-right, 0px); }
 .tabbar button{ background:none; border:none; color:var(--muted); display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; height:var(--tabbar-h); font-size:11px; font-weight:600; cursor:pointer; letter-spacing:.01em; }
@@ -619,7 +619,7 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .module-box{ background:var(--surface-2); }
 .module-box input, .module-box select{ background:var(--surface); }
 
-@media (min-width:900px){ .tabbar{ grid-template-columns:repeat(6, 120px); justify-content:center; } }
+@media (min-width:900px){ .tabbar{ grid-template-columns:repeat(7, 110px); justify-content:center; } }
 @media (prefers-reduced-motion: reduce){ *{ transition:none !important; animation:none !important; } }
 
 /* ===== Liquid glass layer: translucent frosted surfaces over a soft colour field.
@@ -685,6 +685,58 @@ input, select, textarea, .modal input, .modal select, .modal textarea, .module-b
 input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .cf.calc .cf-row input{ border-color:var(--accent-pep); }
 .seg{ border:1px solid rgba(40,30,20,.28); }
+
+/* ===== Claude tab ===== */
+.tabbar{ overflow:visible; }
+.tabbar button{ font-size:10.5px; }
+.tab-orb{ position:relative; overflow:visible; }
+.tab-orb .orb{ position:absolute; left:50%; top:-26px; transform:translateX(-50%); width:60px; height:60px; border-radius:50%;
+  display:flex; align-items:center; justify-content:center; color:#fff;
+  background:radial-gradient(circle at 32% 26%, #ffe2c2 0%, #ffb469 22%, #ff9f43 48%, #e2761a 78%, #b85a00 100%);
+  border:3px solid rgba(255,255,255,.9);
+  box-shadow:0 10px 22px rgba(226,118,26,.45), 0 3px 6px rgba(60,40,20,.25), inset 0 -6px 10px rgba(120,50,0,.35), inset 0 4px 8px rgba(255,255,255,.55);
+  transition:transform .15s ease, box-shadow .15s ease; }
+.tab-orb .orb::after{ content:''; position:absolute; top:7px; left:14px; width:24px; height:12px; border-radius:50%; background:linear-gradient(180deg, rgba(255,255,255,.75), rgba(255,255,255,0)); pointer-events:none; }
+.tab-orb .orb svg{ width:28px; height:28px; fill:#fff; stroke:none; filter:drop-shadow(0 1px 1px rgba(120,50,0,.4)); }
+.tab-orb > span:last-child{ margin-top:30px; }
+.tabbar .tab-orb.active{ background:none; box-shadow:none; }
+.tab-orb.active .orb{ transform:translateX(-50%) scale(1.06); box-shadow:0 12px 26px rgba(226,118,26,.55), 0 0 0 4px rgba(255,159,67,.25), inset 0 -6px 10px rgba(120,50,0,.35), inset 0 4px 8px rgba(255,255,255,.55); }
+.tab-orb:active .orb{ transform:translateX(-50%) scale(.95); }
+.ask-steps{ margin:0 0 12px; padding-left:20px; font-size:13.5px; line-height:1.55; }
+.ask-steps a{ color:var(--info); font-weight:600; }
+.ask-chat{ display:flex; flex-direction:column; gap:12px; }
+.ask-head{ display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; }
+.ask-title{ display:flex; align-items:center; gap:10px; min-width:0; }
+.ask-title h3{ font-size:16px; }
+.ask-orb-sm{ width:34px; height:34px; border-radius:50%; flex:none; display:flex; align-items:center; justify-content:center; color:#fff; font-size:16px;
+  background:radial-gradient(circle at 32% 26%, #ffd9b0, #ff9f43 55%, #c96a10); box-shadow:inset 0 -3px 6px rgba(120,50,0,.3), 0 3px 8px rgba(226,118,26,.35); }
+.ask-thread{ display:flex; flex-direction:column; gap:10px; min-height:120px; }
+.ask-msg{ max-width:88%; padding:10px 13px; border-radius:18px; font-size:14px; line-height:1.5; overflow-wrap:anywhere; }
+.ask-msg.user{ align-self:flex-end; background:linear-gradient(180deg,#ffb469,#ff9f43); color:#1c1005; border-bottom-right-radius:6px; box-shadow:0 3px 10px rgba(255,140,40,.25); white-space:pre-wrap; }
+.ask-msg.bot{ align-self:flex-start; background:rgba(255,255,255,.72); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); border:1px solid rgba(255,255,255,.85); border-bottom-left-radius:6px; box-shadow:var(--shadow); }
+.ask-msg.bot.err{ background:rgba(253,234,234,.85); color:var(--warn); }
+.ask-msg.bot .research-md{ font-size:14px; }
+.ask-msg.bot table{ font-size:12.5px; }
+.ask-typing{ display:inline-flex; gap:4px; align-items:center; color:var(--muted); font-size:13px; }
+.ask-typing i{ width:6px; height:6px; border-radius:50%; background:var(--accent-pep); animation:askdot 1.2s infinite ease-in-out; }
+.ask-typing i:nth-child(2){ animation-delay:.15s; } .ask-typing i:nth-child(3){ animation-delay:.3s; }
+@keyframes askdot{ 0%,80%,100%{ opacity:.25; transform:translateY(0);} 40%{ opacity:1; transform:translateY(-3px);} }
+.ask-suggest{ display:flex; flex-direction:column; gap:8px; align-items:stretch; padding:6px 0; }
+.ask-suggest .hint{ text-align:center; color:var(--muted); font-size:13px; margin-bottom:2px; }
+.ask-suggest button{ text-align:left; border-radius:14px; padding:11px 14px; font-size:13.5px; }
+.ask-composer{ position:sticky; bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom,0px) + 22px); z-index:20; display:flex; align-items:flex-end; gap:8px; padding:8px; border-radius:26px;
+  background:rgba(255,255,255,.72); -webkit-backdrop-filter:var(--glass-blur); backdrop-filter:var(--glass-blur); border:1px solid rgba(255,255,255,.9); box-shadow:0 8px 24px rgba(60,40,20,.14), var(--glass-edge); }
+.ask-composer textarea{ flex:1; min-width:0; resize:none; border:none; background:transparent; box-shadow:none; padding:9px 8px; max-height:140px; font-size:16px; line-height:1.35; }
+.ask-composer textarea:focus{ outline:none; border:none; }
+.ask-send{ flex:none; width:40px; height:40px; border-radius:50%; border:none; cursor:pointer; color:#1c1005; font-size:19px; font-weight:800;
+  background:linear-gradient(180deg,#ffb469,#ff9f43 55%,#f58a24); box-shadow:0 4px 12px rgba(255,140,40,.4), inset 0 1px 0 rgba(255,255,255,.6); }
+.ask-send:disabled{ opacity:.45; }
+.ask-send.stop{ background:#1d1d20; color:#fff; font-size:14px; }
+.ask-cost{ text-align:center; margin-top:-4px; }
+.ask-legacy summary{ cursor:pointer; list-style:none; }
+.ask-legacy summary::-webkit-details-marker{ display:none; }
+.research-item.chat-item{ cursor:pointer; }
+.research-item .ask-open{ margin-top:8px; }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   :root{ --surface:#ffffff; --surface-2:#f1efea; }
   .tabbar, .app-head, .modal{ background:rgba(255,255,255,.96); }
@@ -825,6 +877,59 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
         </div>
       </section>
 
+      <section id="askView" class="view" hidden>
+
+        <div class="card" id="askSetup" hidden>
+          <div class="card-h"><h3>✨ Ask Claude</h3></div>
+          <p style="font-size:14px;margin:0 0 10px;">Chat with Claude right here. Your protocols, doses, vials and weights are included automatically, so answers are about <em>your</em> data.</p>
+          <ol class="ask-steps">
+            <li>Open <a href="https://console.anthropic.com/settings/keys" target="_blank" rel="noopener">console.anthropic.com → API Keys</a> and create a key.</li>
+            <li>Add a little credit under Billing (pay as you go, separate from a Claude.ai subscription). Setting a monthly spend limit there is a good idea.</li>
+            <li>Paste the key below.</li>
+          </ol>
+          <div class="field"><label for="askKeyInput">API key</label><input type="password" id="askKeyInput" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+          <div class="btn-row" style="margin-top:10px;"><button type="button" class="btn btn-accent-pep" id="askKeySave">Save key</button></div>
+          <p class="footnote" style="margin-top:10px;">The key is stored only on this phone and is never included in backups. Each question sends it with your question and data straight to Anthropic, and nowhere else.</p>
+        </div>
+
+        <div id="askChat" class="ask-chat" hidden>
+          <div class="card ask-head">
+            <div class="ask-title"><span class="ask-orb-sm" aria-hidden="true">✦</span><div><h3>Ask Claude</h3><span class="footnote" id="askModelLbl"></span></div></div>
+            <div class="btn-row"><button type="button" class="btn btn-sm" id="askNew">+ New chat</button><button type="button" class="btn btn-sm" id="askSettings" aria-label="Claude settings">⚙</button></div>
+          </div>
+          <div class="ask-thread" id="askThread" aria-live="polite"></div>
+          <div class="ask-composer">
+            <textarea id="askInput" rows="1" placeholder="Ask Claude…" aria-label="Message Claude"></textarea>
+            <button type="button" class="ask-send" id="askSend" aria-label="Send">↑</button>
+          </div>
+          <div class="footnote ask-cost" id="askCost"></div>
+        </div>
+
+        <div class="card">
+          <div class="card-h"><h3>Past conversations</h3></div>
+          <div class="research-thread" id="researchList"></div>
+        </div>
+
+        <details class="card ask-legacy">
+          <summary><strong>Copy &amp; paste instead</strong> <span class="footnote">· free, uses the Claude app</span></summary>
+          <p class="footnote" style="margin:10px 0 12px;">Copies your question together with your data, ready to paste into a Claude chat. Save the answer back here afterwards.</p>
+          <div style="display:flex;flex-direction:column;gap:8px;">
+            <div class="field"><label for="researchTopic">Question</label><input type="text" id="researchTopic" placeholder="e.g. What's my cost per mg of BPC-157 across vendors?"></div>
+            <div class="field"><label for="researchInput">Paste anything relevant (optional)</label><textarea id="researchInput" rows="2" placeholder="An article excerpt, your notes, a vendor page…"></textarea></div>
+            <div class="btn-row"><button type="button" class="btn btn-accent-pep btn-sm" id="copyClaudeBtn">Copy question + my data</button><a class="btn btn-sm" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a></div>
+            <div class="footnote" id="researchStatus" role="status"></div>
+            <textarea id="copyFallback" rows="4" readonly hidden aria-label="Text to copy"></textarea>
+          </div>
+          <div class="module-box" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
+            <div class="field"><label for="answerTopic">Save Claude's answer: topic</label><input type="text" id="answerTopic" placeholder="Filled in from your question"></div>
+            <div class="field"><label for="answerText">Answer</label><textarea id="answerText" rows="4" placeholder="Paste the answer here"></textarea></div>
+            <div class="btn-row"><button type="button" class="btn btn-sm" id="saveAnswerBtn">Save answer</button><span class="footnote" id="answerStatus" role="status"></span></div>
+          </div>
+          
+        </details>
+
+      </section>
+
       <section id="pepCalcView" class="view" hidden>
 
       <div class="card">
@@ -937,24 +1042,6 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
       </div>
 
         <div class="card">
-          <h3 style="font-size:16px;margin-bottom:4px;">Ask Claude about your stack</h3>
-          <p class="footnote" style="margin-bottom:12px;">Copies your question together with your protocols, stash, vendors, recent check-ins and labs, ready to paste into a Claude chat. Nothing leaves this device unless you paste it somewhere.</p>
-          <div style="display:flex;flex-direction:column;gap:8px;">
-            <div class="field"><label for="researchTopic">Question</label><input type="text" id="researchTopic" placeholder="e.g. What's my cost per mg of BPC-157 across vendors?"></div>
-            <div class="field"><label for="researchInput">Paste anything relevant (optional)</label><textarea id="researchInput" rows="2" placeholder="An article excerpt, your notes, a vendor page…"></textarea></div>
-            <div class="btn-row"><button type="button" class="btn btn-accent-pep btn-sm" id="copyClaudeBtn">Copy question + my data</button><a class="btn btn-sm" href="https://claude.ai/new" target="_blank" rel="noopener">Open Claude ↗</a></div>
-            <div class="footnote" id="researchStatus" role="status"></div>
-            <textarea id="copyFallback" rows="4" readonly hidden aria-label="Text to copy"></textarea>
-          </div>
-          <div class="module-box" style="margin-top:14px;display:flex;flex-direction:column;gap:8px;">
-            <div class="field"><label for="answerTopic">Save Claude's answer: topic</label><input type="text" id="answerTopic" placeholder="Filled in from your question"></div>
-            <div class="field"><label for="answerText">Answer</label><textarea id="answerText" rows="4" placeholder="Paste the answer here"></textarea></div>
-            <div class="btn-row"><button type="button" class="btn btn-sm" id="saveAnswerBtn">Save answer</button><span class="footnote" id="answerStatus" role="status"></span></div>
-          </div>
-          <div class="research-thread" id="researchList" style="margin-top:14px;"></div>
-        </div>
-
-        <div class="card">
           <h3 style="font-size:16px;margin-bottom:6px;">App &amp; backup</h3>
           <div id="installInfo"></div>
           <div class="footnote mono" id="appVersion" style="margin-top:6px;"></div>
@@ -1000,6 +1087,7 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
     <button type="button" data-tab="dose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Dose</span></button>
     <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/></svg><span>Protocols</span></button>
     <button type="button" data-tab="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg><span>Inventory</span></button>
+    <button type="button" data-tab="ask" class="tab-orb" aria-label="Ask Claude"><span class="orb"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></span><span>Claude</span></button>
     <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg><span>Progress</span></button>
     <button type="button" data-tab="tools"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><span>Tools</span></button>
     <button type="button" data-tab="resources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7"/></svg><span>Resources</span></button>

@@ -2727,24 +2727,34 @@ function mdToHtml(md){
   closeList();
   return html || `<p>${inline(md||'')}</p>`;
 }
+function chatText(m){ return (m.content||[]).filter(b=> b && b.type==='text').map(b=> b.text).join(''); }
 function renderResearch(){
-  const el = $('#researchList');
+  const el = $('#researchList'); if(!el) return;
   if(!state.research.length){
-    el.innerHTML = `<div class="empty"><div class="glyph">🔎</div><p>Ask a question above, or log findings from chat here for later reference.</p></div>`;
+    el.innerHTML = `<div class="empty"><div class="glyph">💬</div><p>Your conversations with Claude will be saved here.</p></div>`;
     return;
   }
-  el.innerHTML = state.research.slice().reverse().map(r=>`
-    <div class="research-item">
+  const list = state.research.slice().sort((a,b)=> String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  el.innerHTML = list.map(r=>{
+    const isChat = Array.isArray(r.messages);
+    const turns = isChat ? r.messages.filter(m=>m.role==='user').length : 0;
+    return `<div class="research-item ${isChat?'chat-item':''}" ${isChat?`data-open-chat="${r.id}"`:''}>
       <div style="display:flex;justify-content:space-between;gap:8px;">
-        <div>
+        <div style="min-width:0;">
           <h4>${esc(r.topic||'Untitled')}</h4>
-          <div class="meta">${fmtDate(r.createdAt||todayISO())}</div>
+          <div class="meta">${fmtDate(r.createdAt||todayISO())}${isChat ? ` · ${turns} question${turns===1?'':'s'}${r.costUsd ? ` · ≈ $${r.costUsd.toFixed(2)}` : ''}` : ' · pasted answer'}</div>
         </div>
-        <button class="icon-btn" data-del-research="${r.id}">✕</button>
+        <button class="icon-btn" data-del-research="${r.id}" aria-label="Delete">✕</button>
       </div>
-      <div class="research-body research-md">${mdToHtml(r.answer||r.notes||'')}</div>
-    </div>`).join('');
-  $$('[data-del-research]',el).forEach(b=> b.addEventListener('click', ()=> dbDelete('research', b.dataset.delResearch)));
+      ${isChat ? `<div class="research-body research-md" style="max-height:4.6em;overflow:hidden;">${mdToHtml(r.answer||'')}</div><button type="button" class="btn btn-sm ask-open">Continue chat ›</button>` : `<div class="research-body research-md">${mdToHtml(r.answer||r.notes||'')}</div>`}
+    </div>`;
+  }).join('');
+  $$('[data-del-research]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); confirmAction('Delete this conversation?', ()=>{ if(askConv && askConv.id===b.dataset.delResearch) askConv = null; return dbDelete('research', b.dataset.delResearch); }); }));
+  $$('[data-open-chat]',el).forEach(c=> c.addEventListener('click', ()=>{
+    const r = state.research.find(x=>x.id===c.dataset.openChat); if(!r) return;
+    askConv = JSON.parse(JSON.stringify(r));
+    renderAsk(); window.scrollTo({top:0, behavior:'smooth'});
+  }));
 }
 /* ===================== Charts (shared by Progress and Labs) ===================== */
 function niceTicks(min, max, count){
@@ -3753,8 +3763,186 @@ function initAsk(){
   });
 }
 
+/* ===================== Claude chat (in-app, the user's own API key) =====================
+   Calls the Claude Messages API straight from the phone with the key the user pastes in (stored only in
+   localStorage, never in backups). Each conversation keeps the system prompt (with a data snapshot) it
+   started with and is only ever appended to, so replayed thinking blocks stay valid. */
+const CLAUDE_MODELS = {
+  'claude-opus-5-5':   {label:'Claude Opus 5.5', inp:4, out:20, cr:0.20, cw:5},
+  'claude-sonnet-5-5': {label:'Claude Sonnet 5.5 (cheaper)', inp:2, out:10, cr:0.20, cw:2.5},
+};
+let askConv = null, askBusy = false, askAbort = null, askStream = null;
+const claudeKey = ()=> lsGet('ledger.claudeKey','');
+const claudeModel = ()=> CLAUDE_MODELS[lsGet('ledger.claudeModel','')] ? lsGet('ledger.claudeModel','') : 'claude-opus-5-5';
+function askSystemPrompt(){
+  return `You are the assistant inside Peptide Ledger, the user's private app for tracking peptide protocols, doses, vials, vendors and weight. Today is ${fmtDate(todayISO())}.
+
+Answer using the user's logged data below. If something you need isn't in the data, say so instead of guessing. Keep answers short and scannable (under about 250 words unless asked for more), and use a markdown table when comparing vendors, costs, doses or options. You can explain general information such as half-lives, reconstitution and syringe math, and what the data shows. Don't give personal medical dosing advice; when a question needs a clinician's judgement, say so briefly.
+
+<user_data>
+${JSON.stringify(stackContextForAsk())}
+</user_data>`;
+}
+const ASK_SUGGESTIONS = ['How is my current protocol going so far?', 'When will my active vials run out?', 'Summarize my weight trend since I started.', 'What questions should I bring to my doctor?'];
+function renderAsk(){
+  const setup = $('#askSetup'), chat = $('#askChat'); if(!setup) return;
+  const hasKey = !!claudeKey();
+  setup.hidden = hasKey; chat.hidden = !hasKey;
+  if(!hasKey) return;
+  $('#askModelLbl').textContent = (askConv && CLAUDE_MODELS[askConv.model] ? CLAUDE_MODELS[askConv.model] : CLAUDE_MODELS[claudeModel()]).label;
+  const th = $('#askThread');
+  const msgs = askConv ? askConv.messages : [];
+  if(!msgs.length){
+    th.innerHTML = `<div class="ask-suggest"><div class="hint">Ask anything about your protocols, doses, vials, vendors or weight.</div>${ASK_SUGGESTIONS.map(s=>`<button type="button" class="btn" data-suggest="${esc(s)}">${esc(s)}</button>`).join('')}</div>`;
+    $$('[data-suggest]',th).forEach(b=> b.addEventListener('click', ()=>{ $('#askInput').value = b.dataset.suggest; sendAsk(); }));
+  } else {
+    th.innerHTML = msgs.map(m=>{
+      if(m.role==='user') return `<div class="ask-msg user">${esc(chatText(m))}</div>`;
+      return `<div class="ask-msg bot"><div class="research-md">${mdToHtml(chatText(m))}</div></div>`;
+    }).join('') + (askBusy ? `<div class="ask-msg bot" id="askLive"><span class="ask-typing"><i></i><i></i><i></i>&nbsp;Claude is thinking</span></div>` : '');
+  }
+  $('#askCost').textContent = askConv && askConv.costUsd ? `This chat ≈ $${askConv.costUsd.toFixed(3)} · ${CLAUDE_MODELS[askConv.model]?.label || ''}` : '';
+  const send = $('#askSend');
+  send.classList.toggle('stop', askBusy); send.textContent = askBusy ? '■' : '↑'; send.setAttribute('aria-label', askBusy ? 'Stop' : 'Send');
+}
+function askScrollEnd(){ const c = $('.ask-composer'); if(c) c.scrollIntoView({block:'end', behavior:'smooth'}); }
+// Thinking/tool blocks before the last fallback marker came from a model that declined; don't echo them back.
+function echoableContent(blocks){
+  const cut = blocks.map(b=>b.type).lastIndexOf('fallback');
+  return blocks.filter((b,i)=>{
+    if(b.type==='fallback') return false;
+    if(i < cut) return b.type==='text';
+    return true;
+  });
+}
+async function sendAsk(){
+  if(askBusy){ if(askAbort) askAbort.abort(); return; }
+  const input = $('#askInput'); const text = input.value.trim(); if(!text) return;
+  const key = claudeKey(); if(!key) return renderAsk();
+  if(!askConv) askConv = {model: claudeModel(), system: askSystemPrompt(), messages: [], topic: text.slice(0,90), createdAt: todayISO(), costUsd: 0};
+  askConv.messages.push({role:'user', content:[{type:'text', text}]});
+  input.value = ''; input.style.height = '';
+  askBusy = true; renderAsk(); askScrollEnd();
+  askAbort = new AbortController();
+  const blocks = [], usage = {};
+  let stopReason = null, errMsg = null;
+  const live = ()=> $('#askLive');
+  try{
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method:'POST', signal: askAbort.signal,
+      headers:{
+        'content-type':'application/json',
+        'x-api-key': key,
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true',
+        'anthropic-beta':'server-side-fallback-2026-07-01',
+      },
+      body: JSON.stringify({
+        model: askConv.model, max_tokens: 16000, stream: true,
+        system: [{type:'text', text: askConv.system, cache_control:{type:'ephemeral'}}],
+        messages: askConv.messages,
+        output_config: {effort: 'medium'},
+        fallbacks: 'default',
+      }),
+    });
+    if(!res.ok){
+      let detail = ''; try{ const j = await res.json(); detail = (j.error && j.error.message) || ''; }catch(_){}
+      errMsg = res.status===401 ? 'Your API key was not accepted. Check it in ⚙ settings.'
+        : res.status===429 ? 'Too many requests right now. Wait a moment and try again.'
+        : res.status===529 || res.status>=500 ? 'Claude is busy or unavailable right now. Try again shortly.'
+        : /credit balance/i.test(detail) ? 'Your Anthropic credit balance is too low. Add credit at console.anthropic.com → Billing.'
+        : (detail || `Request failed (${res.status}).`);
+    } else {
+      const reader = res.body.getReader(), dec = new TextDecoder();
+      let buf = '';
+      for(;;){
+        const {value, done} = await reader.read(); if(done) break;
+        buf += dec.decode(value, {stream:true});
+        let i;
+        while((i = buf.indexOf('\n\n')) >= 0){
+          const chunk = buf.slice(0, i); buf = buf.slice(i+2);
+          const dataLine = chunk.split('\n').filter(l=> l.startsWith('data:')).map(l=> l.slice(5).trim()).join('');
+          if(!dataLine) continue;
+          let ev; try{ ev = JSON.parse(dataLine); }catch(_){ continue; }
+          if(ev.type==='message_start'){ Object.assign(usage, ev.message && ev.message.usage || {}); }
+          else if(ev.type==='content_block_start'){ blocks[ev.index] = JSON.parse(JSON.stringify(ev.content_block)); }
+          else if(ev.type==='content_block_delta'){
+            const b = blocks[ev.index], d = ev.delta; if(!b || !d) continue;
+            if(d.type==='text_delta'){ b.text = (b.text||'') + d.text;
+              const el = live(); if(el){ el.innerHTML = `<div class="research-md">${mdToHtml(blocks.filter(x=>x&&x.type==='text').map(x=>x.text).join(''))}</div>`; } }
+            else if(d.type==='thinking_delta') b.thinking = (b.thinking||'') + d.thinking;
+            else if(d.type==='signature_delta') b.signature = d.signature;
+          }
+          else if(ev.type==='message_delta'){ if(ev.delta && ev.delta.stop_reason) stopReason = ev.delta.stop_reason; if(ev.usage) Object.assign(usage, ev.usage); }
+          else if(ev.type==='error'){ errMsg = (ev.error && ev.error.message) || 'Claude ran into an error.'; }
+        }
+      }
+    }
+  }catch(e){
+    errMsg = e && e.name==='AbortError' ? 'Stopped.' : 'Couldn\'t reach Claude. Check your connection and try again.';
+  }
+  askBusy = false; askAbort = null;
+  const m = CLAUDE_MODELS[askConv.model] || CLAUDE_MODELS['claude-opus-5-5'];
+  const cost = ((usage.input_tokens||0)*m.inp + (usage.cache_creation_input_tokens||0)*m.cw + (usage.cache_read_input_tokens||0)*m.cr + (usage.output_tokens||0)*m.out) / 1e6;
+  askConv.costUsd = (askConv.costUsd||0) + cost;
+  const content = blocks.filter(Boolean);
+  if(!errMsg && stopReason==='refusal'){ errMsg = 'Claude declined to answer this one. Try rewording the question.'; }
+  if(errMsg){
+    askConv.messages.pop();   // drop the unanswered question so the conversation stays valid
+    renderAsk();
+    $('#askThread').insertAdjacentHTML('beforeend', `<div class="ask-msg bot err">${esc(errMsg)}</div>`);
+    $('#askInput').value = $('#askInput').value || text;
+    if(!askConv.messages.length && !askConv.id) askConv = null;
+    return;
+  }
+  askConv.messages.push({role:'assistant', content: echoableContent(content)});
+  askConv.answer = chatText(askConv.messages[askConv.messages.length-1]);
+  askConv.updatedAt = new Date().toISOString();
+  const rec = {...askConv}; delete rec.id;
+  if(askConv.id) await dbSet('research', askConv.id, rec);
+  else askConv.id = await dbAdd('research', rec);
+  renderAsk(); askScrollEnd();
+}
+function openAskSettings(){
+  const k = claudeKey();
+  openModal('Claude settings', `
+    <div class="form-grid">
+      <div class="field span2"><label>API key</label><div class="mono" style="font-size:13px;">${k ? esc(k.slice(0,10)+'…'+k.slice(-4)) : 'Not set'}</div></div>
+      <div class="field span2"><label for="askNewKey">Replace key</label><input id="askNewKey" type="password" placeholder="sk-ant-…" autocomplete="off" autocapitalize="off" spellcheck="false"></div>
+      <div class="field span2"><label for="askModelSel">Model</label><select id="askModelSel">${Object.entries(CLAUDE_MODELS).map(([id,m])=>`<option value="${id}" ${claudeModel()===id?'selected':''}>${esc(m.label)} · $${m.inp}/$${m.out} per million tokens</option>`).join('')}</select>
+        <div class="footnote" style="margin-top:4px;">Applies to new chats. A typical question with your data costs a few cents.</div></div>
+    </div>
+    <p class="footnote" style="margin-top:10px;">Manage keys, credit and spend limits at <a href="https://console.anthropic.com" target="_blank" rel="noopener">console.anthropic.com</a>.</p>
+    <div class="form-actions wrap"><button class="btn btn-danger" id="askDelKey" style="margin-right:auto;">Remove key</button><button class="btn" id="askSetCancel">Cancel</button><button class="btn btn-accent-pep" id="askSetSave">Save</button></div>
+  `, body=>{
+    $('#askSetCancel',body).addEventListener('click', closeModal);
+    $('#askDelKey',body).addEventListener('click', ()=>{ closeModal(); confirmAction('Remove your Claude API key from this phone? Your saved conversations stay.', ()=>{ lsSet('ledger.claudeKey',''); renderAsk(); }, 'Remove'); });
+    $('#askSetSave',body).addEventListener('click', ()=>{
+      const nk = $('#askNewKey',body).value.trim();
+      if(nk) lsSet('ledger.claudeKey', nk);
+      lsSet('ledger.claudeModel', $('#askModelSel',body).value);
+      closeModal(); renderAsk();
+    });
+  });
+}
+function initAskChat(){
+  $('#askKeySave').addEventListener('click', ()=>{
+    const k = $('#askKeyInput').value.trim();
+    if(!/^sk-ant-/.test(k)){ $('#askKeyInput').focus(); $('#askKeyInput').setCustomValidity('That doesn\'t look like an Anthropic API key (it starts with sk-ant-).'); $('#askKeyInput').reportValidity(); return; }
+    $('#askKeyInput').setCustomValidity(''); lsSet('ledger.claudeKey', k); $('#askKeyInput').value = ''; renderAsk();
+  });
+  $('#askKeyInput').addEventListener('input', ()=> $('#askKeyInput').setCustomValidity(''));
+  $('#askSend').addEventListener('click', sendAsk);
+  $('#askNew').addEventListener('click', ()=>{ if(askBusy && askAbort) askAbort.abort(); askConv = null; renderAsk(); $('#askInput').focus(); });
+  $('#askSettings').addEventListener('click', openAskSettings);
+  const inp = $('#askInput');
+  inp.addEventListener('input', ()=>{ inp.style.height = 'auto'; inp.style.height = Math.min(140, inp.scrollHeight)+'px'; });
+  inp.addEventListener('keydown', e=>{ if(e.key==='Enter' && !e.shiftKey && !('ontouchstart' in window)){ e.preventDefault(); sendAsk(); } });
+  renderAsk();
+}
+
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView'};
+const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView'};
 let currentTab = 'dose';
 function setTab(name, opts){
   if(!TABS[name]) name = 'dose';
@@ -3764,6 +3952,7 @@ function setTab(name, opts){
   lsSet('ledger.tab', name);
   if(name==='tools'){ runCalc(); showAppVersion(); }          // redraw the syringe now that it has a width
   if(name==='progress') renderProgress();
+  if(name==='ask') renderAsk();
   if(!(opts && opts.keepScroll)) window.scrollTo(0,0);
 }
 function initTabs(){
@@ -3943,6 +4132,7 @@ async function boot(){
   runCalc();
   initTabs();
   initAsk();
+  initAskChat();
   initProgress();
   $('#syncPill').addEventListener('click', openBackupModal);
   $('#backupNudgeBtn').addEventListener('click', openBackupModal);
