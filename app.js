@@ -2974,7 +2974,9 @@ function openPhotoModal(){
   if(storageMode!=='idb'){ openModal('Photos unavailable', `<p class="footnote">This browser isn't letting the app use its photo storage (IndexedDB). Private browsing can cause this. Open the installed app normally to add photos.</p><div class="form-actions"><button class="btn" id="phX">OK</button></div>`, b=> $('#phX',b).addEventListener('click', closeModal)); return; }
   openModal('Add progress photo', `
     <div class="form-grid">
-      <div class="field span2"><label for="phFile">Photo</label><input id="phFile" type="file" accept="image/*"></div>
+      <div class="field span2"><label for="phFile">Photo</label><input id="phFile" type="file" accept="image/*">
+        <button type="button" class="btn btn-sm" id="phCam" style="margin-top:8px;align-self:flex-start;">📷 Take photo with guide</button>
+        <div class="footnote" style="margin-top:4px;">Shows your last photo at this angle as a faded overlay so you can match your pose.</div></div>
       <div class="field span2"><div id="phPreview" class="ph-preview" hidden></div></div>
       <div class="field"><label for="phDate">Date</label><input id="phDate" type="date" value="${todayISO()}" max="${todayISO()}"></div>
       <div class="field"><label for="phAngle">Angle</label><select id="phAngle">${PHOTO_ANGLES.map(a=>`<option>${a}</option>`).join('')}</select></div>
@@ -2985,6 +2987,21 @@ function openPhotoModal(){
     <div class="footnote" id="phStatus" style="margin-top:8px;"></div>
   `, body=>{
     let loaded = null;
+    const useFile = async f=>{
+      if(loaded){ URL.revokeObjectURL(loaded.url); loaded = null; }
+      $('#phSave',body).disabled = true;
+      if(!f) return;
+      try{
+        loaded = await loadImage(f);
+        const pv = $('#phPreview',body); pv.hidden = false; pv.innerHTML = `<img src="${loaded.url}" alt="Selected photo preview">`;
+        $('#phSave',body).disabled = false;
+        $('#phStatus',body).textContent = '';
+      }catch(e){ $('#phStatus',body).textContent = e.message; }
+    };
+    $('#phCam',body).addEventListener('click', ()=> openGhostCamera($('#phAngle',body).value, (blob, angle)=>{
+      $('#phAngle',body).value = angle;
+      useFile(new File([blob], 'progress.jpg', {type:'image/jpeg'}));
+    }));
     $('#phFile',body).addEventListener('change', async ()=>{
       const f = $('#phFile',body).files[0];
       if(loaded){ URL.revokeObjectURL(loaded.url); loaded = null; }
@@ -3063,9 +3080,10 @@ async function openPhotoViewer(id){
   openModal(`${p.angle} · ${fmtDate(p.date)}`, `
     <div class="ph-full">${u?`<img src="${u}" alt="${esc(p.angle)} progress photo from ${fmtDate(p.date)}">`:'<p class="footnote">Image file missing.</p>'}</div>
     ${p.note?`<p style="margin-top:10px;font-size:14px;">${esc(p.note)}</p>`:''}
-    <div class="form-actions"><button class="btn btn-danger" id="phDel" style="margin-right:auto;">Delete</button><button class="btn btn-accent-pep" id="phClose">Close</button></div>
+    <div class="form-actions wrap"><button class="btn btn-danger" id="phDel" style="margin-right:auto;">Delete</button><button class="btn" id="phPts">📍 ${p.landmarks ? 'Redo' : 'Set'} alignment points</button><button class="btn btn-accent-pep" id="phClose">Close</button></div>
   `, body=>{
     $('#phClose',body).addEventListener('click', closeModal);
+    $('#phPts',body).addEventListener('click', ()=>{ closeModal(); openPointPicker(p.id, ()=> openPhotoViewer(p.id)); });
     $('#phDel',body).addEventListener('click', ()=>{
       closeModal();
       confirmAction('Delete this photo from this device?', async ()=>{
@@ -3076,59 +3094,323 @@ async function openPhotoViewer(id){
     });
   });
 }
-/* Full-screen photo comparison: side by side, stacked (tap or slide to switch / fade), or a wipe slider. */
+/* ===== Photo alignment =====
+   Each photo can store two landmarks (photo.landmarks = {a:{x,y}, b:{x,y}}, as fractions of the image).
+   Comparing two photos maps the newer photo onto the older one so those landmarks coincide, then applies an
+   optional hand fine-tune stored on the newer photo: photo.alignTweaks[olderId] = {dx, dy, s, r}
+   (dx/dy in widths of the older photo as shown, s = extra scale, r = extra rotation in radians). */
+function landmarkNames(angle){
+  if(angle==='Side') return ['top of your head', 'bottom of your belly'];
+  if(angle==='Front' || angle==='Back') return ['top of the shoulder on the LEFT of the photo', 'top of the shoulder on the RIGHT of the photo'];
+  return ['first reference point', 'second reference point'];
+}
+// keep point order stable so a and b always mean the same body part
+function orderLandmarks(angle, a, b){
+  if(angle==='Side') return a.y <= b.y ? {a, b} : {a:b, b:a};
+  return a.x <= b.x ? {a, b} : {a:b, b:a};
+}
+function openOverlay(label){
+  const ov = document.createElement('div');
+  ov.className = 'cmp'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true'); ov.setAttribute('aria-label', label);
+  document.body.appendChild(ov); document.body.style.overflow = 'hidden';
+  return ov;
+}
+function closeOverlay(ov){ ov.remove(); if(!$('.cmp')) document.body.style.overflow = ''; }
+function waitImg(img){ return img.complete && img.naturalWidth ? Promise.resolve() : new Promise(r=>{ img.onload = img.onerror = ()=> r(); }); }
+// contain-fit an image of size w×h into a box W×H: returns scale and offset
+function fitBox(w, h, W, H){ const k = Math.min(W/w, H/h); return {k, ox:(W - w*k)/2, oy:(H - h*k)/2}; }
+/* Matrix [a,b,c,d,e,f] (CSS matrix order) that draws the newer image (nw×nh) so its landmarks land on the
+   older image's landmarks, with the older image contain-fitted in a box W×H. */
+function alignMatrix(older, newer, ow, oh, nw, nh, W, H, tweak){
+  const f0 = fitBox(ow, oh, W, H);
+  let m;
+  if(older.landmarks && newer.landmarks){
+    const A0 = {x: f0.ox + older.landmarks.a.x*ow*f0.k, y: f0.oy + older.landmarks.a.y*oh*f0.k};
+    const B0 = {x: f0.ox + older.landmarks.b.x*ow*f0.k, y: f0.oy + older.landmarks.b.y*oh*f0.k};
+    const A1 = {x: newer.landmarks.a.x*nw, y: newer.landmarks.a.y*nh};
+    const B1 = {x: newer.landmarks.b.x*nw, y: newer.landmarks.b.y*nh};
+    const v0 = {x:B0.x-A0.x, y:B0.y-A0.y}, v1 = {x:B1.x-A1.x, y:B1.y-A1.y};
+    const s = Math.hypot(v0.x,v0.y) / Math.max(1e-6, Math.hypot(v1.x,v1.y));
+    const th = Math.atan2(v0.y,v0.x) - Math.atan2(v1.y,v1.x);
+    const c = s*Math.cos(th), sn = s*Math.sin(th);
+    m = [c, sn, -sn, c, A0.x - (c*A1.x - sn*A1.y), A0.y - (sn*A1.x + c*A1.y)];
+  } else {
+    const f1 = fitBox(nw, nh, W, H);
+    m = [f1.k, 0, 0, f1.k, f1.ox, f1.oy];
+  }
+  const t = tweak || {};
+  if(t.s || t.r || t.dx || t.dy){
+    // extra scale/rotate about the older photo's centre, then shift
+    const s2 = t.s || 1, r2 = t.r || 0, C = {x: W/2, y: H/2}, bw = ow*f0.k;
+    const c = s2*Math.cos(r2), sn = s2*Math.sin(r2);
+    const T = [c, sn, -sn, c, C.x - (c*C.x - sn*C.y) + (t.dx||0)*bw, C.y - (sn*C.x + c*C.y) + (t.dy||0)*bw];
+    m = [T[0]*m[0]+T[2]*m[1], T[1]*m[0]+T[3]*m[1], T[0]*m[2]+T[2]*m[3], T[1]*m[2]+T[3]*m[3], T[0]*m[4]+T[2]*m[5]+T[4], T[1]*m[4]+T[3]*m[5]+T[5]];
+  }
+  return m;
+}
+function placeImg(img, m){
+  img.style.width = img.naturalWidth+'px'; img.style.height = img.naturalHeight+'px';
+  img.style.transform = `matrix(${m.map(v=> +v.toFixed(5)).join(',')})`;
+}
+
+/* Tap two landmarks on one photo, drag to adjust, save. */
+async function openPointPicker(id, onDone){
+  const p = state.photos.find(x=>x.id===id); if(!p) return;
+  const u = await blobUrl(id); if(!u) return;
+  const names = landmarkNames(p.angle);
+  const ov = openOverlay('Set alignment points');
+  let pts = p.landmarks ? [p.landmarks.a, p.landmarks.b].map(q=>({...q})) : [];
+  ov.innerHTML = `<div class="cmp-top"><h3>Alignment points · ${esc(p.angle)} · ${esc(fmtDateShort(p.date))}</h3><button type="button" class="cmp-x" aria-label="Cancel">✕</button></div>
+    <div class="pp-hint" id="ppHint"></div>
+    <div class="cmp-stage"><div class="cmp-box pp-box" id="ppBox"><img class="cmp-abs" src="${u}" alt="Photo to mark"><i class="pp-dot" data-k="0" hidden>1</i><i class="pp-dot" data-k="1" hidden>2</i></div></div>
+    <div class="cmp-ctrl"><div class="seg2"><button type="button" id="ppReset">Start over</button><button type="button" id="ppSave" class="on">Save points</button></div></div>`;
+  const box = $('#ppBox',ov), img = $('img',box), dots = $$('.pp-dot',box);
+  await waitImg(img);
+  let fit;
+  const layout = ()=>{
+    const r = box.getBoundingClientRect();
+    fit = fitBox(img.naturalWidth, img.naturalHeight, r.width, r.height);
+    placeImg(img, [fit.k,0,0,fit.k,fit.ox,fit.oy]);
+    dots.forEach((d,i)=>{
+      d.hidden = !pts[i];
+      if(pts[i]){ d.style.left = (fit.ox + pts[i].x*img.naturalWidth*fit.k)+'px'; d.style.top = (fit.oy + pts[i].y*img.naturalHeight*fit.k)+'px'; }
+    });
+    $('#ppHint',ov).innerHTML = pts.length<1 ? `Tap the <b>${esc(names[0])}</b>.` : pts.length<2 ? `Now tap the <b>${esc(names[1])}</b>.` : 'Drag a point to fine-tune it, then save.';
+    $('#ppSave',ov).disabled = pts.length<2;
+  };
+  const toPt = (cx, cy)=>{
+    const r = box.getBoundingClientRect();
+    return {x: Math.max(0, Math.min(1, (cx - r.left - fit.ox)/(img.naturalWidth*fit.k))), y: Math.max(0, Math.min(1, (cy - r.top - fit.oy)/(img.naturalHeight*fit.k)))};
+  };
+  let drag = -1;
+  box.addEventListener('pointerdown', e=>{
+    e.preventDefault();
+    const r = box.getBoundingClientRect();
+    // grab the nearest existing point if close, otherwise place the next one
+    let best = -1, bd = 36;
+    pts.forEach((q,i)=>{ const x = r.left + fit.ox + q.x*img.naturalWidth*fit.k, y = r.top + fit.oy + q.y*img.naturalHeight*fit.k; const d = Math.hypot(e.clientX-x, e.clientY-y); if(d<bd){ bd = d; best = i; } });
+    if(best<0 && pts.length<2){ pts.push(toPt(e.clientX, e.clientY)); best = pts.length-1; }
+    drag = best;
+    if(drag>=0) try{ box.setPointerCapture(e.pointerId); }catch(_){}
+    layout();
+  });
+  box.addEventListener('pointermove', e=>{ if(drag<0) return; pts[drag] = toPt(e.clientX, e.clientY); layout(); });
+  box.addEventListener('pointerup', ()=>{ drag = -1; });
+  box.addEventListener('pointercancel', ()=>{ drag = -1; });
+  const onResize = ()=> layout();
+  window.addEventListener('resize', onResize);
+  const close = ()=>{ window.removeEventListener('resize', onResize); closeOverlay(ov); };
+  $('.cmp-x',ov).addEventListener('click', ()=>{ close(); if(onDone) onDone(false); });
+  $('#ppReset',ov).addEventListener('click', ()=>{ pts = []; layout(); });
+  $('#ppSave',ov).addEventListener('click', async ()=>{
+    if(pts.length<2) return;
+    const cur = state.photos.find(x=>x.id===id);
+    await dbSet('photos', id, {...stripId(cur), landmarks: orderLandmarks(cur.angle, pts[0], pts[1])});
+    close(); if(onDone) onDone(true);
+  });
+  layout();
+}
+
+/* Full-screen photo comparison: side by side, stacked (tap or slide to switch / fade), or a wipe slider.
+   The newer photo is aligned to the older one using alignment points and any saved fine-tune. */
 let cmpMode = lsGet('ledger.cmpMode','side');
 async function openCompareModal(ids){
-  const ps = ids.map(id=> state.photos.find(x=>x.id===id)).filter(Boolean).sort((a,b)=> a.date.localeCompare(b.date));
+  const pick = ()=> ids.map(id=> state.photos.find(x=>x.id===id)).filter(Boolean).sort((a,b)=> a.date.localeCompare(b.date));
+  let ps = pick();
   if(ps.length!==2) return;
   const urls = await Promise.all(ps.map(p=> blobUrl(p.id)));
   const gap = daysBetween(ps[0].date, ps[1].date);
   const cap = i=> `${i===0?'Before':'After'} · ${fmtDateShort(ps[i].date)}`;
-  const img = (i, extra)=> urls[i] ? `<img src="${urls[i]}" alt="${esc(ps[i].angle)} photo from ${fmtDate(ps[i].date)}" ${extra||''}>` : '';
-  const ov = document.createElement('div');
-  ov.className = 'cmp'; ov.setAttribute('role','dialog'); ov.setAttribute('aria-modal','true'); ov.setAttribute('aria-label','Compare photos');
-  document.body.appendChild(ov); document.body.style.overflow = 'hidden';
-  const close = ()=>{ ov.remove(); document.body.style.overflow = ''; document.removeEventListener('keydown', onKey); };
-  let stackShow = 1, fade = 100, wipe = 50;
-  const onKey = e=>{ if(e.key==='Escape') close(); if(cmpMode==='stack' && (e.key==='ArrowLeft'||e.key==='ArrowRight')){ fade = fade>=50 ? 0 : 100; draw(); } };
-  document.addEventListener('keydown', onKey);
-  function draw(){
+  const ov = openOverlay('Compare photos');
+  let fade = 100, wipe = 50, tuning = null;   // tuning holds the unsaved fine-tune while adjusting
+  const tweakOf = ()=> tuning || ((ps[1].alignTweaks||{})[ps[0].id]) || null;
+  const onKey = e=>{ if(e.key==='Escape') close(); if(cmpMode==='stack' && !tuning && (e.key==='ArrowLeft'||e.key==='ArrowRight')){ fade = fade>=50 ? 0 : 100; draw(); } };
+  const onResize = ()=> layout();
+  document.addEventListener('keydown', onKey); window.addEventListener('resize', onResize);
+  const close = ()=>{ document.removeEventListener('keydown', onKey); window.removeEventListener('resize', onResize); closeOverlay(ov); };
+  // place both photos in every box on screen
+  function layout(){
+    $$('.cmp-box',ov).forEach(box=>{
+      const r = box.getBoundingClientRect(); if(!r.width) return;
+      const i0 = $('img[data-i="0"]',box), i1 = $('img[data-i="1"]',box);
+      const ow = (i0 && i0.naturalWidth) || ps[0].w || 1, oh = (i0 && i0.naturalHeight) || ps[0].h || 1;
+      if(i0){ const f = fitBox(ow, oh, r.width, r.height); placeImg(i0, [f.k,0,0,f.k,f.ox,f.oy]); }
+      if(i1 && i1.naturalWidth) placeImg(i1, alignMatrix(ps[0], ps[1], ow, oh, i1.naturalWidth, i1.naturalHeight, r.width, r.height, tweakOf()));
+    });
+  }
+  async function draw(){
+    const aligned = ps[0].landmarks && ps[1].landmarks;
+    const tweaked = !!((ps[1].alignTweaks||{})[ps[0].id]);
+    const im = (i)=> urls[i] ? `<img class="cmp-abs" data-i="${i}" src="${urls[i]}" alt="${esc(ps[i].angle)} photo from ${esc(fmtDate(ps[i].date))}">` : '';
     let stage = '', ctrl = '';
-    if(cmpMode==='side'){
-      stage = `<div class="cmp-stage side">${[0,1].map(i=>`<figure>${img(i)}<figcaption>${esc(cap(i))}</figcaption></figure>`).join('')}</div>`;
+    if(tuning){
+      stage = `<div class="cmp-stage"><div class="cmp-box tune" id="cmpTune">${im(0)}<div class="cmp-layer" style="opacity:.55">${im(1)}</div><div class="tune-grid"></div></div></div>`;
+      ctrl = `<div class="cmp-ctrl"><div class="cmp-hint">Drag to move the newer photo. Pinch to resize, twist two fingers to rotate.</div>
+        <div class="seg2"><button type="button" data-tune="reset">Reset</button><button type="button" data-tune="cancel">Cancel</button><button type="button" data-tune="save" class="on">Save</button></div></div>`;
+    } else if(cmpMode==='side'){
+      stage = `<div class="cmp-stage side">${[0,1].map(i=>`<figure><div class="cmp-box">${i===0 ? im(0) : im(1)}</div><figcaption>${esc(cap(i))}</figcaption></figure>`).join('')}</div>`;
     } else if(cmpMode==='stack'){
-      stage = `<div class="cmp-stage"><div class="cmp-stack" id="cmpStack">${img(0)}${img(1, `style="opacity:${fade/100}"`)}<span class="cmp-tag" style="left:8px;">${esc(fade>=50 ? cap(1) : cap(0))}</span></div></div>`;
+      stage = `<div class="cmp-stage"><div class="cmp-box" id="cmpStack">${im(0)}<div class="cmp-layer" style="opacity:${fade/100}">${im(1)}</div><span class="cmp-tag" style="left:8px;">${esc(fade>=50 ? cap(1) : cap(0))}</span></div></div>`;
       ctrl = `<div class="cmp-ctrl"><div class="seg2"><button type="button" data-show="0" class="${fade<50?'on':''}">Before · ${esc(fmtDateShort(ps[0].date))}</button><button type="button" data-show="1" class="${fade>=50?'on':''}">After · ${esc(fmtDateShort(ps[1].date))}</button></div>
         <input type="range" id="cmpFade" min="0" max="100" value="${fade}" aria-label="Fade between before and after">
         <div class="cmp-hint">Tap the photo to flip between them, or slide to fade one into the other.</div></div>`;
     } else {
-      stage = `<div class="cmp-stage"><div class="cmp-stack" id="cmpWipe">${img(0)}${img(1, `style="clip-path:inset(0 0 0 ${wipe}%)"`)}<div class="cmp-wipe-line" style="left:${wipe}%"></div><span class="cmp-tag" style="left:8px;">Before</span><span class="cmp-tag" style="right:8px;">After</span></div></div>`;
+      stage = `<div class="cmp-stage"><div class="cmp-box" id="cmpWipe">${im(0)}<div class="cmp-layer" style="clip-path:inset(0 0 0 ${wipe}%)">${im(1)}</div><div class="cmp-wipe-line" style="left:${wipe}%"></div><span class="cmp-tag" style="left:8px;">Before</span><span class="cmp-tag" style="right:8px;">After</span></div></div>`;
       ctrl = `<div class="cmp-ctrl"><div class="cmp-hint">Drag across the photo to wipe between ${esc(fmtDateShort(ps[0].date))} and ${esc(fmtDateShort(ps[1].date))}.</div></div>`;
     }
+    const tools = tuning ? '' : `<div class="cmp-tools">
+        <span class="cmp-status">${aligned ? '✓ Aligned by your points' : 'Not aligned yet'}${tweaked ? ' · fine-tuned' : ''}</span>
+        <button type="button" data-align>📍 ${aligned ? 'Points' : 'Align'}</button>
+        <button type="button" data-tune-start>✋ Fine-tune</button>
+      </div>`;
     ov.innerHTML = `<div class="cmp-top"><h3>${gap} day${gap===1?'':'s'} apart · ${esc(ps[1].angle)}</h3><button type="button" class="cmp-x" aria-label="Close">✕</button></div>
-      <div class="cmp-modes" role="tablist">${[['side','Side by side'],['stack','Stack'],['wipe','Slider']].map(([k,l])=>`<button type="button" role="tab" aria-selected="${cmpMode===k}" class="${cmpMode===k?'on':''}" data-mode="${k}">${l}</button>`).join('')}</div>
-      ${stage}${ctrl}`;
+      ${tuning ? '' : `<div class="cmp-modes" role="tablist">${[['side','Side by side'],['stack','Stack'],['wipe','Slider']].map(([k,l])=>`<button type="button" role="tab" aria-selected="${cmpMode===k}" class="${cmpMode===k?'on':''}" data-mode="${k}">${l}</button>`).join('')}</div>`}
+      ${tools}${stage}${ctrl}`;
     $('.cmp-x',ov).addEventListener('click', close);
     $$('[data-mode]',ov).forEach(b=> b.addEventListener('click', ()=>{ cmpMode = b.dataset.mode; lsSet('ledger.cmpMode', cmpMode); draw(); }));
-    if(cmpMode==='stack'){
-      const top = $('#cmpStack img:nth-of-type(2)',ov), tag = $('#cmpStack .cmp-tag',ov), range = $('#cmpFade',ov);
-      const apply = ()=>{ if(top) top.style.opacity = fade/100; tag.textContent = fade>=50 ? cap(1) : cap(0); range.value = fade;
+    const ab = $('[data-align]',ov);
+    if(ab) ab.addEventListener('click', ()=> chooseAlign());
+    const tb = $('[data-tune-start]',ov);
+    if(tb) tb.addEventListener('click', ()=>{ tuning = {...({dx:0,dy:0,s:1,r:0}), ...(((ps[1].alignTweaks||{})[ps[0].id])||{})}; draw(); });
+    await Promise.all($$('img.cmp-abs',ov).map(waitImg));
+    layout();
+    if(tuning) bindTune();
+    if(cmpMode==='stack' && !tuning){
+      const layer = $('#cmpStack .cmp-layer',ov), tag = $('#cmpStack .cmp-tag',ov), range = $('#cmpFade',ov);
+      const apply = ()=>{ layer.style.opacity = fade/100; tag.textContent = fade>=50 ? cap(1) : cap(0); range.value = fade;
         $$('[data-show]',ov).forEach(b=> b.classList.toggle('on', (+b.dataset.show===1) === (fade>=50))); };
       $('#cmpStack',ov).addEventListener('click', ()=>{ fade = fade>=50 ? 0 : 100; apply(); });
       $$('[data-show]',ov).forEach(b=> b.addEventListener('click', ()=>{ fade = +b.dataset.show ? 100 : 0; apply(); }));
       range.addEventListener('input', ()=>{ fade = +range.value; apply(); });
     }
-    if(cmpMode==='wipe'){
-      const box = $('#cmpWipe',ov), top = $('#cmpWipe img:nth-of-type(2)',ov), line = $('.cmp-wipe-line',ov);
+    if(cmpMode==='wipe' && !tuning){
+      const box = $('#cmpWipe',ov), layer = $('#cmpWipe .cmp-layer',ov), line = $('.cmp-wipe-line',ov);
       bindScrub(box, x=>{
         const r = box.getBoundingClientRect();
         wipe = Math.max(0, Math.min(100, (x - r.left)/r.width*100));
-        if(top) top.style.clipPath = `inset(0 0 0 ${wipe}%)`; line.style.left = wipe+'%';
+        layer.style.clipPath = `inset(0 0 0 ${wipe}%)`; line.style.left = wipe+'%';
       }, ()=>{});
     }
   }
+  // pick which photo's points to set (walks through any that are missing)
+  function chooseAlign(){
+    const missing = ps.filter(p=> !p.landmarks);
+    const refresh = ()=>{ ps = pick(); draw(); };
+    if(missing.length){
+      const next = ()=>{ const m = ps.filter(p=> !p.landmarks)[0]; if(m) openPointPicker(m.id, ok=>{ ps = pick(); if(ok) next(); else draw(); }); else refresh(); };
+      next(); return;
+    }
+    const sheet = document.createElement('div'); sheet.className = 'cmp-sheet';
+    sheet.innerHTML = `<div class="cmp-sheet-in"><strong>Redo alignment points for…</strong>
+      ${ps.map((p,i)=>`<button type="button" data-redo="${p.id}">${i===0?'Before':'After'} · ${esc(fmtDateShort(p.date))}</button>`).join('')}
+      <button type="button" data-redo="">Cancel</button></div>`;
+    ov.appendChild(sheet);
+    $$('[data-redo]',sheet).forEach(b=> b.addEventListener('click', ()=>{ sheet.remove(); if(b.dataset.redo) openPointPicker(b.dataset.redo, ()=> refresh()); }));
+  }
+  // one finger moves, two fingers pinch/rotate; mouse drag moves, wheel resizes (shift+wheel rotates)
+  function bindTune(){
+    const box = $('#cmpTune',ov);
+    const bw = ()=>{ const r = box.getBoundingClientRect(), i0 = $('img[data-i="0"]',box); return fitBox(i0.naturalWidth, i0.naturalHeight, r.width, r.height).k * i0.naturalWidth; };
+    let g = null;
+    const pts = e=> [...e.touches].map(t=>({x:t.clientX, y:t.clientY}));
+    box.addEventListener('touchstart', e=>{ e.preventDefault(); g = {p: pts(e), t: {...tuning}}; }, {passive:false});
+    box.addEventListener('touchmove', e=>{
+      e.preventDefault(); if(!g) return;
+      const p = pts(e), w = bw();
+      if(p.length===1 && g.p.length===1){
+        tuning.dx = g.t.dx + (p[0].x-g.p[0].x)/w; tuning.dy = g.t.dy + (p[0].y-g.p[0].y)/w;
+      } else if(p.length>=2 && g.p.length>=2){
+        const d0 = Math.hypot(g.p[1].x-g.p[0].x, g.p[1].y-g.p[0].y), d1 = Math.hypot(p[1].x-p[0].x, p[1].y-p[0].y);
+        const a0 = Math.atan2(g.p[1].y-g.p[0].y, g.p[1].x-g.p[0].x), a1 = Math.atan2(p[1].y-p[0].y, p[1].x-p[0].x);
+        const m0 = {x:(g.p[0].x+g.p[1].x)/2, y:(g.p[0].y+g.p[1].y)/2}, m1 = {x:(p[0].x+p[1].x)/2, y:(p[0].y+p[1].y)/2};
+        tuning.s = Math.max(.3, Math.min(3, g.t.s * d1/Math.max(1,d0)));
+        tuning.r = g.t.r + (a1-a0);
+        tuning.dx = g.t.dx + (m1.x-m0.x)/w; tuning.dy = g.t.dy + (m1.y-m0.y)/w;
+      } else g = {p, t:{...tuning}};   // finger count changed: restart from here
+      layout();
+    }, {passive:false});
+    box.addEventListener('touchend', e=>{ g = e.touches.length ? {p: pts(e), t:{...tuning}} : null; });
+    let md = null;
+    box.addEventListener('mousedown', e=>{ md = {x:e.clientX, y:e.clientY, t:{...tuning}}; });
+    window.addEventListener('mousemove', e=>{ if(!md || !tuning) return; const w = bw(); tuning.dx = md.t.dx + (e.clientX-md.x)/w; tuning.dy = md.t.dy + (e.clientY-md.y)/w; layout(); });
+    window.addEventListener('mouseup', ()=>{ md = null; });
+    box.addEventListener('wheel', e=>{ e.preventDefault(); if(e.shiftKey) tuning.r += e.deltaY*-0.002; else tuning.s = Math.max(.3, Math.min(3, tuning.s*(1 - e.deltaY*0.001))); layout(); }, {passive:false});
+    $$('[data-tune]',ov).forEach(b=> b.addEventListener('click', async ()=>{
+      const k = b.dataset.tune;
+      if(k==='reset'){ tuning = {dx:0,dy:0,s:1,r:0}; layout(); return; }
+      if(k==='save'){
+        const cur = state.photos.find(x=>x.id===ps[1].id);
+        const tw = {...(cur.alignTweaks||{})};
+        const isZero = Math.abs(tuning.dx)<1e-4 && Math.abs(tuning.dy)<1e-4 && Math.abs(tuning.s-1)<1e-4 && Math.abs(tuning.r)<1e-4;
+        if(isZero) delete tw[ps[0].id]; else tw[ps[0].id] = {dx:+tuning.dx.toFixed(5), dy:+tuning.dy.toFixed(5), s:+tuning.s.toFixed(5), r:+tuning.r.toFixed(5)};
+        await dbSet('photos', cur.id, {...stripId(cur), alignTweaks: tw});
+        ps = pick();
+      }
+      tuning = null; draw();
+    }));
+  }
   draw();
-  $('.cmp-x',ov).focus();
+}
+
+/* ===== Guided camera: live camera with your last photo at the chosen angle as a faded "ghost". ===== */
+async function openGhostCamera(angle, onCapture){
+  const ov = openOverlay('Take progress photo');
+  let facing = lsGet('ledger.camFacing','user'), stream = null, timer = +lsGet('ledger.camTimer','0') || 0, ghostOpacity = +lsGet('ledger.ghostOpacity','40');
+  let counting = null;
+  const stop = ()=>{ if(stream){ stream.getTracks().forEach(t=> t.stop()); stream = null; } if(counting){ clearInterval(counting); counting = null; } };
+  const close = ()=>{ stop(); closeOverlay(ov); };
+  const lastOf = a=> state.photos.filter(p=> p.angle===a).sort((x,y)=> y.date.localeCompare(x.date))[0];
+  async function render(){
+    const last = lastOf(angle);
+    const gu = last ? await blobUrl(last.id) : null;
+    const mirror = facing==='user' ? 'transform:scaleX(-1);' : '';
+    ov.innerHTML = `<div class="cmp-top"><h3>Guided photo</h3><button type="button" class="cmp-x" aria-label="Close camera">✕</button></div>
+      <div class="cmp-modes">${PHOTO_ANGLES.map(a=>`<button type="button" class="${a===angle?'on':''}" data-angle="${a}">${a}</button>`).join('')}</div>
+      <div class="cmp-stage"><div class="cmp-box cam-box">
+        <video id="camVideo" playsinline autoplay muted style="${mirror}"></video>
+        ${gu ? `<img id="camGhost" src="${gu}" alt="" style="${mirror}opacity:${ghostOpacity/100}">` : ''}
+        <div class="tune-grid"></div>
+        <div class="cam-count" id="camCount" hidden></div>
+        <div class="cam-msg" id="camMsg">Starting camera…</div>
+      </div></div>
+      <div class="cmp-ctrl">
+        ${gu ? `<label class="cam-row"><span>Guide</span><input type="range" id="camOpacity" min="0" max="80" value="${ghostOpacity}" aria-label="Guide opacity"><span class="mono">${esc(fmtDateShort(last.date))}</span></label>` : `<div class="cmp-hint">No earlier ${esc(angle.toLowerCase())} photo yet. This one will be the guide next time.</div>`}
+        <div class="cam-bar">
+          <button type="button" class="cam-side" id="camFlip" aria-label="Switch camera">🔄</button>
+          <button type="button" class="cam-shutter" id="camShoot" aria-label="Take photo"></button>
+          <button type="button" class="cam-side" id="camTimer" aria-label="Self-timer">⏱ ${timer ? timer+'s' : 'Off'}</button>
+        </div>
+      </div>`;
+    $('.cmp-x',ov).addEventListener('click', close);
+    $$('[data-angle]',ov).forEach(b=> b.addEventListener('click', ()=>{ angle = b.dataset.angle; stop(); render(); }));
+    const op = $('#camOpacity',ov);
+    if(op) op.addEventListener('input', ()=>{ ghostOpacity = +op.value; lsSet('ledger.ghostOpacity', String(ghostOpacity)); $('#camGhost',ov).style.opacity = ghostOpacity/100; });
+    $('#camFlip',ov).addEventListener('click', ()=>{ facing = facing==='user' ? 'environment' : 'user'; lsSet('ledger.camFacing', facing); stop(); render(); });
+    $('#camTimer',ov).addEventListener('click', ()=>{ timer = timer===0 ? 3 : timer===3 ? 10 : 0; lsSet('ledger.camTimer', String(timer)); $('#camTimer',ov).textContent = '⏱ ' + (timer ? timer+'s' : 'Off'); });
+    $('#camShoot',ov).addEventListener('click', shoot);
+    const video = $('#camVideo',ov), msg = $('#camMsg',ov);
+    if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.textContent = 'This browser can\'t open the camera. Use "Choose file" instead.'; return; }
+    try{
+      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode: facing, width:{ideal:1920}, height:{ideal:1920}}, audio:false});
+      if(!ov.isConnected){ stop(); return; }
+      video.srcObject = stream; await video.play().catch(()=>{});
+      msg.hidden = true;
+    }catch(e){
+      msg.textContent = e && e.name==='NotAllowedError' ? 'Camera access was blocked. Allow camera access for this app in your phone\'s settings, then try again.' : 'Couldn\'t start the camera.';
+    }
+  }
+  function shoot(){
+    const video = $('#camVideo',ov); if(!stream || !video || !video.videoWidth || counting) return;
+    const go = ()=>{
+      const c = document.createElement('canvas'); c.width = video.videoWidth; c.height = video.videoHeight;
+      c.getContext('2d').drawImage(video, 0, 0);
+      c.toBlob(b=>{ if(!b) return; const a = angle; close(); onCapture(b, a); }, 'image/jpeg', 0.92);
+    };
+    if(!timer) return go();
+    let left = timer; const cnt = $('#camCount',ov); cnt.hidden = false; cnt.textContent = left;
+    counting = setInterval(()=>{ left--; if(left<=0){ clearInterval(counting); counting = null; cnt.hidden = true; go(); } else cnt.textContent = left; }, 1000);
+  }
+  render();
 }
 function initProgress(){
   initCheckinForm();
