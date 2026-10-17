@@ -11,7 +11,7 @@ If the session started on another branch (e.g. `claude/...`), merge or fast-forw
 Do not stop at "branch pushed" or open a PR unless the owner asks for one. Afterwards, tell him it's live and to tap Reload in the app.
 
 ## Files
-- `index.html`: markup and all CSS (single light warm-paper theme; orange `--accent-pep` for action fills, `--accent-pep-strong` for orange text, blue `--info` for info, green/red for status only).
+- `index.html`: markup and all CSS (light "liquid glass" theme (frosted translucent cards over a soft colour field, overrides in the Liquid glass block at the end of the CSS); orange `--accent-pep` for action fills, `--accent-pep-strong` for orange text, blue `--info` for info, green/red for status only).
 - `app.js`: all logic, one IIFE. Sections are marked with `/* ===== ... ===== */` banners.
 - `sw.js`: offline cache. **Bump `VERSION` on every change**, or installed phones keep the old files.
 - `manifest.webmanifest`, `icons/`: install metadata.
