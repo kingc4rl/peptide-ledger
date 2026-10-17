@@ -3783,10 +3783,11 @@ About the user:
 
 How to answer:
 - Lead with what the medical and scientific evidence suggests. Say how strong it is (human trials, small studies, animal or cell work) and name key studies where you can.
-- Then cover the anecdotal side: what users commonly report and what the public discussion online (forums, Reddit, peptide communities) tends to say. Label it clearly as anecdotal. This comes from what you already know; you are not browsing the web.
+- Then cover the anecdotal side: what users commonly report and what the public discussion online (forums, Reddit, peptide communities) tends to say. Label it clearly as anecdotal.
+- You have a web search tool. Use it when it would improve the answer: recent studies, current discussion and user reports, or anything you're unsure of. Prefer primary sources (PubMed, journals, trial registries) for the evidence, and forums or community sites for the anecdotal side.
 - Factor in type 1 diabetes whenever it changes the answer (for example effects on blood glucose, insulin needs or hypoglycaemia), stated plainly as part of the answer rather than as a warning.
 - The user's logged data is below. Use it only when it actually affects the answer (for example interactions with peptides they take or took, timing, overlapping effects, or a question about their own records). Otherwise ignore it and don't mention it.
-- Be direct and well organised. Use short headings or a markdown table when it helps. Keep it focused, around 300 words unless the question needs more.
+- Be direct and well organised. Use short headings or a markdown table when it helps. There is no length limit: give a complete answer and never leave out important information to keep it short.
 
 <user_data>
 ${JSON.stringify(stackContextForAsk())}
@@ -3807,7 +3808,9 @@ function renderAsk(){
   } else {
     th.innerHTML = msgs.map(m=>{
       if(m.role==='user') return `<div class="ask-msg user">${esc(chatText(m))}</div>`;
-      return `<div class="ask-msg bot"><div class="research-md">${mdToHtml(chatText(m))}</div></div>`;
+      const srcs = [], seen = new Set();
+      (m.content||[]).forEach(b=> (b.citations||[]).forEach(c=>{ if(c && c.url && !seen.has(c.url) && safeUrl(c.url)){ seen.add(c.url); srcs.push(c); } }));
+      return `<div class="ask-msg bot"><div class="research-md">${mdToHtml(chatText(m))}</div>${srcs.length ? `<div class="ask-srcs"><span>Sources</span>${srcs.slice(0,8).map((c,i)=>`<a href="${esc(safeUrl(c.url))}" target="_blank" rel="noopener">${i+1}. ${esc(c.title || new URL(c.url).hostname)}</a>`).join('')}</div>` : ''}</div>`;
     }).join('') + (askBusy ? `<div class="ask-msg bot" id="askLive"><span class="ask-typing"><i></i><i></i><i></i>&nbsp;Claude is thinking</span></div>` : '');
   }
   $('#askCost').textContent = askConv && askConv.costUsd ? `This chat ≈ $${askConv.costUsd.toFixed(3)} · ${CLAUDE_MODELS[askConv.model]?.label || ''}` : '';
@@ -3815,6 +3818,7 @@ function renderAsk(){
   send.classList.toggle('stop', askBusy); send.textContent = askBusy ? '■' : '↑'; send.setAttribute('aria-label', askBusy ? 'Stop' : 'Send');
 }
 function askScrollEnd(){ const c = $('.ask-composer'); if(c) c.scrollIntoView({block:'end', behavior:'smooth'}); }
+function cleanBlock(b){ const c = {...b}; delete c._json; return c; }
 // Thinking/tool blocks before the last fallback marker came from a model that declined; don't echo them back.
 function echoableContent(blocks){
   const cut = blocks.map(b=>b.type).lastIndexOf('fallback');
@@ -3833,37 +3837,50 @@ async function sendAsk(){
   input.value = ''; input.style.height = '';
   askBusy = true; renderAsk(); askScrollEnd();
   askAbort = new AbortController();
-  const blocks = [], usage = {};
+  let blocks = [], usage = {}, searches = 0;
   let stopReason = null, errMsg = null;
   const live = ()=> $('#askLive');
+  const showLive = ()=>{
+    const el = live(); if(!el) return;
+    const txt = blocks.filter(x=>x && x.type==='text').map(x=>x.text||'').join('');
+    const searching = blocks.some(x=> x && x.type==='server_tool_use' && x.name==='web_search') && !txt;
+    el.innerHTML = txt ? `<div class="research-md">${mdToHtml(txt)}</div>` : `<span class="ask-typing"><i></i><i></i><i></i>&nbsp;${searching ? 'Searching the web' : 'Claude is thinking'}</span>`;
+  };
   try{
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method:'POST', signal: askAbort.signal,
-      headers:{
-        'content-type':'application/json',
-        'x-api-key': key,
-        'anthropic-version':'2023-06-01',
-        'anthropic-dangerous-direct-browser-access':'true',
-        'anthropic-beta':'server-side-fallback-2026-07-01',
-      },
-      body: JSON.stringify({
-        model: askConv.model, max_tokens: 16000, stream: true,
-        system: [{type:'text', text: askConv.system, cache_control:{type:'ephemeral'}}],
-        messages: askConv.messages,
-        output_config: {effort: 'medium'},
-        fallbacks: 'default',
-      }),
-    });
-    if(!res.ok){
-      let detail = ''; try{ const j = await res.json(); detail = (j.error && j.error.message) || ''; }catch(_){}
-      errMsg = res.status===401 ? 'Your API key was not accepted. Check it in ⚙ settings.'
-        : res.status===429 ? 'Too many requests right now. Wait a moment and try again.'
-        : res.status===529 || res.status>=500 ? 'Claude is busy or unavailable right now. Try again shortly.'
-        : /credit balance/i.test(detail) ? 'Your Anthropic credit balance is too low. Add credit at console.anthropic.com → Billing.'
-        : (detail || `Request failed (${res.status}).`);
-    } else {
+    // a long search can pause the turn; resend with the partial answer appended so the server picks it up
+    for(let hop = 0; hop < 5; hop++){
+      const hopStart = blocks.length;
+      const msgs = hopStart ? askConv.messages.concat([{role:'assistant', content: blocks.filter(Boolean).map(cleanBlock)}]) : askConv.messages;
+      const res = await fetch('https://api.anthropic.com/v1/messages', {
+        method:'POST', signal: askAbort.signal,
+        headers:{
+          'content-type':'application/json',
+          'x-api-key': key,
+          'anthropic-version':'2023-06-01',
+          'anthropic-dangerous-direct-browser-access':'true',
+          'anthropic-beta':'server-side-fallback-2026-07-01',
+        },
+        body: JSON.stringify({
+          model: askConv.model, max_tokens: 32000, stream: true,
+          system: [{type:'text', text: askConv.system, cache_control:{type:'ephemeral'}}],
+          messages: msgs,
+          tools: [{type:'web_search_20260209', name:'web_search', max_uses: 6}],
+          output_config: {effort: 'medium'},
+          fallbacks: 'default',
+        }),
+      });
+      if(!res.ok){
+        let detail = ''; try{ const j = await res.json(); detail = (j.error && j.error.message) || ''; }catch(_){}
+        errMsg = res.status===401 ? 'Your API key was not accepted. Check it in ⚙ settings.'
+          : res.status===429 ? 'Too many requests right now. Wait a moment and try again.'
+          : res.status===529 || res.status>=500 ? 'Claude is busy or unavailable right now. Try again shortly.'
+          : /credit balance/i.test(detail) ? 'Your Anthropic credit balance is too low. Add credit at console.anthropic.com → Billing.'
+          : (detail || `Request failed (${res.status}).`);
+        break;
+      }
       const reader = res.body.getReader(), dec = new TextDecoder();
-      let buf = '';
+      let buf = '', hopUsage = {};
+      stopReason = null;
       for(;;){
         const {value, done} = await reader.read(); if(done) break;
         buf += dec.decode(value, {stream:true});
@@ -3873,28 +3890,37 @@ async function sendAsk(){
           const dataLine = chunk.split('\n').filter(l=> l.startsWith('data:')).map(l=> l.slice(5).trim()).join('');
           if(!dataLine) continue;
           let ev; try{ ev = JSON.parse(dataLine); }catch(_){ continue; }
-          if(ev.type==='message_start'){ Object.assign(usage, ev.message && ev.message.usage || {}); }
-          else if(ev.type==='content_block_start'){ blocks[ev.index] = JSON.parse(JSON.stringify(ev.content_block)); }
+          const at = ev.index!=null ? hopStart + ev.index : -1;
+          if(ev.type==='message_start'){ Object.assign(hopUsage, ev.message && ev.message.usage || {}); }
+          else if(ev.type==='content_block_start'){ blocks[at] = JSON.parse(JSON.stringify(ev.content_block)); showLive(); }
           else if(ev.type==='content_block_delta'){
-            const b = blocks[ev.index], d = ev.delta; if(!b || !d) continue;
-            if(d.type==='text_delta'){ b.text = (b.text||'') + d.text;
-              const el = live(); if(el){ el.innerHTML = `<div class="research-md">${mdToHtml(blocks.filter(x=>x&&x.type==='text').map(x=>x.text).join(''))}</div>`; } }
+            const b = blocks[at], d = ev.delta; if(!b || !d) continue;
+            if(d.type==='text_delta'){ b.text = (b.text||'') + d.text; showLive(); }
             else if(d.type==='thinking_delta') b.thinking = (b.thinking||'') + d.thinking;
             else if(d.type==='signature_delta') b.signature = d.signature;
+            else if(d.type==='input_json_delta') b._json = (b._json||'') + d.partial_json;
+            else if(d.type==='citations_delta'){ (b.citations = b.citations||[]).push(d.citation); }
           }
-          else if(ev.type==='message_delta'){ if(ev.delta && ev.delta.stop_reason) stopReason = ev.delta.stop_reason; if(ev.usage) Object.assign(usage, ev.usage); }
+          else if(ev.type==='content_block_stop'){
+            const b = blocks[at];
+            if(b && b._json!=null){ try{ b.input = JSON.parse(b._json || '{}'); }catch(_){} delete b._json; }
+          }
+          else if(ev.type==='message_delta'){ if(ev.delta && ev.delta.stop_reason) stopReason = ev.delta.stop_reason; if(ev.usage) Object.assign(hopUsage, ev.usage); }
           else if(ev.type==='error'){ errMsg = (ev.error && ev.error.message) || 'Claude ran into an error.'; }
         }
       }
+      ['input_tokens','cache_creation_input_tokens','cache_read_input_tokens','output_tokens'].forEach(k=> usage[k] = (usage[k]||0) + (hopUsage[k]||0));
+      searches += (hopUsage.server_tool_use && hopUsage.server_tool_use.web_search_requests) || 0;
+      if(errMsg || stopReason!=='pause_turn') break;
     }
   }catch(e){
     errMsg = e && e.name==='AbortError' ? 'Stopped.' : 'Couldn\'t reach Claude. Check your connection and try again.';
   }
   askBusy = false; askAbort = null;
   const m = CLAUDE_MODELS[askConv.model] || CLAUDE_MODELS['claude-opus-5-5'];
-  const cost = ((usage.input_tokens||0)*m.inp + (usage.cache_creation_input_tokens||0)*m.cw + (usage.cache_read_input_tokens||0)*m.cr + (usage.output_tokens||0)*m.out) / 1e6;
+  const cost = ((usage.input_tokens||0)*m.inp + (usage.cache_creation_input_tokens||0)*m.cw + (usage.cache_read_input_tokens||0)*m.cr + (usage.output_tokens||0)*m.out) / 1e6 + searches*0.01;
   askConv.costUsd = (askConv.costUsd||0) + cost;
-  const content = blocks.filter(Boolean);
+  const content = blocks.filter(Boolean).map(cleanBlock);
   if(!errMsg && stopReason==='refusal'){ errMsg = 'Claude declined to answer this one. Try rewording the question.'; }
   if(errMsg){
     askConv.messages.pop();   // drop the unanswered question so the conversation stays valid
@@ -3905,6 +3931,7 @@ async function sendAsk(){
     return;
   }
   askConv.messages.push({role:'assistant', content: echoableContent(content)});
+  if(stopReason==='pause_turn' || stopReason==='max_tokens') askConv.messages[askConv.messages.length-1].truncated = true;
   askConv.answer = chatText(askConv.messages[askConv.messages.length-1]);
   askConv.updatedAt = new Date().toISOString();
   const rec = {...askConv}; delete rec.id;
