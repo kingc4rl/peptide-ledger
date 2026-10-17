@@ -872,6 +872,18 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
       <section id="resourcesView" class="view" hidden>
 
         <div class="card">
+          <h3 style="font-size:16px;margin-bottom:10px;">Resources</h3>
+          <div class="link-bank" id="resourceLinks"></div>
+          <details class="link-fold" id="howtoRef">
+            <summary class="link-chip">📖 How-to &amp; testing links</summary>
+            <div class="link-fold-body">
+              <div class="link-bank" id="howtoLinks"></div>
+              <p class="footnote" style="margin-top:12px;">Outside links are community-shared, so check them yourself.</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="card">
           <div class="card-h"><h3>Peptide vendors</h3><button class="btn btn-accent-pep btn-sm" id="addVendorBtn">+ Add vendor</button></div>
           <div id="vendorList"></div>
         </div>
@@ -882,18 +894,6 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
             <button class="btn btn-accent-pep btn-sm" id="addSupplyVendorBtn">+ Add vendor</button>
           </div>
           <div id="supplyVendorList"></div>
-        </div>
-
-        <div class="card">
-          <h3 style="font-size:16px;margin-bottom:10px;">Resources</h3>
-          <div class="link-bank" id="resourceLinks"></div>
-          <details class="link-fold" id="howtoRef">
-            <summary class="link-chip">📖 How-to &amp; testing links</summary>
-            <div class="link-fold-body">
-              <div class="link-bank" id="howtoLinks"></div>
-              <p class="footnote" style="margin-top:12px;">Outside links are community-shared, so check them yourself.</p>
-            </div>
-          </details>
         </div>
 
       </section>

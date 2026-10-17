@@ -602,13 +602,14 @@ function runEndo(){
   runEndo();
 })();
 
-$('#resourceLinks').innerHTML = `
-  <a class="link-chip" href="https://peptidebenchmark.com" target="_blank" rel="noopener">📊 PeptideBenchmark</a>
-  <a class="link-chip" href="https://www.peptidedeck.com/peptide-calculator" target="_blank" rel="noopener">🧮 PeptideDeck calculator</a>
-  <a class="link-chip" href="https://peptidesafe.lovable.app/" target="_blank" rel="noopener">🧪 PeptideSafe endotoxin calculator</a>
-  <a class="link-chip" href="https://www.peptidedeck.com/blog" target="_blank" rel="noopener">📚 PeptideDeck research blog</a>
-  <a class="link-chip" href="https://stacked.health" target="_blank" rel="noopener">📦 Stacked</a>
-`;
+$('#resourceLinks').innerHTML = [
+  ['https://www.peptideschedule.com','📅 Peptide Schedule'],
+  ['https://peptidedosages.com','💉 Peptide Dosages'],
+  ['https://voracious-headstand-97f.notion.site/Peptides-Database-0a5ceea6bb204083af1fee80797e14cd','🗂 Peptides Database (Notion)'],
+  ['https://rtplabs.xyz/axis-plus/','🧪 RTP Labs: Axis Plus'],
+  ['https://chat.peppys.org','💬 Peppys chat'],
+  ['https://m-mps.com/product-codes/','🏷 MPS product codes'],
+].map(([href,label])=>`<a class="link-chip" href="${href}" target="_blank" rel="noopener">${label}</a>`).join('');
 (function(){
   const chip=(h,t)=>`<a class="link-chip" href="${h}" target="_blank" rel="noopener">${t}</a>`;
   $('#howtoLinks').innerHTML = [
