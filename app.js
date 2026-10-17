@@ -2716,17 +2716,27 @@ function mdToHtml(md){
       html += `<pre><code>${esc(code.join('\n'))}</code></pre>`;
       i = j+1; continue;
     }
-    if(/^\s*\|.*\|\s*$/.test(line) && lines[i+1] && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])){
+    if(/^\s*\|.*\|/.test(line) && lines[i+1] && /^\s*\|?\s*:?-{2,}[\s:|-]*$/.test(lines[i+1])){
       closeList();
-      const header = line.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
+      const cells = (row)=> row.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim());
+      const header = cells(line);
       let body = [];
       let j = i+2;
-      while(j<lines.length && /^\s*\|.*\|\s*$/.test(lines[j])){
-        body.push(lines[j].trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
+      while(j<lines.length && /^\s*\|.*\|/.test(lines[j])){
+        const r = cells(lines[j]);
+        while(r.length < header.length) r.push('');
+        body.push(r.slice(0, header.length));
         j++;
       }
-      html += `<div class="md-table"><table><thead><tr>${header.map(h=>`<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${
-        body.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      // A phone can't fit wide or wordy tables, so those become one card per row with each column labelled.
+      const longest = Math.max(0, ...body.flat().map(c=>c.length));
+      if(header.length > 3 || longest > 32){
+        html += `<div class="md-cards">${body.map(r=>`<div class="md-card"><div class="md-card-h">${inline(r[0]) || '&nbsp;'}</div>${
+          r.slice(1).map((c,k)=> c ? `<div class="md-card-row"><span>${inline(header[k+1])}</span><div>${inline(c)}</div></div>` : '').join('')}</div>`).join('')}</div>`;
+      } else {
+        html += `<div class="md-table"><table><thead><tr>${header.map(h=>`<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${
+          body.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      }
       i = j; continue;
     }
     const h = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
@@ -2760,15 +2770,16 @@ function mdToHtml(md){
   closeList();
   return html || `<p>${inline(md||'')}</p>`;
 }
-/* Text blocks split only by citations join directly; text after a web search (or a block that opens with a heading,
-   list or table) starts a new paragraph, so a heading never gets glued onto the sentence before it. */
+/* Text blocks split only by citations join directly; text after a web search (or a block that opens with a heading)
+   starts a new paragraph, so a heading never gets glued onto the sentence before it. */
 function chatText(m){
   let out = '', gap = false;
   for(const b of (m.content||[])){
     if(!b) continue;
     if(b.type==='text'){
       const t = b.text||'';
-      const block = /^\s*(#{1,6}\s|\||[-*+]\s|\d+[.)]\s|>|```)/.test(t);
+      // Citations split text mid-sentence and mid-table-row, so only a heading or code fence forces a new line here.
+      const block = /^\s*(#{1,6}\s|```)/.test(t);
       out += ((gap || block) && out && !/\n\s*$/.test(out) ? '\n\n' : '') + t;
       gap = false;
     }
