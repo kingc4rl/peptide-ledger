@@ -657,6 +657,11 @@ input, select, textarea{ background:rgba(255,255,255,.62); border:1px solid rgba
 .scrub-tip{ background:rgba(29,29,32,.82); -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); }
 .lc-readout.on{ background:rgba(29,29,32,.85); }
 .disclaimer{ background:rgba(255,255,255,.35); border-color:rgba(30,25,15,.12); border-radius:18px; }
+/* field edges: visible on glass */
+input, select, textarea, .modal input, .modal select, .modal textarea, .module-box input, .module-box select, .cf-row input{ border:1px solid rgba(40,30,20,.28); }
+input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
+.cf.calc .cf-row input{ border-color:var(--accent-pep); }
+.seg{ border:1px solid rgba(40,30,20,.28); }
 @supports not ((backdrop-filter:blur(1px)) or (-webkit-backdrop-filter:blur(1px))){
   :root{ --surface:#ffffff; --surface-2:#f1efea; }
   .tabbar, .app-head, .modal{ background:rgba(255,255,255,.96); }
