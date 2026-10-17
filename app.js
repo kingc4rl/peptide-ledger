@@ -1880,6 +1880,17 @@ function vialTests(v){
   const extra = Array.isArray(v.extraTests) ? v.extraTests : [];
   return [first].concat(extra).filter(testFilled);
 }
+/* Vendor picker for a vial. The vial stores the vendor's name in its existing pharmacy field,
+   so older entries, cost tracking and backups keep working. */
+function vendorOptions(current){
+  const names = state.vendors.map(x=> (x.name||'').trim()).filter(Boolean).sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
+  const cur = (current||'').trim();
+  const known = names.some(n=> n.toLowerCase()===cur.toLowerCase());
+  return `<option value="">— None —</option>` +
+    names.map(n=>`<option value="${esc(n)}" ${known && n.toLowerCase()===cur.toLowerCase()?'selected':''}>${esc(n)}</option>`).join('') +
+    (cur && !known ? `<option value="${esc(cur)}" selected>${esc(cur)} (not in vendor list)</option>` : '') +
+    `<option value="__new">+ Add a different vendor…</option>`;
+}
 function hasLabTest(v){ return vialTests(v).length>0; }
 function safeUrl(u){ return /^https?:\/\//i.test(String(u||'').trim()) ? String(u).trim() : ''; }
 function labTestHTML(v){
@@ -1903,7 +1914,13 @@ function openVialModal(existing){
       <div class="field"><label for="vConc">Concentration (mg/mL)</label><input id="vConc" type="number" step="any" value="${esc(v.concentration||'')}" placeholder="After reconstitution"></div>
       <div class="field"><label for="vPrice">Price paid ($, for this whole entry)</label><input id="vPrice" type="number" step="any" value="${esc(v.price||'')}" placeholder="e.g. 65"></div>
       <div class="field"><label for="vLot">Lot #</label><input id="vLot" type="text" value="${esc(v.lot||'')}"></div>
-      <div class="field"><label for="vPharmacy">Pharmacy</label><input id="vPharmacy" type="text" value="${esc(v.pharmacy||'')}" placeholder="e.g. BPI, Olympia"></div>
+      <div class="field span2"><label for="vVendor">Vendor</label>
+        <select id="vVendor">${vendorOptions(v.pharmacy)}</select>
+        <div id="vNewVendorBox" hidden style="margin-top:8px;">
+          <input id="vNewVendor" type="text" placeholder="New vendor name" aria-label="New vendor name">
+          <label class="endo-check" style="margin-top:6px;font-weight:500;"><input type="checkbox" id="vSaveVendor" checked> Also add to my peptide vendor list</label>
+        </div>
+      </div>
       <div class="field"><label for="vOpened">Date opened</label><input id="vOpened" type="date" value="${esc(v.dateOpened||'')}" placeholder="Leave blank if unopened"></div>
       <div class="field"><label for="vBud">BUD (beyond-use date)</label><input id="vBud" type="date" value="${esc(v.bud||'')}"></div>
       <div class="field span2"><label for="vProtocol">Linked protocol (for dose/frequency)</label><select id="vProtocol"><option value="">— none —</option>${protocolOptions}</select></div>
@@ -1939,6 +1956,12 @@ function openVialModal(existing){
     $('#vTests',body).addEventListener('change', onTest);
     $('#vTests',body).addEventListener('click', e=>{ const b = e.target.closest('[data-rm-test]'); if(!b) return; tests.splice(+b.dataset.rmTest,1); drawTests(); });
     $('#vAddTest',body).addEventListener('click', ()=>{ tests.push({lab:'',massMg:'',purity:'',endo:'',date:'',coaUrl:''}); drawTests(); });
+    const vendSel = $('#vVendor',body);
+    vendSel.addEventListener('change', ()=>{
+      const isNew = vendSel.value==='__new';
+      $('#vNewVendorBox',body).hidden = !isNew;
+      if(isNew) $('#vNewVendor',body).focus();
+    });
     if(existing){
       $('#vDelete',body).addEventListener('click', ()=>{ closeModal(); confirmAction('Delete this vial?', ()=> dbDelete('vials', existing.id)); });
     }
@@ -1946,7 +1969,14 @@ function openVialModal(existing){
     $('#vSave',body).addEventListener('click', async ()=>{
       const compound = $('#vCompound',body).value.trim();
       if(!compound) return;
-      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:$('#vPharmacy',body).value.trim(),
+      let vendor = vendSel.value;
+      if(vendor==='__new'){
+        vendor = $('#vNewVendor',body).value.trim();
+        if(!vendor){ $('#vNewVendor',body).focus(); return; }
+        const dup = state.vendors.some(x=> (x.name||'').trim().toLowerCase()===vendor.toLowerCase());
+        if($('#vSaveVendor',body).checked && !dup) await dbAdd('vendors', {name:vendor, subtext:'', url:'', deal:'', notes:''});
+      }
+      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:vendor,
         ...(()=>{ const ts = tests.map(t=>({...t, lab:(t.lab||'').trim(), coaUrl:(t.coaUrl||'').trim()})).filter(testFilled); const f = ts[0] || {};
           return {testLab:f.lab||'', testMassMg:f.massMg||'', testPurity:f.purity||'', testEndo:f.endo||'', testDate:f.date||'', coaUrl:f.coaUrl||'', extraTests: ts.slice(1)}; })(),
         dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
@@ -3376,7 +3406,7 @@ function stackContextForAsk(){
   return {
     today: todayISO(),
     vendors: state.vendors.map(v=>({name:v.name, url:v.url||null, deal:v.deal||null, notes:v.notes||null})),
-    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, pharmacy:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTests: vialTests(v).map(t=>({lab:t.lab||null, massMg:num(t.massMg,null), purityPct:num(t.purity,null), endotoxinEUperMg:num(t.endo,null), date:t.date||null, coa:safeUrl(t.coaUrl)||null}))})),
+    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, vendor:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTests: vialTests(v).map(t=>({lab:t.lab||null, massMg:num(t.massMg,null), purityPct:num(t.purity,null), endotoxinEUperMg:num(t.endo,null), date:t.date||null, coa:safeUrl(t.coaUrl)||null}))})),
     protocols: state.protocols.filter(p=>p.status!=='archived').map(p=>{
       const d = doseAt(p, day);
       return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p), blend: blendParts(p) ? blendParts(p).map(c=>({peptide:c.name, mgPerVial:c.mg, share:Math.round(c.frac*1000)/1000, halfLifeHours:c.hl||null})) : null,
