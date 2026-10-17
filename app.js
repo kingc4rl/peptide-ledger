@@ -799,7 +799,9 @@ function renderProtocols(){
   });
   $$('[data-full-chart]',el).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
-    serumSel = b.dataset.fullChart; lsSet('ledger.serumSel', serumSel); renderSerum();
+    const pid = b.dataset.fullChart;
+    [...serumHidden].forEach(id=>{ if(id===pid || id.startsWith(pid+':')) serumHidden.delete(id); });
+    saveSerumHidden(); renderSerum();
     const c = $('#serumCard'); if(c) c.scrollIntoView({behavior:'smooth', block:'start'});
   }));
 }
@@ -1581,7 +1583,9 @@ function fmtAmount(mg){
   const mcg = mg*1000;
   return mcg>=10 ? `${Math.round(mcg)} mcg` : `${Math.round(mcg*100)/100} mcg`;
 }
-let serumSel = lsGet('ledger.serumSel','all');
+// Series ids hidden from the serum chart; everything shows unless tapped off in the list under it.
+const serumHidden = new Set((()=>{ try{ return JSON.parse(lsGet('ledger.serumHidden','[]')) || []; }catch(e){ return []; } })());
+const saveSerumHidden = ()=> lsSet('ledger.serumHidden', JSON.stringify([...serumHidden]));
 function serumSeries(){
   const colorMap = protocolColorMap();
   const out = [], missing = [];
@@ -1752,28 +1756,24 @@ function renderSerum(){
     el.innerHTML = `<div class="empty"><div class="glyph">📉</div><p>Add a protocol and log a dose to see the level of it in your body over time.</p></div>${miss}`;
     return;
   }
-  if(serumSel!=='all' && !series.some(s=>s.p.id===serumSel)) serumSel = 'all';
   const now = Date.now();
-  const shownS = serumSel==='all' ? series : series.filter(s=>s.p.id===serumSel);
-  const ctx = serumCtx(shownS, now, serumSel==='all' && new Set(shownS.map(s=>s.p.id)).size>1);
+  const shownS = series.filter(s=> !serumHidden.has(s.id));
+  const ctx = serumCtx(shownS, now, new Set(shownS.map(s=>s.p.id)).size>1);
   const earliest = Math.min(now, ...series.flatMap(s=> s.evs.map(e=>e.t)));
   const clampEnd = t1=> Math.max(earliest + serumWinMs()*0.25, Math.min(now + 30*24*HOUR, t1));
   let t1 = serumEnd==null ? serumFollowEnd(now) : clampEnd(serumEnd);
-  const chipIds = [...new Map(series.map(s=>[s.p.id, s.p.compound||'Untitled'])).entries()];
-  const chips = [['all','All']].concat(chipIds).map(([id,label])=>
-    `<button type="button" class="chip-btn ${serumSel===id?'on':''}" data-serum-sel="${esc(id)}">${esc(label)}</button>`).join('');
   const wins = SERUM_WINDOWS.map(([k])=> `<button type="button" class="chip-btn ${serumWin===k?'on':''}" data-serum-win="${k}">${k}</button>`).join('');
   const rows = series.map(s=>{
     const cur = levelAt(s.evs, s.hl, now);
     const lastPeak = Math.max(0, ...s.evs.filter(e=>e.t<=now).map(e=>levelAt(s.evs, s.hl, e.t)));
     const last = s.evs.filter(e=>e.t<=now).sort((a,b)=>b.t-a.t)[0];
-    return `<div class="serum-row"><span class="serum-dot" style="background:${s.color}"></span>
+    const off = serumHidden.has(s.id);
+    return `<button type="button" class="serum-row ${off?'off':''}" data-serum-toggle="${esc(s.id)}" aria-pressed="${!off}"><span class="serum-dot" style="--c:${s.color}"></span>
       <span class="serum-name"><strong>${esc(s.label)}</strong><span class="footnote">${s.sub?` · ${esc(s.sub)}`:''} · t½ ${esc(fmtHours(s.hl))}${last?'':' · no doses logged'}</span></span>
-      <span class="mono serum-val">${esc(fmtAmount(cur))}${lastPeak>0?` <span class="footnote">${Math.round(cur/lastPeak*100)}% of peak</span>`:''}</span></div>`;
+      <span class="mono serum-val">${esc(fmtAmount(cur))}${lastPeak>0?` <span class="footnote">${Math.round(cur/lastPeak*100)}% of peak</span>`:''}</span></button>`;
   }).join('');
   if(ctl){
-    ctl.innerHTML = `<div class="chip-row">${chips}</div><div class="chip-row">${wins}</div>`;
-    $$('[data-serum-sel]',ctl).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
+    ctl.innerHTML = `<div class="chip-row">${wins}</div>`;
     $$('[data-serum-win]',ctl).forEach(b=> b.addEventListener('click', ()=>{
       // keep the same centre point when switching windows, unless following now
       const centre = serumEnd==null ? null : t1 - serumWinMs()/2;
@@ -1782,13 +1782,24 @@ function renderSerum(){
       renderSerum();
     }));
   }
+  const hint = series.length>1 ? `<p class="footnote serum-hint">Tap a peptide to hide or show it on the chart.</p>` : '';
+  if(!shownS.length){
+    el.innerHTML = `<div class="empty serum-none"><p>All peptides are hidden. Tap one below to show it.</p></div>${hint}${rows}${miss}`;
+    $$('[data-serum-toggle]',el).forEach(b=> b.addEventListener('click', ()=>{ serumHidden.delete(b.dataset.serumToggle); saveSerumHidden(); renderSerum(); }));
+    return;
+  }
   el.innerHTML = `
     <div class="serum-pan">
       <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart" id="serumSvg" role="img" aria-label="Estimated serum level over time. Touch and drag to read the level at any moment.">${serumSvgInner(ctx, t1)}</svg>
     </div>
     <div class="serum-nav"><button type="button" class="btn btn-sm nav-arrow" id="serumBack" aria-label="Earlier">‹</button><span class="footnote" id="serumRangeLbl"></span><button type="button" class="btn btn-sm nav-arrow" id="serumFwd" aria-label="Later">›</button></div>
     <div style="text-align:center;margin:-4px 0 8px;"><button type="button" class="link-btn" id="serumNow" ${serumEnd==null?'hidden':''}>↺ Back to now</button></div>
-    ${rows}${miss}`;
+    ${hint}${rows}${miss}`;
+  $$('[data-serum-toggle]',el).forEach(b=> b.addEventListener('click', ()=>{
+    const id = b.dataset.serumToggle;
+    if(serumHidden.has(id)) serumHidden.delete(id); else serumHidden.add(id);
+    saveSerumHidden(); renderSerum();
+  }));
   const svg = $('#serumSvg',el), lbl = $('#serumRangeLbl',el), nowBtn = $('#serumNow',el);
   const rangeText = ()=>{
     const t0 = t1 - serumWinMs();
