@@ -1743,8 +1743,9 @@ function serumCtx(shownS, now, pct){
   })};
 }
 function renderSerum(){
-  const el = $('#serumBody');
+  const el = $('#serumBody'), ctl = $('#serumControls');
   if(!el) return;
+  if(ctl) ctl.innerHTML = '';
   const {series, missing} = serumSeries();
   const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">No half-life for ${missing.map(m=>esc(m)).join(', ')}. Edit the protocol and enter one to chart it.</p>` : '';
   if(!series.length){
@@ -1770,16 +1771,24 @@ function renderSerum(){
       <span class="serum-name"><strong>${esc(s.label)}</strong><span class="footnote">${s.sub?` · ${esc(s.sub)}`:''} · t½ ${esc(fmtHours(s.hl))}${last?'':' · no doses logged'}</span></span>
       <span class="mono serum-val">${esc(fmtAmount(cur))}${lastPeak>0?` <span class="footnote">${Math.round(cur/lastPeak*100)}% of peak</span>`:''}</span></div>`;
   }).join('');
+  if(ctl){
+    ctl.innerHTML = `<div class="chip-row">${chips}</div><div class="chip-row">${wins}</div>`;
+    $$('[data-serum-sel]',ctl).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
+    $$('[data-serum-win]',ctl).forEach(b=> b.addEventListener('click', ()=>{
+      // keep the same centre point when switching windows, unless following now
+      const centre = serumEnd==null ? null : t1 - serumWinMs()/2;
+      serumWin = b.dataset.serumWin; lsSet('ledger.serumWin', serumWin);
+      if(centre!=null) serumEnd = centre + serumWinMs()/2;
+      renderSerum();
+    }));
+  }
   el.innerHTML = `
-    <div class="chip-row" style="margin-bottom:8px;">${chips}</div>
-    <div class="chip-row">${wins}</div>
     <div class="serum-pan">
       <svg viewBox="0 0 ${SV.W} ${SV.H}" class="chart" id="serumSvg" role="img" aria-label="Estimated serum level over time. Touch and drag to read the level at any moment.">${serumSvgInner(ctx, t1)}</svg>
     </div>
     <div class="serum-nav"><button type="button" class="btn btn-sm nav-arrow" id="serumBack" aria-label="Earlier">‹</button><span class="footnote" id="serumRangeLbl"></span><button type="button" class="btn btn-sm nav-arrow" id="serumFwd" aria-label="Later">›</button></div>
     <div style="text-align:center;margin:-4px 0 8px;"><button type="button" class="link-btn" id="serumNow" ${serumEnd==null?'hidden':''}>↺ Back to now</button></div>
-    ${rows}
-    <p class="footnote" style="margin-top:8px;">Touch and drag across the chart to read the level at any moment. Use ‹ › to move earlier or later. ${ctx.pct?'Compounds are shown as % of their own peak so they fit one scale. Pick one for actual amounts. ':''}Estimate of the amount in your body assuming each injection is fully absorbed at once and clears by its half-life. Solid line is logged doses; dashed line adds scheduled doses. Not a blood test.</p>${miss}`;
+    ${rows}${miss}`;
   const svg = $('#serumSvg',el), lbl = $('#serumRangeLbl',el), nowBtn = $('#serumNow',el);
   const rangeText = ()=>{
     const t0 = t1 - serumWinMs();
@@ -1793,14 +1802,6 @@ function renderSerum(){
   $('#serumBack',el).addEventListener('click', ()=> step(-1));
   $('#serumFwd',el).addEventListener('click', ()=> step(1));
   nowBtn.addEventListener('click', ()=>{ serumEnd = null; t1 = serumFollowEnd(now); draw(); });
-  $$('[data-serum-sel]',el).forEach(b=> b.addEventListener('click', ()=>{ serumSel = b.dataset.serumSel; lsSet('ledger.serumSel', serumSel); renderSerum(); }));
-  $$('[data-serum-win]',el).forEach(b=> b.addEventListener('click', ()=>{
-    // keep the same centre point when switching windows, unless following now
-    const centre = serumEnd==null ? null : t1 - serumWinMs()/2;
-    serumWin = b.dataset.serumWin; lsSet('ledger.serumWin', serumWin);
-    if(centre!=null) serumEnd = centre + serumWinMs()/2;
-    renderSerum();
-  }));
 }
 
 /* ===================== Peptides: Stash ===================== */
