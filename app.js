@@ -2691,17 +2691,31 @@ function openPepEquipmentModal(existing){
 }
 
 /* ===================== Peptides: Research ===================== */
-/* Small, safe-enough markdown -> HTML for LLM answers: bold, links, pipe tables, bullet lists, paragraphs.
+/* Small, safe-enough markdown -> HTML for LLM answers: headings, bold/italic, inline code, links, pipe tables,
+   bullet and numbered lists, quotes, rules, code blocks, paragraphs.
    Escapes everything first, then re-introduces only the handful of tags it builds itself. */
 function mdToHtml(md){
   const lines = (md||'').replace(/\r\n/g,'\n').split('\n');
-  let html = '', i = 0, inList = false;
+  let html = '', i = 0, list = null;
   const inline = (s)=> esc(s)
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/__(.+?)__/g, '<strong>$1</strong>')
+    .replace(/(^|[^*\w])\*(?!\s)([^*]+?)\*(?!\w)/g, '$1<em>$2</em>')
+    .replace(/(^|[^_\w])_(?!\s)([^_]+?)_(?!\w)/g, '$1<em>$2</em>')
+    .replace(/~~(.+?)~~/g, '<s>$1</s>')
     .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
-  function closeList(){ if(inList){ html += '</ul>'; inList=false; } }
+  function closeList(){ if(list){ html += `</${list}>`; list=null; } }
+  function openList(tag){ if(list!==tag){ closeList(); html += `<${tag}>`; list=tag; } }
   while(i<lines.length){
     const line = lines[i];
+    if(/^\s*```/.test(line)){
+      closeList();
+      let j = i+1, code = [];
+      while(j<lines.length && !/^\s*```/.test(lines[j])){ code.push(lines[j]); j++; }
+      html += `<pre><code>${esc(code.join('\n'))}</code></pre>`;
+      i = j+1; continue;
+    }
     if(/^\s*\|.*\|\s*$/.test(line) && lines[i+1] && /^\s*\|?[\s:|-]+\|?\s*$/.test(lines[i+1])){
       closeList();
       const header = line.trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim());
@@ -2711,13 +2725,32 @@ function mdToHtml(md){
         body.push(lines[j].trim().replace(/^\||\|$/g,'').split('|').map(c=>c.trim()));
         j++;
       }
-      html += `<table><thead><tr>${header.map(h=>`<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${
-        body.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+      html += `<div class="md-table"><table><thead><tr>${header.map(h=>`<th>${inline(h)}</th>`).join('')}</tr></thead><tbody>${
+        body.map(r=>`<tr>${r.map(c=>`<td>${inline(c)}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
       i = j; continue;
     }
-    if(/^\s*[-*]\s+/.test(line)){
-      if(!inList){ html += '<ul>'; inList=true; }
-      html += `<li>${inline(line.replace(/^\s*[-*]\s+/,''))}</li>`;
+    const h = line.match(/^\s*(#{1,6})\s+(.*?)\s*#*\s*$/);
+    if(h){
+      closeList();
+      const lvl = Math.min(6, h[1].length + 2); // # -> h3, ## -> h4, ### and deeper -> h5/h6
+      html += `<h${lvl} class="md-h">${inline(h[2])}</h${lvl}>`;
+      i++; continue;
+    }
+    if(/^\s*([-*_])(\s*\1){2,}\s*$/.test(line)){ closeList(); html += '<hr>'; i++; continue; }
+    if(/^\s*[-*+]\s+/.test(line)){
+      openList('ul');
+      const sub = /^\s{2,}/.test(line) ? ' class="md-sub"' : '';
+      html += `<li${sub}>${inline(line.replace(/^\s*[-*+]\s+/,''))}</li>`;
+      i++; continue;
+    }
+    if(/^\s*\d+[.)]\s+/.test(line)){
+      openList('ol');
+      html += `<li>${inline(line.replace(/^\s*\d+[.)]\s+/,''))}</li>`;
+      i++; continue;
+    }
+    if(/^\s*>/.test(line)){
+      closeList();
+      html += `<blockquote>${inline(line.replace(/^\s*>\s?/,''))}</blockquote>`;
       i++; continue;
     }
     closeList();
@@ -2727,7 +2760,22 @@ function mdToHtml(md){
   closeList();
   return html || `<p>${inline(md||'')}</p>`;
 }
-function chatText(m){ return (m.content||[]).filter(b=> b && b.type==='text').map(b=> b.text).join(''); }
+/* Text blocks split only by citations join directly; text after a web search (or a block that opens with a heading,
+   list or table) starts a new paragraph, so a heading never gets glued onto the sentence before it. */
+function chatText(m){
+  let out = '', gap = false;
+  for(const b of (m.content||[])){
+    if(!b) continue;
+    if(b.type==='text'){
+      const t = b.text||'';
+      const block = /^\s*(#{1,6}\s|\||[-*+]\s|\d+[.)]\s|>|```)/.test(t);
+      out += ((gap || block) && out && !/\n\s*$/.test(out) ? '\n\n' : '') + t;
+      gap = false;
+    }
+    else if(b.type!=='thinking' && b.type!=='redacted_thinking') gap = true;
+  }
+  return out;
+}
 function renderResearch(){
   const el = $('#researchList'); if(!el) return;
   if(!state.research.length){
@@ -3842,7 +3890,7 @@ async function sendAsk(){
   const live = ()=> $('#askLive');
   const showLive = ()=>{
     const el = live(); if(!el) return;
-    const txt = blocks.filter(x=>x && x.type==='text').map(x=>x.text||'').join('');
+    const txt = chatText({content:blocks});
     const searching = blocks.some(x=> x && x.type==='server_tool_use' && x.name==='web_search') && !txt;
     el.innerHTML = txt ? `<div class="research-md">${mdToHtml(txt)}</div>` : `<span class="ask-typing"><i></i><i></i><i></i>&nbsp;${searching ? 'Searching the web' : 'Claude is thinking'}</span>`;
   };
