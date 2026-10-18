@@ -1876,9 +1876,9 @@ function renderVials(){
         ? `<span class="pill pill-pep">Opened${v.dateOpened?' '+esc(fmtDateShort(v.dateOpened)):''}</span><span class="lot-left mono">${Math.round(v.remainingMg*10)/10} / ${mg} mg</span>`
         : `<span class="pill pill-muted">Unopened</span>`;
       const tests = vialTests(v);
-      const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:'', v.price?`$${num(v.price).toFixed(2)}`:''].filter(Boolean).join(' · ');
+      const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
       return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
-        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty>1?`<span class="lot-qty">×${qty}</span>`:''}</div>
+        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty+(isOpen?1:0)>1?`<span class="lot-qty">×${qty+(isOpen?1:0)}</span>`:''}</div>
         <div class="lot-info">
           <div class="lot-top"><div class="lot-name">${esc(v.pharmacy||'No vendor')}</div>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
           <div class="lot-pills">${status}
@@ -1886,7 +1886,7 @@ function renderVials(){
             ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : ''}
             ${v.bud? `<span class="pill ${budSoon?'pill-warn':'pill-muted'}">BUD ${esc(fmtDateShort(v.bud))}</span>` : ''}
           </div>
-          <div class="lot-meta">${qty} sealed${isOpen?' + 1 open':''}${meta?' · '+meta:''}${Array.isArray(v.finishedLog)&&v.finishedLog.length?` · ${v.finishedLog.length} finished`:''}</div>
+          ${(()=>{ const bits = [meta, Array.isArray(v.finishedLog)&&v.finishedLog.length ? `${v.finishedLog.length} finished` : ''].filter(Boolean); return bits.length ? `<div class="lot-meta">${bits.join(' · ')}</div>` : ''; })()}
         </div>
         ${tests.length ? `<div class="lot-coas">${tests.map((t,k)=>`<button type="button" class="coa-mini" data-coa-vial="${v.id}" data-coa-i="${k}" aria-label="View certificate of analysis${t.lab?' from '+esc(t.lab):''}">${coaMiniSVG(t, mg)}</button>`).join('')}</div>` : ''}
       </div>`;
@@ -2268,7 +2268,7 @@ function openVialModal(existing){
     <div class="form-grid">
       <div class="field span2"><label for="vCompound">Compound</label><input id="vCompound" type="text" value="${esc(v.compound||'')}"></div>
       <div class="field"><label for="vMg">mg per vial</label><input id="vMg" type="number" step="any" value="${esc(v.mgPerVial||'')}"></div>
-      <div class="field"><label for="vQty">Qty (identical vials)</label><input id="vQty" type="number" step="1" min="1" value="${esc(v.qty||1)}"></div>
+      <div class="field"><label for="vQty">${v.remainingMg!=null ? 'Sealed vials <span style="font-weight:400;color:var(--muted);">(not counting the open one)</span>' : 'Qty (identical vials)'}</label><input id="vQty" type="number" step="1" min="0" value="${esc(String(v.qty ?? 1))}"></div>
       <div class="field"><label for="vConc">Concentration (mg/mL)</label><input id="vConc" type="number" step="any" value="${esc(v.concentration||'')}" placeholder="After reconstitution"></div>
       <div class="field"><label for="vPrice">Price paid ($, for this whole entry)</label><input id="vPrice" type="number" step="any" value="${esc(v.price||'')}" placeholder="e.g. 65"></div>
       <div class="field"><label for="vLot">Lot #</label><input id="vLot" type="text" value="${esc(v.lot||'')}"></div>
@@ -2334,7 +2334,7 @@ function openVialModal(existing){
         const dup = state.vendors.some(x=> (x.name||'').trim().toLowerCase()===vendor.toLowerCase());
         if($('#vSaveVendor',body).checked && !dup) await dbAdd('vendors', {name:vendor, subtext:'', url:'', deal:'', notes:''});
       }
-      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:$('#vQty',body).value||1, concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:vendor,
+      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:($('#vQty',body).value==='' ? (v.remainingMg!=null ? 0 : 1) : $('#vQty',body).value), concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:vendor,
         ...(()=>{ const ts = tests.map(t=>({...t, lab:(t.lab||'').trim(), coaUrl:(t.coaUrl||'').trim()})).filter(testFilled); const f = ts[0] || {};
           return {testLab:f.lab||'', testMassMg:f.massMg||'', testPurity:f.purity||'', testEndo:f.endo||'', testDate:f.date||'', coaUrl:f.coaUrl||'', extraTests: ts.slice(1)}; })(),
         dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
