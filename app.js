@@ -842,71 +842,105 @@ function openDoseModal(p){
   });
 }
 /* ===================== Injection pen drawing ===================== */
-/* A white reusable injection pen, drawn horizontally: needle and threaded hub, clear cartridge holder with a printed
-   scale (the rubber plunger sits further toward the needle as the active vial empties), a matte white body carrying the
-   label, an arrow notch and dose-number window, and a knurled twist dial forming the end, with a thin peptide-colour ring.
+/* A white reusable injection pen modelled on a real insulin pen, drawn horizontally: translucent ribbed needle hub,
+   clear holder with a large printed scale (cartridge inside; the rubber plunger sits further toward the needle as the
+   active vial empties), a glossy white body carrying the printed label, a recessed panel with a domed dose lens showing
+   the number drum, a narrow dial ring with ribs running along the pen, and a short chrome button.
    o: {color, name, dose, units, sched, status, kind (good|due|bad|muted), pct (0-1 or null)} */
 function penSVG(o, id){
-  const A = o.color, W = 360, H = 64, cy = 30, R = 15, r = 12;
-  const hubX = 22, holderX = 36, bodyX = 138, dialX = 300, end = 344;
-  const mat = (gid, c, k=1)=> `<linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1">
-    <stop offset="0" stop-color="${shade(c,-.28*k)}"/><stop offset=".1" stop-color="${shade(c,.12*k)}"/><stop offset=".3" stop-color="${shade(c,.3*k)}"/>
-    <stop offset=".5" stop-color="${shade(c,.08*k)}"/><stop offset=".78" stop-color="${shade(c,-.12*k)}"/><stop offset=".92" stop-color="${shade(c,-.3*k)}"/><stop offset="1" stop-color="${shade(c,-.18*k)}"/></linearGradient>`;
-  const cartL = holderX+12, cartR = bodyX-6;
+  const A = o.color, W = 360, H = 66, cy = 30, R = 15, r = 12.5;
+  const hubX = 18, holderX = 34, bodyX = 132, dialX = 316, chromeX = 332, end = 342;
+  const cartL = holderX+13, cartR = bodyX-6;
   const lvl = o.pct==null ? 1 : Math.max(.03, Math.min(1, o.pct));
   const plX = cartL + (cartR - cartL - 9) * lvl;
-  const chip = {good:['#17844f','#e2f4ea'], due:['#c25e00','#fff0de'], bad:['#c0392b','#fdeaea'], muted:['#4c535c','#eceef2']}[o.kind] || ['#4c535c','#eceef2'];
-  const statusTxt = String(o.status).toUpperCase();
-  const sw = 10 + statusTxt.length*4.3, chipX = dialX-48-sw, tx = bodyX+12;
-  const sub = `${o.dose} · ${o.sched}`, room = chipX-4-tx;
+  const panelL = dialX-64, panelR = dialX-6, lensX = dialX-22;
+  const statusCol = {good:'#17844f', due:'#c25e00', bad:'#c0392b', muted:'#5b626b'}[o.kind] || '#5b626b';
+  const tx = bodyX+12, room = panelL-6-tx;
   const holder = `M${holderX} ${cy-r+3} Q${holderX} ${cy-r} ${holderX+4} ${cy-r} H${bodyX+2} V${cy+r} H${holderX+4} Q${holderX} ${cy+r} ${holderX} ${cy+r-3}Z`;
-  const units = o.units;
+  const body = `M${bodyX+5} ${cy-R} H${dialX} V${cy+R} H${bodyX+5} Q${bodyX} ${cy+R} ${bodyX} ${cy+R-5} V${cy-R+5} Q${bodyX} ${cy-R} ${bodyX+5} ${cy-R}Z`;
+  const u = o.units, isNum = typeof u==='number';
+  const fmtU = v=> String(Math.round(v*10)/10);
+  const prev = isNum ? fmtU(Math.max(0, u - (u>=10?1:.5))) : '', next = isNum ? fmtU(u + (u>=10?1:.5)) : '';
+  const sub = `${o.dose} · ${o.sched}`;
   return `<svg class="pen-svg" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>
-    ${mat(id+'b','#eceef1')}${mat(id+'d','#c9ccd3',1.2)}${mat(id+'h','#ffffff',.7)}
-    <linearGradient id="${id}gl" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7f93a2" stop-opacity=".7"/><stop offset=".12" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".26" stop-color="#ffffff" stop-opacity=".9"/><stop offset=".38" stop-color="#eef5f9" stop-opacity=".25"/><stop offset=".8" stop-color="#dce8f0" stop-opacity=".25"/><stop offset=".94" stop-color="#9fb3c2" stop-opacity=".55"/><stop offset="1" stop-color="#ffffff" stop-opacity=".6"/></linearGradient>
-    <linearGradient id="${id}lq" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${shade(A,-.1)}" stop-opacity=".55"/><stop offset=".35" stop-color="${shade(A,.55)}" stop-opacity=".35"/><stop offset="1" stop-color="${shade(A,-.2)}" stop-opacity=".6"/></linearGradient>
+    <linearGradient id="${id}b" x1="0" x2="0" y1="0" y2="1">
+      <stop offset="0" stop-color="#b9bcc3"/><stop offset=".07" stop-color="#e3e5e9"/><stop offset=".2" stop-color="#ffffff"/><stop offset=".3" stop-color="#fbfbfc"/>
+      <stop offset=".46" stop-color="#eceef1"/><stop offset=".72" stop-color="#dfe1e5"/><stop offset=".88" stop-color="#c3c6cc"/><stop offset=".95" stop-color="#d8dade"/><stop offset="1" stop-color="#b3b6bd"/></linearGradient>
+    <linearGradient id="${id}spec" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".08" stop-color="#fff" stop-opacity=".95"/><stop offset=".85" stop-color="#fff" stop-opacity=".9"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <linearGradient id="${id}pan" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#b8bbc2"/><stop offset=".18" stop-color="#d4d7dc"/><stop offset=".55" stop-color="#e4e6ea"/><stop offset=".9" stop-color="#f4f5f7"/><stop offset="1" stop-color="#ffffff"/></linearGradient>
+    <linearGradient id="${id}kn" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8f939b"/><stop offset=".18" stop-color="#d9dbe0"/><stop offset=".32" stop-color="#f3f4f6"/><stop offset=".55" stop-color="#c3c6cc"/><stop offset=".85" stop-color="#9da0a8"/><stop offset="1" stop-color="#b5b8be"/></linearGradient>
+    <linearGradient id="${id}knx" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".18"/><stop offset=".2" stop-color="#000" stop-opacity="0"/><stop offset=".8" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient>
+    <linearGradient id="${id}cr" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6e717a"/><stop offset=".16" stop-color="#e6e8ec"/><stop offset=".28" stop-color="#ffffff"/><stop offset=".42" stop-color="#9fa3ab"/><stop offset=".62" stop-color="#d9dce1"/><stop offset=".84" stop-color="#7c8089"/><stop offset="1" stop-color="#a9adb4"/></linearGradient>
+    <linearGradient id="${id}crx" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".25"/><stop offset=".25" stop-color="#000" stop-opacity="0"/><stop offset=".7" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></linearGradient>
+    <linearGradient id="${id}gl" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8396a5" stop-opacity=".75"/><stop offset=".1" stop-color="#ffffff" stop-opacity=".6"/><stop offset=".22" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".34" stop-color="#eef5f9" stop-opacity=".2"/><stop offset=".78" stop-color="#dce8f0" stop-opacity=".2"/><stop offset=".93" stop-color="#9fb3c2" stop-opacity=".5"/><stop offset="1" stop-color="#ffffff" stop-opacity=".7"/></linearGradient>
+    <linearGradient id="${id}hub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8ea6c9" stop-opacity=".9"/><stop offset=".3" stop-color="#eef4fb" stop-opacity=".9"/><stop offset=".6" stop-color="#c3d3ea" stop-opacity=".85"/><stop offset="1" stop-color="#7f97bd" stop-opacity=".9"/></linearGradient>
+    <linearGradient id="${id}lq" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${shade(A,-.1)}" stop-opacity=".5"/><stop offset=".35" stop-color="${shade(A,.55)}" stop-opacity=".3"/><stop offset="1" stop-color="${shade(A,-.2)}" stop-opacity=".55"/></linearGradient>
     <linearGradient id="${id}rub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset=".3" stop-color="#6b6e75"/><stop offset=".6" stop-color="#3a3c41"/><stop offset="1" stop-color="#1c1d20"/></linearGradient>
     <linearGradient id="${id}rod" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8d9098"/><stop offset=".4" stop-color="#f1f2f4"/><stop offset="1" stop-color="#7a7d85"/></linearGradient>
-    <radialGradient id="${id}sh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#1c2a3a" stop-opacity=".28"/><stop offset="1" stop-color="#1c2a3a" stop-opacity="0"/></radialGradient>
+    <radialGradient id="${id}lens" cx=".38" cy=".3" r=".75"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".25" stop-color="#fff" stop-opacity=".35"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".92" stop-color="#5d6470" stop-opacity=".25"/><stop offset="1" stop-color="#3b414b" stop-opacity=".55"/></radialGradient>
+    <radialGradient id="${id}sh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#1c2a3a" stop-opacity=".3"/><stop offset="1" stop-color="#1c2a3a" stop-opacity="0"/></radialGradient>
     <clipPath id="${id}cart"><rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" rx="3"/></clipPath>
+    <clipPath id="${id}ln"><circle cx="${lensX}" cy="${cy}" r="8.6"/></clipPath>
   </defs>
-  <ellipse cx="${W/2+10}" cy="${cy+R+7}" rx="${W/2-24}" ry="4.5" fill="url(#${id}sh)"/>
-  <rect x="3" y="${cy-.55}" width="${hubX-1}" height="1.1" fill="url(#${id}rod)"/>
-  <rect x="${hubX-6}" y="${cy-2}" width="7" height="4" rx="1" fill="url(#${id}h)"/>
-  <rect x="${hubX}" y="${cy-7}" width="${holderX-hubX+2}" height="14" rx="2.5" fill="url(#${id}h)"/>
-  ${Array.from({length:5},(_,i)=>`<rect x="${hubX+2+i*2.6}" y="${cy-7}" width=".8" height="14" fill="#000" fill-opacity=".14"/>`).join('')}
-  <path d="${holder}" fill="#eaf1f6" fill-opacity=".35"/>
+  <ellipse cx="${W/2+8}" cy="${cy+R+8}" rx="${W/2-22}" ry="4.6" fill="url(#${id}sh)"/>
+  <!-- needle + translucent ribbed hub -->
+  <rect x="2" y="${cy-.55}" width="${hubX}" height="1.1" fill="url(#${id}rod)"/>
+  <path d="M${hubX} ${cy-8} H${holderX+1} V${cy+8} H${hubX} Q${hubX-3} ${cy+8} ${hubX-3} ${cy+5} V${cy-5} Q${hubX-3} ${cy-8} ${hubX} ${cy-8}Z" fill="url(#${id}hub)"/>
+  ${Array.from({length:6},(_,i)=>`<rect x="${hubX+1+i*2.4}" y="${cy-8}" width=".7" height="16" fill="#3e5a86" fill-opacity=".28"/>`).join('')}
+  <rect x="${hubX-3}" y="${cy-6}" width="${holderX-hubX+4}" height="2" fill="#fff" fill-opacity=".6"/>
+  <!-- clear holder, cartridge, large printed scale -->
+  <path d="${holder}" fill="#eaf1f6" fill-opacity=".3"/>
   <g clip-path="url(#${id}cart)">
-    <rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" fill="#f6fafc" fill-opacity=".5"/>
+    <rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" fill="#f6fafc" fill-opacity=".45"/>
     ${o.pct==null ? '' : `<rect x="${cartL}" y="${cy-8.5}" width="${plX-cartL}" height="17" fill="url(#${id}lq)"/>`}
     <rect x="${plX+9}" y="${cy-1.6}" width="${cartR-plX}" height="3.2" fill="url(#${id}rod)"/>
     <rect x="${plX}" y="${cy-8.5}" width="9" height="17" rx="1.5" fill="url(#${id}rub)"/>
     <rect x="${plX+2.6}" y="${cy-8.5}" width=".6" height="17" fill="#000" fill-opacity=".45"/><rect x="${plX+5.6}" y="${cy-8.5}" width=".6" height="17" fill="#000" fill-opacity=".45"/>
   </g>
-  <rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" rx="3" fill="none" stroke="#9fb2c0" stroke-opacity=".7" stroke-width=".5"/>
   <path d="M${cartL} ${cy-5} q-6 0 -8 3 v4 q2 3 8 3" fill="#f6fafc" fill-opacity=".6" stroke="#9fb2c0" stroke-opacity=".6" stroke-width=".5"/>
-  ${Array.from({length:11},(_,i)=>{ const x = cartR - 4 - i*((cartR-cartL-8)/10), lab = i%2===0 && i>0;
-    return `<rect x="${x}" y="${cy+6.5}" width=".55" height="${lab?4:2.5}" fill="#1d2026" fill-opacity=".75"/>${lab?`<text x="${x}" y="${cy+14.3}" text-anchor="middle" font-size="3.6" font-weight="700" font-family="system-ui,sans-serif" fill="#1d2026" fill-opacity=".75">${i*10}</text>`:''}`; }).join('')}
+  ${Array.from({length:25},(_,i)=>{ const x = cartR - 5 - i*((cartR-cartL-10)/24), big = i%4===0, lab = i%4===0;
+    return `<rect x="${x-.3}" y="${cy+2.2}" width=".6" height="${big?4.6:2.6}" fill="#1b1e24" fill-opacity=".8"/>${lab?`<text x="${x}" y="${cy+11.4}" text-anchor="middle" font-size="4.6" font-weight="700" font-family="system-ui,sans-serif" fill="#1b1e24" fill-opacity=".85">${(24-i)*10+20}</text>`:''}`; }).join('')}
   <path d="${holder}" fill="url(#${id}gl)"/>
   <path d="${holder}" fill="none" stroke="#7f93a2" stroke-opacity=".55" stroke-width=".6"/>
-  <path d="M${bodyX+4} ${cy-R} H${dialX} V${cy+R} H${bodyX+4} Q${bodyX} ${cy+R} ${bodyX} ${cy+R-4} V${cy-R+4} Q${bodyX} ${cy-R} ${bodyX+4} ${cy-R}Z" fill="url(#${id}b)"/>
-  <rect x="${bodyX}" y="${cy-R+2}" width="1.4" height="${2*R-4}" fill="#000" fill-opacity=".18"/>
-  <text x="${tx}" y="${cy-1.5}" font-size="10.6" font-weight="800" font-family="system-ui,-apple-system,sans-serif" fill="#15181c"${String(o.name).length>14?` textLength="100" lengthAdjust="spacingAndGlyphs"`:''}>${esc(o.name)}</text>
-  <text x="${tx}" y="${cy+9.5}" font-size="7" font-weight="600" font-family="system-ui,-apple-system,sans-serif" fill="#3b4149"${sub.length*3.6>room?` textLength="${room}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(sub)}</text>
-  <rect x="${chipX}" y="${cy+2.2}" width="${sw}" height="10" rx="5" fill="${chip[1]}"/>
-  <text x="${chipX+sw/2}" y="${cy+9.4}" text-anchor="middle" font-size="6.2" font-weight="800" font-family="system-ui,sans-serif" fill="${chip[0]}"${statusTxt.length>12?` textLength="${sw-8}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(statusTxt)}</text>
-  <path d="M${dialX-44} ${cy} l10 -5.5 v11z" fill="#b9bcc3" opacity=".8"/>
-  <path d="M${dialX-44} ${cy} l10 -5.5" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".6"/>
-  <rect x="${dialX-30}" y="${cy-8}" width="24" height="16" rx="2.5" fill="#26282d"/>
-  <rect x="${dialX-28.5}" y="${cy-6.5}" width="21" height="13" rx="1.5" fill="#fbfbf8"/>
-  ${typeof units==='number' ? `<text x="${dialX-18}" y="${cy-7.6}" text-anchor="middle" font-size="4" font-weight="700" font-family="ui-monospace,monospace" fill="#9a9da3">${Math.max(0,units-2)}</text>` : ''}
-  <text x="${dialX-18}" y="${cy+3.3}" text-anchor="middle" font-size="${String(units).length>3?7:9}" font-weight="800" font-family="ui-monospace,Menlo,monospace" fill="#111">${esc(String(units))}</text>
-  <rect x="${dialX-28.5}" y="${cy-6.5}" width="21" height="3.2" fill="#000" fill-opacity=".08"/><rect x="${dialX-28.5}" y="${cy+3.4}" width="21" height="3.1" fill="#000" fill-opacity=".1"/>
-  <path d="M${dialX} ${cy-R-1} H${end-7} Q${end} ${cy-R-1} ${end} ${cy-R+6} V${cy+R-6} Q${end} ${cy+R+1} ${end-7} ${cy+R+1} H${dialX}Z" fill="url(#${id}d)"/>
-  ${Array.from({length:13},(_,i)=>`<rect x="${dialX+3+i*2.4}" y="${cy-R}" width=".9" height="${2*R}" fill="#000" fill-opacity=".2"/><rect x="${dialX+3.9+i*2.4}" y="${cy-R}" width=".5" height="${2*R}" fill="#fff" fill-opacity=".14"/>`).join('')}
-  <path d="M${end-6} ${cy-R} Q${end-.5} ${cy-R} ${end-.5} ${cy-R+6} V${cy+R-6} Q${end-.5} ${cy+R} ${end-6} ${cy+R}" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width=".8"/>
-  <rect x="${dialX-1.6}" y="${cy-R}" width="2.2" height="${2*R}" fill="${A}"/>
-  <rect x="${dialX+.6}" y="${cy-R-1}" width="1" height="${2*R+2}" fill="#000" fill-opacity=".22"/>
+  <!-- glossy body -->
+  <path d="${body}" fill="url(#${id}b)"/>
+  <rect x="${bodyX}" y="${cy-R+3}" width="3" height="${2*R-6}" rx="1.5" fill="#9ea2a9"/>
+  <rect x="${bodyX+3}" y="${cy-R+3}" width="1" height="${2*R-6}" fill="#fff" fill-opacity=".7"/>
+  <rect x="${bodyX+6}" y="${cy-R+4.2}" width="${dialX-bodyX-8}" height="2.4" rx="1.2" fill="url(#${id}spec)"/>
+  <rect x="${bodyX+10}" y="${cy+R-3.4}" width="${dialX-bodyX-16}" height="1" rx=".5" fill="#fff" fill-opacity=".55"/>
+  <!-- printed label -->
+  <text x="${tx}" y="${cy-1}" font-size="10.4" font-weight="800" font-family="system-ui,-apple-system,sans-serif" fill="#15181c"${String(o.name).length>13?` textLength="${room}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(o.name)}</text>
+  <text x="${tx}" y="${cy+8.6}" font-size="6.6" font-weight="600" font-family="system-ui,-apple-system,sans-serif" fill="#3b4149"${(sub.length+o.status.length+3)*3.3>room?` textLength="${room}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(sub)} · <tspan font-weight="800" fill="${statusCol}">${esc(o.status.toUpperCase())}</tspan></text>
+  <!-- recessed panel with domed dose lens -->
+  <rect x="${panelL}" y="${cy-R+4.5}" width="${panelR-panelL}" height="${2*R-9}" rx="${R-4.5}" fill="url(#${id}pan)"/>
+  <rect x="${panelL}" y="${cy-R+4.5}" width="${panelR-panelL}" height="${2*R-9}" rx="${R-4.5}" fill="none" stroke="#8e929a" stroke-opacity=".55" stroke-width=".5"/>
+  <path d="M${panelL+6} ${cy+R-4.6} H${panelR-6}" stroke="#fff" stroke-opacity=".9" stroke-width=".7"/>
+  <path d="M${lensX-13} ${cy} l4.5 -2.8 v5.6z" fill="#3b4149"/>
+  <circle cx="${lensX}" cy="${cy}" r="9.6" fill="#7b808a"/>
+  <circle cx="${lensX}" cy="${cy}" r="8.6" fill="#fbfbf8"/>
+  <g clip-path="url(#${id}ln)">
+    ${isNum ? `<text x="${lensX+1}" y="${cy-5.6}" text-anchor="middle" font-size="4.2" font-weight="700" font-family="system-ui,sans-serif" fill="#7d828b">${prev}</text>
+    <text x="${lensX+1}" y="${cy+8.4}" text-anchor="middle" font-size="4.2" font-weight="700" font-family="system-ui,sans-serif" fill="#7d828b">${next}</text>` : ''}
+    <rect x="${lensX-8.6}" y="${cy-4.4}" width="17.2" height="8.8" fill="#fff"/>
+    <rect x="${lensX-8.6}" y="${cy-4.6}" width="17.2" height=".5" fill="#2b2f36" fill-opacity=".5"/><rect x="${lensX-8.6}" y="${cy+4.1}" width="17.2" height=".5" fill="#2b2f36" fill-opacity=".5"/>
+    <text x="${lensX+1}" y="${cy+3.1}" text-anchor="middle" font-size="${String(u).length>3?6.4:String(u).length>2?7.4:8.6}" font-weight="900" font-family="system-ui,sans-serif" fill="#101216">${esc(String(u))}</text>
+    <rect x="${lensX-8.6}" y="${cy-8.6}" width="3" height="17.2" fill="#000" fill-opacity=".08"/>
+  </g>
+  <circle cx="${lensX}" cy="${cy}" r="8.6" fill="url(#${id}lens)"/>
+  <ellipse cx="${lensX-3}" cy="${cy-4.4}" rx="3.6" ry="1.8" fill="#fff" fill-opacity=".85" transform="rotate(-25 ${lensX-3} ${cy-4.4})"/>
+  <circle cx="${lensX}" cy="${cy}" r="9.6" fill="none" stroke="#fff" stroke-opacity=".6" stroke-width=".5"/>
+  <!-- dial: narrow ring with ribs running along the pen (seen side-on they bunch toward the edges), then a short chrome button a little lower than the dial -->
+  ${(()=>{ const dW = 15, dR = R+2.2, dx = dialX, bx = dialX+dW, bR = R-2.4, bW = 9;
+    const ribs = Array.from({length:17},(_,i)=>{ const th = -Math.PI/2 + (i+.5)*Math.PI/17, y = cy + Math.sin(th)*(dR-1), w = Math.max(.35, Math.cos(th)*1.1);
+      return `<rect x="${dx+1.2}" y="${y-w/2}" width="${dW-2.4}" height="${w}" rx="${w/2}" fill="#000" fill-opacity="${.16+.18*(1-Math.cos(th))}"/><rect x="${dx+1.2}" y="${y+w/2}" width="${dW-2.4}" height="${Math.max(.25,w*.45)}" fill="#fff" fill-opacity="${.32*Math.cos(th)}"/>`; }).join('');
+    return `<rect x="${dx-1.4}" y="${cy-R}" width="1.6" height="${2*R}" fill="${A}"/>
+    <rect x="${dx}" y="${cy-dR}" width="${dW}" height="${2*dR}" rx="2.2" fill="url(#${id}kn)"/>
+    ${ribs}
+    <rect x="${dx}" y="${cy-dR}" width="${dW}" height="${2*dR}" rx="2.2" fill="url(#${id}knx)"/>
+    <rect x="${bx-.4}" y="${cy-bR}" width="1.2" height="${2*bR}" fill="#3f434a" fill-opacity=".55"/>
+    <path d="M${bx+.8} ${cy-bR} H${bx+bW-2.6} Q${bx+bW} ${cy-bR} ${bx+bW} ${cy-bR+3} V${cy+bR-3} Q${bx+bW} ${cy+bR} ${bx+bW-2.6} ${cy+bR} H${bx+.8}Z" fill="url(#${id}cr)"/>
+    <path d="M${bx+.8} ${cy-bR} H${bx+bW-2.6} Q${bx+bW} ${cy-bR} ${bx+bW} ${cy-bR+3} V${cy+bR-3} Q${bx+bW} ${cy+bR} ${bx+bW-2.6} ${cy+bR} H${bx+.8}Z" fill="url(#${id}crx)"/>
+    <path d="M${bx+bW-2.4} ${cy-bR+.6} Q${bx+bW-.6} ${cy-bR+.6} ${bx+bW-.6} ${cy-bR+3} V${cy+bR-3} Q${bx+bW-.6} ${cy+bR-.6} ${bx+bW-2.4} ${cy+bR-.6}" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width=".6"/>`; })()}
   </svg>`;
 }
 const SYRINGE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2l4 4"/><path d="M17 7l3-3"/><path d="M19 9L8.7 19.3a2.4 2.4 0 0 1-3.4 0l-.6-.6a2.4 2.4 0 0 1 0-3.4L15 5"/><path d="M9 11l4 4"/><path d="M5 19l-3 3"/><path d="M14 4l6 6"/></svg>';
