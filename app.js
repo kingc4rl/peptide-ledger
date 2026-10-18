@@ -1841,40 +1841,37 @@ function renderVials(){
     const anyCalc = calcs.some(c=> c && c.daysRemaining!=null);
     const totalDays = calcs.reduce((s,c)=> s + (c && c.daysRemaining!=null ? Math.max(c.daysRemaining,0) : 0), 0);
     const totalLow = anyCalc && totalDays<=7;
+    const color = colorFor(compound, gi);
     const rows = lots.map((v,i)=>{
       const calc = calcs[i];
       const low = calc && calc.daysRemaining!=null && calc.daysRemaining<=7;
       const budDays = v.bud ? daysBetween(todayISO(), v.bud) : null;
       const budSoon = budDays!=null && budDays<=7;
       const activeFor = state.protocols.find(p=> p.status!=='archived' && p.activeVialId===v.id);
+      const qty = num(v.qty,1), mg = num(v.mgPerVial,0);
       const isOpen = v.remainingMg!=null;
-      const pct = isOpen && num(v.mgPerVial,0)>0 ? Math.max(0,Math.min(100,(v.remainingMg/num(v.mgPerVial,1))*100)) : null;
-      return `<div class="card-flat supply-item-card" data-open-vial="${v.id}" style="margin-bottom:6px;min-width:0;cursor:pointer;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          ${v.pharmacy? `<span class="pill pill-tar">${esc(v.pharmacy)}</span>` : ''}
-          ${v.concentration? `<span class="pill pill-muted">${num(v.concentration)} mg/mL</span>` : ''}
-          ${num(v.qty,1)>1? `<span class="pill pill-muted">×${num(v.qty,1)} sealed</span>` : ''}
-          ${v.bud? `<span class="pill ${budSoon?'pill-warn':'pill-info'}">BUD ${fmtDateShort(v.bud)}</span>` : ''}
-          ${activeFor? `<span class="pill pill-pep">In use — ${esc(activeFor.compound||'protocol')}</span>` : ''}
-        </div>
-        ${isOpen ? `
-        <div style="margin-top:8px;">
-          <div style="display:flex;justify-content:space-between;font-size:11.5px;color:var(--muted);margin-bottom:3px;">
-            <span>${Math.round(v.remainingMg*10)/10}mg left of ${num(v.mgPerVial,0)}mg</span>
-            <span>${Math.round(pct)}%</span>
+      const pct = isOpen && mg>0 ? Math.max(0,Math.min(1, v.remainingMg/mg)) : null;
+      const status = isOpen
+        ? `<span class="pill pill-pep">Opened${v.dateOpened?' '+esc(fmtDateShort(v.dateOpened)):''}</span><span class="lot-left mono">${Math.round(v.remainingMg*10)/10} / ${mg} mg</span>`
+        : `<span class="pill pill-muted">Unopened</span>`;
+      const tests = vialTests(v);
+      const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:'', v.price?`$${num(v.price).toFixed(2)}`:''].filter(Boolean).join(' · ');
+      return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
+        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty>1?`<span class="lot-qty">×${qty}</span>`:''}</div>
+        <div class="lot-info">
+          <div class="lot-name">${esc(v.pharmacy||'No vendor')}</div>
+          <div class="lot-pills">${status}
+            ${activeFor? `<span class="pill pill-info">In use</span>` : ''}
+            ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : ''}
+            ${v.bud? `<span class="pill ${budSoon?'pill-warn':'pill-muted'}">BUD ${esc(fmtDateShort(v.bud))}</span>` : ''}
           </div>
-          <div class="progress-track"><div class="progress-fill" style="width:${pct}%;background:${pct<=15?'var(--warn)':'var(--accent-pep)'};"></div></div>
-        </div>` : `
-        <div style="margin-top:6px;">
-          ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : `<span class="pill pill-muted">Link a protocol</span>`}
-        </div>`}
-        ${labTestHTML(v)}
-        <div class="footnote" style="margin-top:6px;overflow-wrap:anywhere;">${num(v.mgPerVial,0)}mg vial${v.dateOpened? ' · opened '+fmtDateShort(v.dateOpened) : ' · unopened'}${v.lot? ' · Lot '+esc(v.lot) : ''}${v.price? ' · $'+num(v.price).toFixed(2) : ''}</div>
+          <div class="lot-meta">${qty} vial${qty===1?'':'s'}${meta?' · '+meta:''}</div>
+        </div>
+        ${tests.length ? `<div class="lot-coas">${tests.map((t,k)=>`<button type="button" class="coa-mini" data-coa-vial="${v.id}" data-coa-i="${k}" aria-label="View certificate of analysis${t.lab?' from '+esc(t.lab):''}">${coaMiniSVG(t, mg)}</button>`).join('')}</div>` : ''}
       </div>`;
     }).join('');
     const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
     const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
-    const color = colorFor(compound, gi);
     const meta = `${totalQty} vial${totalQty===1?'':'s'}${anyCalc ? ` · ${totalDays<=0?'out':'~'+totalDays+'d'}` : ''}`;
     const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
     return {compound, color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
@@ -1914,7 +1911,15 @@ function renderVials(){
     openVialModal(null);
     const f = $('#vCompound'); if(f) f.value = b.dataset.addVial;
   }));
-  $$('[data-open-vial]',el).forEach(card=> card.addEventListener('click', e=>{ if(e.target.closest('[data-coa]')) return; openVialModal(state.vials.find(v=>v.id===card.dataset.openVial)); }));
+  $$('[data-coa-vial]',el).forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = state.vials.find(x=>x.id===b.dataset.coaVial); if(v) openCoaModal(v, +b.dataset.coaI);
+  }));
+  $$('[data-open-vial]',el).forEach(card=>{
+    const open = ()=> openVialModal(state.vials.find(v=>v.id===card.dataset.openVial));
+    card.addEventListener('click', e=>{ if(e.target.closest('[data-coa],[data-coa-vial]')) return; open(); });
+    card.addEventListener('keydown', e=>{ if((e.key==='Enter'||e.key===' ') && e.target===card){ e.preventDefault(); open(); } });
+  });
 }
 let stashSel = null;   // compound whose stash detail is open under its vial
 /* Colour for a compound's vial cap and liquid: its protocol's colour when there is one. */
@@ -1949,10 +1954,85 @@ function vialSVG(g, i){
         : `<rect x="9" y="${ly}" width="46" height="${bot-ly}" fill="${g.color}" fill-opacity=".38"/><rect x="9" y="${ly}" width="46" height="2.2" fill="${g.color}" fill-opacity=".7"/>`}
       <rect x="14" y="${top+4}" width="5" height="${bot-top-14}" rx="2.5" fill="#fff" fill-opacity=".7"/>
     </g>
-    ${g.mgTag ? `<rect x="9" y="52" width="46" height="22" fill="rgba(255,255,255,.88)"/><rect x="9" y="52" width="46" height="3" fill="${g.color}"/>
+    ${g.brand ? vialBrandLabel(g) : g.mgTag ? `<rect x="9" y="52" width="46" height="22" fill="rgba(255,255,255,.88)"/><rect x="9" y="52" width="46" height="3" fill="${g.color}"/>
     <text x="32" y="68.5" text-anchor="middle" font-size="10.5" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#3a3530">${esc(g.mgTag)}</text>` : ''}
     <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="none" stroke="rgba(60,50,40,.28)" stroke-width="1.2"/>
   </svg>`;
+}
+/* Printed label for a single lot's vial: vendor name over the mg, squeezed to fit long names. */
+function vialBrandLabel(g){
+  // long vendor names keep whole words (e.g. "Peptide Sciences Research Supply" -> "PEPTIDE SCIENCES")
+  const words = String(g.brand).toUpperCase().trim().split(/\s+/);
+  let name = words[0].slice(0, 14);
+  for(const w of words.slice(1)){ if((name+' '+w).length > 16) break; name += ' '+w; }
+  const fit = name.length > 7 ? ` textLength="40" lengthAdjust="spacingAndGlyphs"` : '';
+  return `<rect x="9" y="48" width="46" height="32" fill="rgba(255,255,255,.92)"/><rect x="9" y="48" width="46" height="3.5" fill="${g.color}"/>
+    <text x="32" y="62" text-anchor="middle" font-size="8.5" font-weight="800" letter-spacing=".4" font-family="system-ui, sans-serif" fill="#2b2622"${fit}>${esc(name)}</text>
+    ${g.mgTag ? `<text x="32" y="74.5" text-anchor="middle" font-size="9" font-weight="600" font-family="IBM Plex Mono, monospace" fill="#5c544c">${esc(g.mgTag)}</text>` : ''}`;
+}
+/* Mass as a share of the label claim, and a traffic-light grade for each assay. */
+function coaGrades(t, labelMg){
+  const mass = num(t.massMg,null), pur = num(t.purity,null), endo = num(t.endo,null);
+  const massPct = mass!=null && labelMg>0 ? mass/labelMg*100 : null;
+  return {
+    mass, pur, endo, massPct,
+    massG: massPct==null ? null : massPct>=90 && massPct<=110 ? 'ok' : massPct>=80 && massPct<=120 ? 'warn' : 'bad',
+    purG: pur==null ? null : pur>=98 ? 'ok' : pur>=95 ? 'warn' : 'bad',
+    endoG: endo==null ? null : endo<=1 ? 'ok' : endo<=5 ? 'warn' : 'bad'
+  };
+}
+/* Thumbnail of a certificate: paper sheet, header band, text lines, a results table and a seal. */
+function coaMiniSVG(t, labelMg){
+  const g = coaGrades(t, labelMg);
+  const dot = k=> k==='ok' ? '#17844f' : k==='warn' ? '#c98a12' : k==='bad' ? '#cf3434' : '#c9c3ba';
+  return `<svg viewBox="0 0 44 56" aria-hidden="true">
+    <rect x="1" y="1" width="42" height="54" rx="2.5" fill="#fffdf9" stroke="rgba(60,50,40,.25)"/>
+    <rect x="1" y="1" width="42" height="9" rx="2.5" fill="#2f4a6b"/><rect x="1" y="7" width="42" height="3" fill="#2f4a6b"/>
+    <rect x="6" y="4" width="20" height="2.4" rx="1" fill="#fff" fill-opacity=".85"/>
+    <rect x="6" y="14" width="26" height="2" rx="1" fill="#8d857b"/><rect x="6" y="18.5" width="18" height="2" rx="1" fill="#b8b0a5"/>
+    ${[['massG',25],['purG',31],['endoG',37]].map(([k,y])=>`<rect x="6" y="${y}" width="22" height="2" rx="1" fill="#cfc8bd"/><circle cx="35" cy="${y+1}" r="2" fill="${dot(g[k])}"/>`).join('')}
+    <circle cx="33" cy="47" r="6" fill="none" stroke="#b33a3a" stroke-width="1.2" stroke-opacity=".75"/><circle cx="33" cy="47" r="3.6" fill="none" stroke="#b33a3a" stroke-width=".7" stroke-opacity=".6"/>
+    <rect x="6" y="46" width="14" height="1.4" fill="#8d857b"/>
+  </svg><span>COA</span>`;
+}
+/* Full certificate, rebuilt from what the user entered for this vial's lab test. */
+function openCoaModal(v, i){
+  const t = vialTests(v)[i]; if(!t) return;
+  const labelMg = num(v.mgPerVial,0);
+  const g = coaGrades(t, labelMg);
+  const chip = k=> k ? `<span class="coa-res ${k}">${k==='ok'?'Conforms':k==='warn'?'Borderline':'Out of range'}</span>` : '<span class="coa-res">—</span>';
+  const fmt = (x,d=2)=> x==null ? '—' : String(Math.round(x*10**d)/10**d);
+  const coa = safeUrl(t.coaUrl);
+  const lab = t.lab || 'Independent laboratory';
+  const ref = `${(lab.replace(/[^A-Za-z]/g,'').slice(0,3)||'LAB').toUpperCase()}-${(t.date||'').replace(/-/g,'') || '000000'}-${(v.lot||v.id||'').toString().replace(/[^A-Za-z0-9]/g,'').slice(-5).toUpperCase() || '00000'}`;
+  openModal('Certificate of analysis', `
+    <div class="coa-doc">
+      <div class="coa-band"><div class="coa-logo">${esc(lab.slice(0,1).toUpperCase())}</div><div><div class="coa-lab">${esc(lab)}</div><div class="coa-sub">Analytical testing report</div></div></div>
+      <div class="coa-title">Certificate of Analysis</div>
+      <div class="coa-ref mono">Ref ${esc(ref)}</div>
+      <table class="coa-kv">
+        <tr><th>Sample</th><td>${esc(v.compound||'—')}</td></tr>
+        <tr><th>Supplier</th><td>${esc(v.pharmacy||'—')}</td></tr>
+        <tr><th>Lot / batch</th><td class="mono">${esc(v.lot||'—')}</td></tr>
+        <tr><th>Label claim</th><td class="mono">${labelMg?esc(labelMg+' mg / vial'):'—'}</td></tr>
+        <tr><th>Test date</th><td>${t.date?esc(fmtDate(t.date)):'—'}</td></tr>
+      </table>
+      <table class="coa-res-t">
+        <thead><tr><th>Test</th><th>Method</th><th>Result</th><th></th></tr></thead>
+        <tbody>
+          <tr><td>Content</td><td>HPLC</td><td class="mono">${g.mass==null?'—':esc(fmt(g.mass)+' mg')}${g.massPct!=null?`<small>${esc(fmt(g.massPct,1))}% of label</small>`:''}</td><td>${chip(g.massG)}</td></tr>
+          <tr><td>Purity</td><td>HPLC</td><td class="mono">${g.pur==null?'—':esc(fmt(g.pur)+'%')}</td><td>${chip(g.purG)}</td></tr>
+          <tr><td>Endotoxin</td><td>LAL</td><td class="mono">${g.endo==null?'—':esc(fmt(g.endo,3)+' EU/mg')}</td><td>${chip(g.endoG)}</td></tr>
+        </tbody>
+      </table>
+      <div class="coa-foot">
+        <div class="coa-sign"><div class="coa-sig-line"></div><span>Analyst</span></div>
+        <div class="coa-seal"><span>${esc(lab.slice(0,12).toUpperCase())}</span><b>TESTED</b><span>${t.date?esc(fmtDateShort(t.date)):''}</span></div>
+      </div>
+    </div>
+    <p class="footnote" style="margin-top:10px;">Rebuilt from the values you entered for this vial. Grades: mass 90–110% of label, purity ≥ 98%, endotoxin ≤ 1 EU/mg.</p>
+    <div class="form-actions">${coa?`<a class="btn" href="${esc(coa)}" target="_blank" rel="noopener">Open original report ↗</a>`:''}<button type="button" class="btn btn-accent-pep" id="coaEdit">Edit vial</button></div>
+  `, body=>{ $('#coaEdit',body).addEventListener('click', ()=>{ closeModal(); openVialModal(v); }); });
 }
 /* Lab tests on a vial: the first lives in flat fields (testLab, testMassMg, …); more go in v.extraTests. */
 function testFilled(t){ return !!(t && (t.lab || t.massMg || t.purity || t.endo || t.coaUrl)); }

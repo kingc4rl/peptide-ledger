@@ -894,6 +894,48 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .vial-add{ margin-left:auto; font-weight:600; }
 .vial-detail .supply-item-card:last-child{ margin-bottom:0 !important; }
 @keyframes vialOpen{ from{ opacity:0; transform:translateY(-6px); } to{ opacity:1; transform:none; } }
+
+/* Lots under an opened vial: each lot is its own labelled vial, with COA thumbnails */
+.lot{ display:flex; align-items:center; gap:10px; padding:8px 10px 8px 6px; border-radius:14px; background:rgba(255,255,255,.6); border:1px solid rgba(40,30,20,.08); cursor:pointer; margin-top:6px; min-width:0; }
+.lot:first-of-type{ margin-top:0; }
+.lot:active{ transform:scale(.99); }
+.lot-vial{ position:relative; flex:none; width:44px; }
+.lot-vial .vial-svg{ width:44px; height:81px; }
+.lot-qty{ position:absolute; right:-6px; bottom:2px; font:700 10.5px/1 "IBM Plex Mono",monospace; background:var(--ink); color:#fff; border-radius:99px; padding:3px 5px; }
+.lot-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
+.lot-name{ font-weight:700; font-size:14px; overflow-wrap:anywhere; }
+.lot-pills{ display:flex; flex-wrap:wrap; gap:4px; align-items:center; }
+.lot-pills .pill{ font-size:10.5px; padding:2px 7px; }
+.lot-left{ font-size:11.5px; color:var(--muted); }
+.lot-meta{ font-size:11.5px; color:var(--muted); overflow-wrap:anywhere; }
+.lot-coas{ flex:none; display:flex; gap:4px; }
+.coa-mini{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:0; border:0; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.coa-mini svg{ width:34px; height:43px; filter:drop-shadow(0 2px 3px rgba(60,40,20,.18)); transform:rotate(-4deg); transition:transform .15s; }
+.coa-mini:active svg{ transform:rotate(0) scale(.95); }
+.coa-mini span{ font-size:9.5px; font-weight:800; letter-spacing:.06em; color:#2f4a6b; }
+/* Full certificate */
+.coa-doc{ background:#fffdf9; color:#2b2622; border:1px solid rgba(60,50,40,.18); border-radius:6px; padding:0 0 14px; box-shadow:0 8px 24px rgba(40,30,20,.12); overflow:hidden; font-size:13px; }
+.coa-band{ display:flex; align-items:center; gap:10px; background:#2f4a6b; color:#fff; padding:10px 14px; }
+.coa-logo{ width:30px; height:30px; border-radius:50%; background:#fff; color:#2f4a6b; display:grid; place-items:center; font-weight:800; font-size:15px; flex:none; }
+.coa-lab{ font-weight:700; font-size:14px; }
+.coa-sub{ font-size:10.5px; opacity:.8; letter-spacing:.04em; text-transform:uppercase; }
+.coa-title{ text-align:center; font:700 15px/1.2 Georgia, "Times New Roman", serif; letter-spacing:.08em; text-transform:uppercase; margin:14px 14px 2px; }
+.coa-ref{ text-align:center; font-size:10.5px; color:#8d857b; margin-bottom:10px; }
+.coa-kv, .coa-res-t{ width:calc(100% - 28px); margin:0 14px; border-collapse:collapse; }
+.coa-kv th, .coa-kv td{ text-align:left; padding:4px 0; border-bottom:1px dotted rgba(60,50,40,.22); font-size:12.5px; }
+.coa-kv th{ width:38%; color:#8d857b; font-weight:600; }
+.coa-res-t{ margin-top:12px; }
+.coa-res-t th{ text-align:left; font-size:10.5px; text-transform:uppercase; letter-spacing:.04em; color:#8d857b; border-bottom:1.5px solid #2b2622; padding:4px 4px 4px 0; background:none; }
+.coa-res-t td{ padding:7px 4px 7px 0; border-bottom:1px solid rgba(60,50,40,.14); font-size:12.5px; vertical-align:top; background:none; }
+.coa-res-t td:nth-child(2){ white-space:nowrap; }
+.coa-res-t td small{ display:block; font-size:10.5px; color:#8d857b; font-family:system-ui, sans-serif; }
+.coa-res{ font-size:10.5px; font-weight:700; white-space:nowrap; color:#8d857b; }
+.coa-res.ok{ color:var(--good); } .coa-res.warn{ color:#b07a0c; } .coa-res.bad{ color:var(--bad); }
+.coa-foot{ display:flex; align-items:flex-end; justify-content:space-between; margin:16px 14px 0; }
+.coa-sign{ font-size:10.5px; color:#8d857b; }
+.coa-sig-line{ width:110px; height:16px; border-bottom:1px solid #2b2622; margin-bottom:3px; background:linear-gradient(170deg, transparent 45%, rgba(47,74,107,.55) 46%, rgba(47,74,107,.55) 50%, transparent 51%) no-repeat 10px 2px / 70px 12px; }
+.coa-seal{ width:74px; height:74px; border-radius:50%; border:2px solid rgba(179,58,58,.7); box-shadow:inset 0 0 0 4px #fffdf9, inset 0 0 0 5px rgba(179,58,58,.5); color:rgba(179,58,58,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; transform:rotate(-12deg); font-size:7.5px; font-weight:700; letter-spacing:.06em; text-align:center; line-height:1.3; }
+.coa-seal b{ font-size:12px; letter-spacing:.12em; }
 </style>
 </head>
 <body>
