@@ -876,6 +876,24 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .es-line input{ flex:1; min-width:0; }
 .es-line select{ width:74px; flex:none; padding-left:6px !important; padding-right:4px !important; }
 .es-rm{ flex:none; width:32px; height:32px; border-radius:50%; border:0; background:rgba(40,30,20,.06); color:var(--muted); cursor:pointer; }
+
+/* Stash shelf: one vial per compound; tapping opens its lots underneath */
+.vial-shelf{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:10px 8px; }
+.vial-tile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 4px 8px; border-radius:18px; border:1px solid transparent; background:transparent; cursor:pointer; font:inherit; color:inherit; -webkit-tap-highlight-color:transparent; transition:background .2s, border-color .2s, transform .15s; min-width:0; }
+.vial-tile:active{ transform:scale(.96); }
+.vial-tile.on{ background:rgba(255,255,255,.65); border-color:rgba(255,255,255,.9); box-shadow:0 6px 18px rgba(60,40,20,.12); }
+.vial-svg{ width:58px; height:107px; filter:drop-shadow(0 4px 6px rgba(60,40,20,.14)); transition:transform .2s; }
+.vial-tile.on .vial-svg{ transform:translateY(-3px); }
+.vial-label{ font-weight:700; font-size:13px; line-height:1.2; text-align:center; max-width:100%; overflow-wrap:anywhere; margin-top:4px; }
+.vial-meta{ font-size:11px; color:var(--muted); white-space:nowrap; }
+.vial-tile.low .vial-meta{ color:var(--bad); font-weight:600; }
+.vial-detail{ grid-column:1/-1; position:relative; margin-top:2px; padding:12px; border-radius:16px; background:rgba(255,255,255,.55); border:1px solid rgba(40,30,20,.1); border-top:3px solid var(--vc); animation:vialOpen .22s ease; }
+.vial-detail::before{ content:''; position:absolute; top:-10px; left:var(--caret); width:14px; height:14px; transform:translateX(-50%) rotate(45deg); background:var(--vc); border-radius:3px 0 0 0; clip-path:polygon(0 0,100% 0,0 100%); }
+.vial-detail-h{ display:flex; align-items:center; gap:6px; flex-wrap:wrap; margin-bottom:8px; }
+.vial-detail-h strong{ font-size:15px; margin-right:2px; }
+.vial-add{ margin-left:auto; font-weight:600; }
+.vial-detail .supply-item-card:last-child{ margin-bottom:0 !important; }
+@keyframes vialOpen{ from{ opacity:0; transform:translateY(-6px); } to{ opacity:1; transform:none; } }
 </style>
 </head>
 <body>

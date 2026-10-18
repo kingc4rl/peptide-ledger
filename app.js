@@ -1830,7 +1830,7 @@ function renderVials(){
   });
   const BUD_MAX = 8640000000000000;
   order.sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
-  el.innerHTML = order.map(compound=>{
+  const shelf = order.map((compound, gi)=>{
     const lots = groups[compound].slice().sort((a,b)=>{
       const ta = a.bud ? new Date(a.bud).getTime() : BUD_MAX;
       const tb = b.bud ? new Date(b.bud).getTime() : BUD_MAX;
@@ -1872,18 +1872,87 @@ function renderVials(){
         <div class="footnote" style="margin-top:6px;overflow-wrap:anywhere;">${num(v.mgPerVial,0)}mg vial${v.dateOpened? ' · opened '+fmtDateShort(v.dateOpened) : ' · unopened'}${v.lot? ' · Lot '+esc(v.lot) : ''}${v.price? ' · $'+num(v.price).toFixed(2) : ''}</div>
       </div>`;
     }).join('');
-    return `<div style="margin-bottom:14px;">
-      <div style="margin-bottom:6px;">
-        <strong>${esc(compound)}</strong>
-        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;margin-top:4px;">
-          <span class="pill pill-muted">${totalQty} vial${totalQty===1?'':'s'}</span>
-          ${anyCalc ? `<span class="pill ${totalLow?'pill-warn':'pill-good'}">${totalDays<=0?'Out':'~'+totalDays+'d left'}</span>` : ''}
-        </div>
-      </div>
-      ${rows}
-    </div>`;
-  }).join('');
+    const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
+    const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
+    const color = colorFor(compound, gi);
+    const meta = `${totalQty} vial${totalQty===1?'':'s'}${anyCalc ? ` · ${totalDays<=0?'out':'~'+totalDays+'d'}` : ''}`;
+    const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
+    return {compound, color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
+  });
+  if(stashSel && !groups[stashSel]) stashSel = null;
+  el.innerHTML = `<div class="vial-shelf">${shelf.map((g,i)=>`
+    <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}">
+      ${vialSVG(g, i)}
+      <span class="vial-label">${esc(g.compound)}</span>
+      <span class="vial-meta">${esc(g.meta)}</span>
+    </button>`).join('')}</div>`;
+  const grid = $('.vial-shelf', el);
+  const selIdx = shelf.findIndex(g=> g.compound===stashSel);
+  if(selIdx>=0){
+    const g = shelf[selIdx];
+    // the detail opens directly under the row holding the tapped vial, with a caret pointing at it
+    const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
+    const tiles = $$('.vial-tile', grid);
+    const rowEnd = tiles[Math.min(tiles.length-1, Math.floor(selIdx/cols)*cols + cols-1)];
+    const det = document.createElement('div');
+    det.className = 'vial-detail';
+    det.style.setProperty('--vc', g.color);
+    det.style.setProperty('--caret', `${((selIdx%cols)+0.5)/cols*100}%`);
+    det.innerHTML = `<div class="vial-detail-h"><strong>${esc(g.compound)}</strong>
+        <span class="pill pill-muted">${g.totalQty} vial${g.totalQty===1?'':'s'}</span>
+        ${g.anyCalc ? `<span class="pill ${g.low?'pill-warn':'pill-good'}">${g.totalDays<=0?'Out':'~'+g.totalDays+'d left'}</span>` : ''}
+        <button type="button" class="link-btn vial-add" data-add-vial="${esc(g.compound)}">+ Add vial</button></div>
+      ${g.rows}`;
+    rowEnd.after(det);
+  }
+  $$('[data-vial-group]',el).forEach(b=> b.addEventListener('click', ()=>{
+    stashSel = stashSel===b.dataset.vialGroup ? null : b.dataset.vialGroup;
+    renderVials();
+    const t = $(`.vial-detail`, el); if(t) t.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }));
+  $$('[data-add-vial]',el).forEach(b=> b.addEventListener('click', ()=>{
+    openVialModal(null);
+    const f = $('#vCompound'); if(f) f.value = b.dataset.addVial;
+  }));
   $$('[data-open-vial]',el).forEach(card=> card.addEventListener('click', e=>{ if(e.target.closest('[data-coa]')) return; openVialModal(state.vials.find(v=>v.id===card.dataset.openVial)); }));
+}
+let stashSel = null;   // compound whose stash detail is open under its vial
+/* Colour for a compound's vial cap and liquid: its protocol's colour when there is one. */
+function colorFor(compound, i){
+  const cm = protocolColorMap(), key = (compound||'').trim().toLowerCase();
+  const p = state.protocols.find(x=> x.status!=='archived' && (x.compound||'').trim().toLowerCase()===key);
+  if(p && cm.get(p.id)) return cm.get(p.id);
+  // unlinked compounds take colours no protocol is using, so two vials don't look alike
+  const used = new Set(cm.values());
+  const free = PROTOCOL_COLORS.filter(c=> !used.has(c));
+  const pool = free.length ? free : PROTOCOL_COLORS;
+  return pool[i % pool.length];
+}
+/* A glass vial: coloured cap, liquid at the open vial's remaining level, or a powder cake when still sealed. */
+function vialSVG(g, i){
+  const id = 'vg'+i, top = 30, bot = 112, h = bot - top - 6;
+  const lvl = g.pct==null ? null : Math.max(0.04, g.pct);
+  const ly = lvl==null ? 0 : bot - 4 - h*lvl;
+  return `<svg class="vial-svg" viewBox="0 0 64 118" aria-hidden="true">
+    <defs>
+      <linearGradient id="${id}c" x1="0" x2="1"><stop offset="0" stop-color="${g.color}"/><stop offset=".45" stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="${g.color}"/><stop offset="1" stop-color="${g.color}" stop-opacity=".8"/></linearGradient>
+      <linearGradient id="${id}m" x1="0" x2="1"><stop offset="0" stop-color="#b9b9c0"/><stop offset=".4" stop-color="#f4f4f7"/><stop offset="1" stop-color="#a5a5ad"/></linearGradient>
+      <clipPath id="${id}b"><rect x="9" y="${top}" width="46" height="${bot-top}" rx="9"/></clipPath>
+    </defs>
+    <rect x="15" y="3" width="34" height="13" rx="4" fill="url(#${id}c)"/>
+    <rect x="13" y="14" width="38" height="8" rx="2.5" fill="url(#${id}m)"/>
+    <rect x="18" y="22" width="28" height="9" fill="rgba(255,255,255,.55)" stroke="rgba(60,50,40,.18)"/>
+    <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="rgba(255,255,255,.5)"/>
+    <g clip-path="url(#${id}b)">
+      ${lvl==null
+        ? `<rect x="9" y="${bot-15}" width="46" height="15" fill="#f6f0e4"/><rect x="9" y="${bot-16}" width="46" height="2" fill="#e7dcc7"/>`
+        : `<rect x="9" y="${ly}" width="46" height="${bot-ly}" fill="${g.color}" fill-opacity=".38"/><rect x="9" y="${ly}" width="46" height="2.2" fill="${g.color}" fill-opacity=".7"/>`}
+      <rect x="14" y="${top+4}" width="5" height="${bot-top-14}" rx="2.5" fill="#fff" fill-opacity=".7"/>
+    </g>
+    ${g.mgTag ? `<rect x="9" y="52" width="46" height="22" fill="rgba(255,255,255,.88)"/><rect x="9" y="52" width="46" height="3" fill="${g.color}"/>
+    <text x="32" y="68.5" text-anchor="middle" font-size="10.5" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#3a3530">${esc(g.mgTag)}</text>` : ''}
+    <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="none" stroke="rgba(60,50,40,.28)" stroke-width="1.2"/>
+  </svg>`;
 }
 /* Lab tests on a vial: the first lives in flat fields (testLab, testMassMg, …); more go in v.extraTests. */
 function testFilled(t){ return !!(t && (t.lab || t.massMg || t.purity || t.endo || t.coaUrl)); }
