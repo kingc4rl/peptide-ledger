@@ -1960,25 +1960,36 @@ function vialSVG(g, i){
   </svg>`;
 }
 /* Printed label for a single lot's vial: vendor name over the mg, squeezed to fit long names. */
-/* Holographic foil label: a rainbow band that drifts sideways under a soft diagonal sheen, topped by the compound colour. */
+/* Holographic foil label, like silver holo sticker stock: a brushed-silver base with soft horizontal rainbow
+   streaks and a couple of iridescent patches. The streaks drift slowly and a sheen passes over. */
 function holoLabel(id, y, h, color){
+  const band = (o, c, a)=> `<stop offset="${o}" stop-color="${c}" stop-opacity="${a}"/>`;
   return `<defs>
-      <linearGradient id="${id}h" x1="0" x2="1" y1="0" y2=".35">
-        <stop offset="0" stop-color="#ff9ad5"/><stop offset=".16" stop-color="#ffd27a"/><stop offset=".33" stop-color="#b8f5c8"/>
-        <stop offset=".5" stop-color="#8fd8ff"/><stop offset=".66" stop-color="#c6a8ff"/><stop offset=".83" stop-color="#ff9ad5"/><stop offset="1" stop-color="#ffd27a"/>
+      <linearGradient id="${id}ag" x1="0" x2=".25" y1="0" y2="1">
+        <stop offset="0" stop-color="#b8b9c1"/><stop offset=".22" stop-color="#e9eaee"/><stop offset=".45" stop-color="#c3c4cb"/><stop offset=".7" stop-color="#eeeff2"/><stop offset="1" stop-color="#b3b4bc"/>
       </linearGradient>
+      <linearGradient id="${id}h" x1="0" x2="0" y1="0" y2="1">
+        ${band(0,'#fff',0)}${band(.1,'#fff',0)}${band(.135,'#ff8fb0',.75)}${band(.165,'#ffd36b',.8)}${band(.195,'#93ef9f',.8)}${band(.225,'#78d3ff',.8)}${band(.255,'#a99cff',.6)}${band(.29,'#fff',0)}
+        ${band(.6,'#fff',0)}${band(.635,'#ff8fb0',.65)}${band(.665,'#ffd36b',.7)}${band(.695,'#93ef9f',.7)}${band(.725,'#78d3ff',.7)}${band(.755,'#b39cff',.5)}${band(.79,'#fff',0)}${band(1,'#fff',0)}
+      </linearGradient>
+      <linearGradient id="${id}fx" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity=".45"/></linearGradient>
+      <mask id="${id}mk"><rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}fx)"/></mask>
+      <radialGradient id="${id}p1" cx=".2" cy=".2" r=".6"><stop offset="0" stop-color="#ffb3e6" stop-opacity=".3"/><stop offset="1" stop-color="#ffb3e6" stop-opacity="0"/></radialGradient>
+      <radialGradient id="${id}p2" cx=".85" cy=".85" r=".55"><stop offset="0" stop-color="#9fe8ff" stop-opacity=".3"/><stop offset="1" stop-color="#9fe8ff" stop-opacity="0"/></radialGradient>
       <linearGradient id="${id}s" x1="0" x2="1" y1="0" y2="1">
-        <stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".48" stop-color="#fff" stop-opacity=".85"/><stop offset=".56" stop-color="#fff" stop-opacity="0"/>
+        <stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".48" stop-color="#fff" stop-opacity=".9"/><stop offset=".56" stop-color="#fff" stop-opacity="0"/>
       </linearGradient>
-      <clipPath id="${id}l"><rect x="9" y="${y}" width="46" height="${h}"/></clipPath>
+      <clipPath id="${id}l"><rect x="9" y="${y}" width="46" height="${h}" rx="1.5"/></clipPath>
     </defs>
     <g clip-path="url(#${id}l)">
-      <rect class="holo-shift" x="-37" y="${y}" width="138" height="${h}" fill="url(#${id}h)"/>
-      <rect x="9" y="${y}" width="46" height="${h}" fill="#fff" fill-opacity=".1"/>
+      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}ag)"/>
+      <g mask="url(#${id}mk)"><rect class="holo-shift" x="9" y="${y-h*0.6}" width="46" height="${h*2.2}" fill="url(#${id}h)"/></g>
+      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}p1)"/>
+      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}p2)"/>
+      <rect x="9" y="${y+h*0.18}" width="46" height="${Math.max(1, h*0.06)}" fill="#fff" fill-opacity=".55"/>
       <rect class="holo-sheen" x="-20" y="${y}" width="60" height="${h}" fill="url(#${id}s)"/>
     </g>
-    <rect x="9" y="${y}" width="46" height="3" fill="${color}"/>
-    <rect x="9" y="${y}" width="46" height="${h}" fill="none" stroke="rgba(255,255,255,.7)" stroke-width=".6"/>`;
+    <rect x="9.3" y="${y+0.3}" width="45.4" height="${h-0.6}" rx="1.5" fill="none" stroke="rgba(120,122,130,.45)" stroke-width=".6"/>`;
 }
 function vialBrandLabel(g, id){
   // long vendor names keep whole words (e.g. "Peptide Sciences Research Supply" -> "PEPTIDE SCIENCES")

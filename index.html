@@ -939,7 +939,7 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 
 .holo-shift{ animation:holoShift 7s ease-in-out infinite alternate; }
 .holo-sheen{ animation:holoSheen 4.5s ease-in-out infinite; }
-@keyframes holoShift{ from{ transform:translateX(-20px); } to{ transform:translateX(20px); } }
+@keyframes holoShift{ from{ transform:translateY(-10px); } to{ transform:translateY(10px); } }
 @keyframes holoSheen{ 0%,15%{ transform:translateX(-30px); } 60%,100%{ transform:translateX(70px); } }
 @media (prefers-reduced-motion: reduce){ .holo-shift, .holo-sheen{ animation:none; } }
 /* Keep the tab bar pinned: no rubber-band bounce on the page itself, and its own compositing layer on iOS */
