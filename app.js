@@ -1954,21 +1954,42 @@ function vialSVG(g, i){
         : `<rect x="9" y="${ly}" width="46" height="${bot-ly}" fill="${g.color}" fill-opacity=".38"/><rect x="9" y="${ly}" width="46" height="2.2" fill="${g.color}" fill-opacity=".7"/>`}
       <rect x="14" y="${top+4}" width="5" height="${bot-top-14}" rx="2.5" fill="#fff" fill-opacity=".7"/>
     </g>
-    ${g.brand ? vialBrandLabel(g) : g.mgTag ? `<rect x="9" y="52" width="46" height="22" fill="rgba(255,255,255,.88)"/><rect x="9" y="52" width="46" height="3" fill="${g.color}"/>
-    <text x="32" y="68.5" text-anchor="middle" font-size="10.5" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#3a3530">${esc(g.mgTag)}</text>` : ''}
+    ${g.brand ? vialBrandLabel(g, id) : g.mgTag ? `${holoLabel(id, 52, 22, g.color)}
+    <text x="32" y="68.5" text-anchor="middle" font-size="10.5" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#2b2622" stroke="rgba(255,255,255,.55)" stroke-width="1.6" paint-order="stroke">${esc(g.mgTag)}</text>` : ''}
     <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="none" stroke="rgba(60,50,40,.28)" stroke-width="1.2"/>
   </svg>`;
 }
 /* Printed label for a single lot's vial: vendor name over the mg, squeezed to fit long names. */
-function vialBrandLabel(g){
+/* Holographic foil label: a rainbow band that drifts sideways under a soft diagonal sheen, topped by the compound colour. */
+function holoLabel(id, y, h, color){
+  return `<defs>
+      <linearGradient id="${id}h" x1="0" x2="1" y1="0" y2=".35">
+        <stop offset="0" stop-color="#ff9ad5"/><stop offset=".16" stop-color="#ffd27a"/><stop offset=".33" stop-color="#b8f5c8"/>
+        <stop offset=".5" stop-color="#8fd8ff"/><stop offset=".66" stop-color="#c6a8ff"/><stop offset=".83" stop-color="#ff9ad5"/><stop offset="1" stop-color="#ffd27a"/>
+      </linearGradient>
+      <linearGradient id="${id}s" x1="0" x2="1" y1="0" y2="1">
+        <stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".48" stop-color="#fff" stop-opacity=".85"/><stop offset=".56" stop-color="#fff" stop-opacity="0"/>
+      </linearGradient>
+      <clipPath id="${id}l"><rect x="9" y="${y}" width="46" height="${h}"/></clipPath>
+    </defs>
+    <g clip-path="url(#${id}l)">
+      <rect class="holo-shift" x="-37" y="${y}" width="138" height="${h}" fill="url(#${id}h)"/>
+      <rect x="9" y="${y}" width="46" height="${h}" fill="#fff" fill-opacity=".1"/>
+      <rect class="holo-sheen" x="-20" y="${y}" width="60" height="${h}" fill="url(#${id}s)"/>
+    </g>
+    <rect x="9" y="${y}" width="46" height="3" fill="${color}"/>
+    <rect x="9" y="${y}" width="46" height="${h}" fill="none" stroke="rgba(255,255,255,.7)" stroke-width=".6"/>`;
+}
+function vialBrandLabel(g, id){
   // long vendor names keep whole words (e.g. "Peptide Sciences Research Supply" -> "PEPTIDE SCIENCES")
   const words = String(g.brand).toUpperCase().trim().split(/\s+/);
   let name = words[0].slice(0, 14);
   for(const w of words.slice(1)){ if((name+' '+w).length > 16) break; name += ' '+w; }
   const fit = name.length > 7 ? ` textLength="40" lengthAdjust="spacingAndGlyphs"` : '';
-  return `<rect x="9" y="48" width="46" height="32" fill="rgba(255,255,255,.92)"/><rect x="9" y="48" width="46" height="3.5" fill="${g.color}"/>
-    <text x="32" y="62" text-anchor="middle" font-size="8.5" font-weight="800" letter-spacing=".4" font-family="system-ui, sans-serif" fill="#2b2622"${fit}>${esc(name)}</text>
-    ${g.mgTag ? `<text x="32" y="74.5" text-anchor="middle" font-size="9" font-weight="600" font-family="IBM Plex Mono, monospace" fill="#5c544c">${esc(g.mgTag)}</text>` : ''}`;
+  const halo = ` stroke="rgba(255,255,255,.6)" stroke-width="1.6" paint-order="stroke"`;
+  return `${holoLabel(id, 48, 32, g.color)}
+    <text x="32" y="62.5" text-anchor="middle" font-size="8.5" font-weight="800" letter-spacing=".4" font-family="system-ui, sans-serif" fill="#221d19"${halo}${fit}>${esc(name)}</text>
+    ${g.mgTag ? `<text x="32" y="74.5" text-anchor="middle" font-size="9" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#3d3530"${halo}>${esc(g.mgTag)}</text>` : ''}`;
 }
 /* Mass as a share of the label claim, and a traffic-light grade for each assay. */
 function coaGrades(t, labelMg){

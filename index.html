@@ -878,11 +878,11 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .es-rm{ flex:none; width:32px; height:32px; border-radius:50%; border:0; background:rgba(40,30,20,.06); color:var(--muted); cursor:pointer; }
 
 /* Stash shelf: one vial per compound; tapping opens its lots underneath */
-.vial-shelf{ display:grid; grid-template-columns:repeat(auto-fill, minmax(96px, 1fr)); gap:10px 8px; }
+.vial-shelf{ display:grid; grid-template-columns:repeat(auto-fill, minmax(98px, 1fr)); gap:10px 6px; }
 .vial-tile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 4px 8px; border-radius:18px; border:1px solid transparent; background:transparent; cursor:pointer; font:inherit; color:inherit; -webkit-tap-highlight-color:transparent; transition:background .2s, border-color .2s, transform .15s; min-width:0; }
 .vial-tile:active{ transform:scale(.96); }
 .vial-tile.on{ background:rgba(255,255,255,.65); border-color:rgba(255,255,255,.9); box-shadow:0 6px 18px rgba(60,40,20,.12); }
-.vial-svg{ width:58px; height:107px; filter:drop-shadow(0 4px 6px rgba(60,40,20,.14)); transition:transform .2s; }
+.vial-svg{ width:74px; height:136px; filter:drop-shadow(0 4px 6px rgba(60,40,20,.14)); transition:transform .2s; }
 .vial-tile.on .vial-svg{ transform:translateY(-3px); }
 .vial-label{ font-weight:700; font-size:13px; line-height:1.2; text-align:center; max-width:100%; overflow-wrap:anywhere; margin-top:4px; }
 .vial-meta{ font-size:11px; color:var(--muted); white-space:nowrap; }
@@ -899,8 +899,8 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .lot{ display:flex; align-items:center; gap:10px; padding:8px 10px 8px 6px; border-radius:14px; background:rgba(255,255,255,.6); border:1px solid rgba(40,30,20,.08); cursor:pointer; margin-top:6px; min-width:0; }
 .lot:first-of-type{ margin-top:0; }
 .lot:active{ transform:scale(.99); }
-.lot-vial{ position:relative; flex:none; width:44px; }
-.lot-vial .vial-svg{ width:44px; height:81px; }
+.lot-vial{ position:relative; flex:none; width:58px; }
+.lot-vial .vial-svg{ width:58px; height:107px; }
 .lot-qty{ position:absolute; right:-6px; bottom:2px; font:700 10.5px/1 "IBM Plex Mono",monospace; background:var(--ink); color:#fff; border-radius:99px; padding:3px 5px; }
 .lot-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
 .lot-name{ font-weight:700; font-size:14px; overflow-wrap:anywhere; }
@@ -936,6 +936,17 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .coa-sig-line{ width:110px; height:16px; border-bottom:1px solid #2b2622; margin-bottom:3px; background:linear-gradient(170deg, transparent 45%, rgba(47,74,107,.55) 46%, rgba(47,74,107,.55) 50%, transparent 51%) no-repeat 10px 2px / 70px 12px; }
 .coa-seal{ width:74px; height:74px; border-radius:50%; border:2px solid rgba(179,58,58,.7); box-shadow:inset 0 0 0 4px #fffdf9, inset 0 0 0 5px rgba(179,58,58,.5); color:rgba(179,58,58,.85); display:flex; flex-direction:column; align-items:center; justify-content:center; transform:rotate(-12deg); font-size:7.5px; font-weight:700; letter-spacing:.06em; text-align:center; line-height:1.3; }
 .coa-seal b{ font-size:12px; letter-spacing:.12em; }
+
+.holo-shift{ animation:holoShift 7s ease-in-out infinite alternate; }
+.holo-sheen{ animation:holoSheen 4.5s ease-in-out infinite; }
+@keyframes holoShift{ from{ transform:translateX(-20px); } to{ transform:translateX(20px); } }
+@keyframes holoSheen{ 0%,15%{ transform:translateX(-30px); } 60%,100%{ transform:translateX(70px); } }
+@media (prefers-reduced-motion: reduce){ .holo-shift, .holo-sheen{ animation:none; } }
+/* Keep the tab bar pinned: no rubber-band bounce on the page itself, and its own compositing layer on iOS */
+html{ overscroll-behavior:none; }
+body{ overscroll-behavior:none; }
+.tabbar{ transform:translateZ(0); -webkit-transform:translateZ(0); will-change:transform; }
+@media (min-width:900px){ .tabbar{ transform:translateX(-50%) translateZ(0); } }
 </style>
 </head>
 <body>
