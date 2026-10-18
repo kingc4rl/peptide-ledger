@@ -500,10 +500,9 @@ function renderEndoStack(){
   const box = $('#endoStack'); if(!box) return;
   box.innerHTML = endoStack.map((r,i)=>`
     <div class="endo-stackrow" data-i="${i}">
-      <div class="field"><label>Additional compound ${i+1}</label><input type="text" list="endoCompounds" data-f="name" value="${esc(r.name)}" placeholder="Compound"></div>
-      <div class="field"><label>Dose</label><div style="display:flex;gap:6px;"><input type="number" data-f="dose" inputmode="decimal" min="0" step="any" value="${esc(r.dose)}" style="flex:1;min-width:0;"><select data-f="unit" style="width:76px;"><option value="mcg" ${r.unit==='mcg'?'selected':''}>mcg</option><option value="mg" ${r.unit==='mg'?'selected':''}>mg</option></select></div></div>
-      <div class="field"><label>EU/mg from your lab test</label><input type="number" data-f="eumg" inputmode="decimal" min="0" step="any" value="${esc(r.eumg)}"></div>
-      <button class="btn btn-sm rm" type="button" data-rm="${i}">Remove</button>
+      <div class="field es-name"><label>Compound ${i+1}</label><div class="es-line"><input type="text" list="endoCompounds" data-f="name" value="${esc(r.name)}" placeholder="Name"><button class="es-rm rm" type="button" data-rm="${i}" aria-label="Remove compound ${i+1}">✕</button></div></div>
+      <div class="field"><label>Dose</label><div class="es-line"><input type="number" data-f="dose" inputmode="decimal" min="0" step="any" value="${esc(r.dose)}"><select data-f="unit"><option value="mcg" ${r.unit==='mcg'?'selected':''}>mcg</option><option value="mg" ${r.unit==='mg'?'selected':''}>mg</option></select></div></div>
+      <div class="field"><label>EU/mg (lab)</label><input type="number" data-f="eumg" inputmode="decimal" min="0" step="any" value="${esc(r.eumg)}"></div>
     </div>`).join('');
 }
 function runEndo(){
@@ -2947,8 +2946,28 @@ function loadCheckinForm(iso){
   const wu = weightUnit();
   const w = c ? toUnit(c.weight, c.weightUnit||wu, wu) : null;
   $('#ciWeight').value = w!=null ? Math.round(w*10)/10 : '';
-  $('#ciStatus').textContent = c ? `Editing the entry for ${fmtDateShort(iso)}.` : '';
+  $('#ciStatus').textContent = '';
   $('#ciDelete').hidden = !c;
+  const today = todayISO();
+  $('#ciDateLbl').textContent = iso===today ? 'Today' : iso===addDays(today,-1) ? 'Yesterday'
+    : new Date(iso+'T12:00').toLocaleDateString(undefined, {weekday:'short', month:'short', day:'numeric'});
+  $('#ciNext').disabled = iso >= today;
+  $('#ciSave').textContent = c ? 'Update weight' : 'Save weight';
+  updateCheckinDelta();
+}
+/* Change vs the most recent earlier entry, using whatever is typed in the box right now. */
+function updateCheckinDelta(){
+  const iso = $('#ciDate').value, el = $('#ciDelta');
+  const wu = weightUnit();
+  const prev = state.checkins.filter(c=> c.date < iso && c.weight!=null && c.weight!=='')
+    .sort((a,b)=> b.date.localeCompare(a.date))[0];
+  const cur = parseFloat($('#ciWeight').value);
+  if(!prev){ el.textContent = ''; return; }
+  const pw = Math.round(toUnit(prev.weight, prev.weightUnit||wu, wu)*10)/10;
+  if(!(cur>0)){ el.innerHTML = `Last: <b>${esc(String(pw))} ${wu}</b> on ${esc(fmtDateShort(prev.date))}`; return; }
+  const d = Math.round((cur - pw)*10)/10;
+  el.innerHTML = d===0 ? `Same as ${esc(fmtDateShort(prev.date))}`
+    : `<b class="${d<0?'down':'up'}">${d<0?'▼':'▲'} ${Math.abs(d)} ${wu}</b> since ${esc(fmtDateShort(prev.date))}`;
 }
 /* Card titles (plus any filter chips right under them) sit above their card, like the serum chart. Moving the
    nodes keeps their ids and listeners, so the render code that fills them is unaffected. */
@@ -2976,6 +2995,10 @@ function initCheckinForm(){
   $('#ciDate').max = maxISO;
   loadCheckinForm(maxISO);
   $('#ciDate').addEventListener('change', ()=>{ const v = $('#ciDate').value; if(v) loadCheckinForm(v > maxISO ? maxISO : v); });
+  $('#ciPrev').addEventListener('click', ()=> loadCheckinForm(addDays($('#ciDate').value || maxISO, -1)));
+  $('#ciNext').addEventListener('click', ()=>{ const v = addDays($('#ciDate').value || maxISO, 1); loadCheckinForm(v > maxISO ? maxISO : v); });
+  $('#ciWeight').addEventListener('input', updateCheckinDelta);
+  $('#ciWeight').addEventListener('keydown', e=>{ if(e.key==='Enter'){ e.preventDefault(); $('#ciSave').click(); } });
   $('#ciSave').addEventListener('click', async ()=>{
     const date = $('#ciDate').value || todayISO();
     const weight = $('#ciWeight').value.trim();
@@ -2984,8 +3007,11 @@ function initCheckinForm(){
     // keep any mood, energy or note an older entry already has
     const data = {...(existing ? stripId(existing) : {}), date, weight: num(weight), weightUnit: 'lb'};
     if(existing) await dbSet('checkins', existing.id, data); else await dbAdd('checkins', data);
-    $('#ciStatus').textContent = `Saved for ${fmtDateShort(date)}.`;
+    $('#ciStatus').textContent = `✓ Saved for ${fmtDateShort(date)}`;
     $('#ciDelete').hidden = false;
+    $('#ciSave').textContent = 'Update weight';
+    $('#ciWeight').blur();
+    updateCheckinDelta();
   });
   $('#ciDelete').addEventListener('click', ()=>{
     const c = checkinFor($('#ciDate').value); if(!c) return;
@@ -4271,6 +4297,7 @@ async function boot(){
   window.addEventListener('appinstalled', ()=>{ deferredInstall = null; renderInstallCard(); });
   renderInstallCard();
   await loadAll();
+  loadCheckinForm($('#ciDate').value || todayISO());   // the form was filled before records loaded
   renderStoragePill();
   setTab('dose', {keepScroll:true});   // the app always opens on Dose
   renderAll();

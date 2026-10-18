@@ -794,6 +794,88 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
   :root{ --surface:#ffffff; --surface-2:#f1efea; }
   .card, .tabbar, .app-head, .modal{ background:#fff; -webkit-backdrop-filter:none; backdrop-filter:none; }
 }
+
+/* Weight logger */
+.ci-card{ padding:14px 16px 12px; }
+.ci-date-row{ display:flex; align-items:center; justify-content:center; gap:8px; }
+.ci-step{ width:34px; height:34px; border-radius:50%; border:1px solid rgba(255,255,255,.85); background:rgba(255,255,255,.55); color:var(--ink); font-size:20px; line-height:1; cursor:pointer; display:grid; place-items:center; padding:0 0 2px; }
+.ci-step:disabled{ opacity:.3; cursor:default; }
+.ci-date{ position:relative; display:inline-flex; align-items:center; gap:6px; padding:7px 14px; border-radius:99px; background:rgba(255,255,255,.6); border:1px solid rgba(40,30,20,.14); font-weight:600; font-size:14px; cursor:pointer; }
+.ci-date::after{ content:''; width:6px; height:6px; border-right:1.6px solid var(--muted); border-bottom:1.6px solid var(--muted); transform:rotate(45deg) translateY(-2px); }
+.ci-date input{ position:absolute; inset:0; width:100%; height:100%; opacity:.011; border:0 !important; padding:0; cursor:pointer; color:transparent; background:transparent !important; box-shadow:none; }
+.ci-hero{ display:flex; align-items:baseline; justify-content:center; gap:6px; margin:12px 0 2px; }
+.ci-hero input{ width:5.2ch; border:0 !important; background:transparent !important; box-shadow:none; text-align:right; padding:0; font:600 46px/1.1 "IBM Plex Mono",monospace; color:var(--ink); letter-spacing:-.02em; outline:none; -moz-appearance:textfield; }
+.ci-hero input::-webkit-outer-spin-button, .ci-hero input::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+.ci-hero input::placeholder{ color:rgba(40,30,20,.22); }
+.ci-hero span{ font-size:18px; font-weight:700; color:var(--muted); }
+.ci-hero:focus-within input{ color:var(--accent-pep-strong); }
+.ci-delta{ text-align:center; font-size:12.5px; color:var(--muted); min-height:18px; }
+.ci-delta b{ font-weight:700; }
+.ci-delta .down{ color:var(--good); }
+.ci-delta .up{ color:var(--accent-pep-strong); }
+.ci-actions{ display:flex; align-items:center; gap:10px; margin-top:10px; }
+.ci-save{ flex:1; justify-content:center; text-align:center; }
+.ci-del{ color:var(--bad); font-weight:600; padding:8px 4px; }
+.ci-status{ text-align:center; min-height:16px; margin-top:6px; }
+.ci-status:empty{ display:none; }
+
+/* Compact calculators */
+.calc-card{ padding:14px; }
+.calc-top{ display:flex; gap:8px; align-items:center; }
+.calc-top select{ flex:1; min-width:0; }
+#calcPresetNote:empty{ display:none; }
+#calcPresetNote{ margin-top:4px; }
+.calc-card .cf-list{ display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+.calc-card .cf{ padding:8px 10px 6px; border:1px solid rgba(40,30,20,.1); border-radius:14px; background:rgba(255,255,255,.45); min-width:0; }
+.calc-card .cf:first-child{ padding-top:8px; }
+.calc-card .cf.calc{ border-color:rgba(255,159,67,.6); background:rgba(255,240,224,.6); }
+.calc-card .cf-h{ gap:4px; margin-bottom:4px; min-height:20px; }
+.calc-card .cf-h label{ font-size:12px; font-weight:700; color:var(--muted); line-height:1.2; }
+.calc-card .cf-badge{ font-size:10px; padding:1px 6px; text-transform:uppercase; letter-spacing:.04em; }
+.calc-card .cf-clear{ font-size:11px; padding:2px; line-height:1; opacity:.6; }
+.calc-card .cf-row{ gap:4px; }
+.calc-card .cf-row input{ font-size:17px; padding:7px 8px; border-radius:9px; }
+.calc-card .cf-unit{ width:auto; font-size:12px; }
+.calc-card .cf-row select{ width:58px; padding:6px 4px; font-size:13px; }
+.calc-card .seg button{ padding:7px 7px; font-size:12px; }
+.calc-card .cf-conv{ font-size:11.5px; min-height:15px; margin-top:3px; line-height:1.3; overflow-wrap:anywhere; }
+.cf-hint{ font-size:11.5px; color:var(--muted); margin:8px 2px; text-align:center; }
+.calc-card .cf-stats{ gap:6px; }
+.calc-card .cf-stats > div{ padding:6px 4px; border-radius:10px; }
+.calc-card .cf-stats strong{ font-size:15px; }
+.calc-card .cf-stats span{ font-size:10.5px; }
+.cf-perunit{ text-align:center; margin-top:4px; }
+.cf-perunit:empty{ display:none; }
+.calc-syr{ margin-top:10px; padding-top:10px; border-top:1px solid var(--line-soft); }
+.calc-syr-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px; }
+.calc-syr-h > span{ font-size:12px; font-weight:700; color:var(--muted); }
+.calc-card .syr-size-row{ flex-wrap:nowrap; gap:4px; }
+.calc-card .syr-size-btn{ flex:none; min-width:0; padding:5px 11px; border-radius:99px; text-align:center; }
+.calc-card .syr-size-btn strong{ font-size:12px; }
+.calc-card .syr-size-btn .syr-tag, .calc-card .syr-size-btn > span{ display:none; }
+.calc-fine{ font-size:10.5px; color:var(--muted); text-align:center; margin-top:8px; opacity:.8; }
+.endo-lede{ margin:0 0 10px; }
+.calc-card .endo-form{ grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; }
+.calc-card .endo-form .field label{ font-size:12px; }
+.calc-card .endo-form .endo-wide{ grid-column:1/-1; }
+.calc-card .endo-form input, .calc-card .endo-form select{ padding:8px 9px; min-width:0; width:100%; }
+#endoCompoundNote:empty{ display:none; }
+.endo-eu-help{ font-size:11px; margin-top:6px; }
+.endo-opts{ display:flex; flex-wrap:wrap; align-items:center; gap:6px 14px; margin-top:10px; padding-top:10px; border-top:1px solid var(--line-soft); }
+.endo-opts .endo-check{ font-size:13px; }
+.endo-opts .btn{ margin-left:auto; }
+.endo-sub{ margin-top:8px; }
+#endoStack:not(:empty){ margin-top:8px; }
+#endoResult:not(:empty){ margin-top:10px; }
+.calc-card .endo-table{ margin-top:10px; }
+.calc-card .endo-stackrow{ display:grid; grid-template-columns:1fr 1fr; gap:8px; align-items:start; margin-bottom:0; padding:8px 10px; border:1px solid rgba(40,30,20,.1); border-radius:14px; background:rgba(255,255,255,.45); margin-top:6px; }
+.calc-card .endo-stackrow .es-name{ grid-column:1/-1; }
+.calc-card .endo-stackrow label{ font-size:12px; }
+.calc-card .endo-stackrow input, .calc-card .endo-stackrow select{ padding:7px 8px; min-width:0; }
+.es-line{ display:flex; gap:4px; align-items:center; }
+.es-line input{ flex:1; min-width:0; }
+.es-line select{ width:74px; flex:none; padding-left:6px !important; padding-right:4px !important; }
+.es-rm{ flex:none; width:32px; height:32px; border-radius:50%; border:0; background:rgba(40,30,20,.06); color:var(--muted); cursor:pointer; }
 </style>
 </head>
 <body>
@@ -900,14 +982,17 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
       </section>
 
       <section id="progressView" class="view" hidden>
-        <div class="card" id="checkinCard">
-          <div class="card-h"><h3>Log weight</h3><span class="footnote">Pick an earlier date to fill in a missed day</span></div>
-          <div class="form-grid">
-            <div class="field"><label for="ciDate">Date</label><input type="date" id="ciDate"></div>
-            <div class="field"><label for="ciWeight">Weight (lb)</label><input type="number" id="ciWeight" inputmode="decimal" step="any" min="0" placeholder="e.g. 182.4"></div>
+        <div class="card ci-card" id="checkinCard">
+          <div class="card-h"><h3>Log weight</h3></div>
+          <div class="ci-date-row">
+            <button type="button" class="ci-step" id="ciPrev" aria-label="Previous day">‹</button>
+            <label class="ci-date"><span id="ciDateLbl">Today</span><input type="date" id="ciDate" aria-label="Date"></label>
+            <button type="button" class="ci-step" id="ciNext" aria-label="Next day">›</button>
           </div>
-          <div class="form-actions"><button type="button" class="btn btn-danger" id="ciDelete" style="margin-right:auto;" hidden>Delete</button><button type="button" class="btn btn-accent-pep" id="ciSave">Save weight</button></div>
-          <div class="footnote" id="ciStatus" role="status" style="margin-top:6px;min-height:16px;"></div>
+          <div class="ci-hero"><input type="number" id="ciWeight" inputmode="decimal" step="any" min="0" placeholder="0.0" aria-label="Weight in pounds"><span>lb</span></div>
+          <div class="ci-delta" id="ciDelta"></div>
+          <div class="ci-actions"><button type="button" class="link-btn ci-del" id="ciDelete" hidden>Delete</button><button type="button" class="btn btn-accent-pep ci-save" id="ciSave">Save weight</button></div>
+          <div class="footnote ci-status" id="ciStatus" role="status"></div>
         </div>
 
         <div class="card">
@@ -985,113 +1070,97 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 
       <section id="pepCalcView" class="view" hidden>
 
-      <div class="card">
-        <h3 style="font-size:16px;margin-bottom:4px;">Dose calculator</h3>
-        <p class="footnote" style="margin-bottom:14px;">Based on a standard U-100 insulin syringe (100 units = 1 mL).</p>
-        <div class="field" style="margin-bottom:12px;">
-          <label for="calcPreset">Peptide (optional, fills typical values)</label>
-          <select id="calcPreset"></select>
-          <div class="footnote" id="calcPresetNote" style="margin-top:4px;"></div>
+      <div class="card calc-card">
+        <h3>Dose calculator</h3>
+        <div class="calc-top">
+          <select id="calcPreset" aria-label="Peptide preset (fills typical values)"></select>
+          <button type="button" class="btn btn-sm" id="calcReset">Reset</button>
         </div>
+        <div class="footnote" id="calcPresetNote"></div>
         <div class="cf-list">
           <div class="cf" data-cf="vial">
-            <div class="cf-h"><label for="calcVial">Peptide in vial</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="vial">✕ Clear</button></div>
+            <div class="cf-h"><label for="calcVial">Peptide in vial</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="vial" aria-label="Clear peptide in vial">✕</button></div>
             <div class="cf-row"><input type="number" id="calcVial" inputmode="decimal" value="5" min="0" step="any"><span class="cf-unit">mg</span></div>
-            <div class="cf-help">Total mg of peptide in the dry vial</div>
             <div class="cf-conv" id="calcVialConv"></div>
           </div>
           <div class="cf" data-cf="bac">
-            <div class="cf-h"><label for="calcBac">BAC water added</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="bac">✕ Clear</button></div>
+            <div class="cf-h"><label for="calcBac">BAC water</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="bac" aria-label="Clear BAC water">✕</button></div>
             <div class="cf-row"><input type="number" id="calcBac" inputmode="decimal" value="2" min="0" step="any">
-              <div class="seg" role="group" aria-label="BAC water unit"><button type="button" class="on" data-bac-unit="ml">mL</button><button type="button" data-bac-unit="units">units</button></div></div>
-            <div class="cf-help">Bacteriostatic water used to reconstitute</div>
+              <div class="seg" role="group" aria-label="BAC water unit"><button type="button" class="on" data-bac-unit="ml">mL</button><button type="button" data-bac-unit="units">u</button></div></div>
             <div class="cf-conv" id="calcBacConv"></div>
           </div>
           <div class="cf" data-cf="dose">
-            <div class="cf-h"><label for="calcDose">Desired dose</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="dose">✕ Clear</button></div>
+            <div class="cf-h"><label for="calcDose">Dose</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="dose" aria-label="Clear dose">✕</button></div>
             <div class="cf-row"><input type="number" id="calcDose" inputmode="decimal" value="0.25" min="0" step="any">
               <select id="calcDoseUnit" aria-label="Dose unit"><option value="mg" selected>mg</option><option value="mcg">mcg</option></select></div>
-            <div class="cf-help">Amount you want per injection</div>
             <div class="cf-conv" id="calcDoseConv"></div>
           </div>
           <div class="cf" data-cf="draw">
-            <div class="cf-h"><label for="calcDraw">Syringe draw</label><span class="cf-badge" hidden>Calculated</span><button type="button" class="cf-clear" data-clear="draw">✕ Clear</button></div>
+            <div class="cf-h"><label for="calcDraw">Syringe draw</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="draw" aria-label="Clear syringe draw">✕</button></div>
             <div class="cf-row"><input type="number" id="calcDraw" inputmode="decimal" min="0" step="any"><span class="cf-unit">units</span></div>
-            <div class="cf-help">Tick marks on a U-100 insulin syringe</div>
             <div class="cf-conv" id="calcDrawConv"></div>
           </div>
         </div>
-        <div class="cf-foot"><span class="footnote">Fill in any three. The fourth is calculated, and changing any field updates the others.</span><button type="button" class="btn btn-sm" id="calcReset">Reset</button></div>
+        <div class="cf-hint">Fill any three and the fourth is calculated. U-100 syringe: 100 units = 1 mL.</div>
         <div class="cf-stats">
-          <div><strong class="mono" id="calcConc">—</strong><span>mg/mL concentration</span></div>
-          <div><strong class="mono" id="calcMl">—</strong><span>mL per injection</span></div>
-          <div><strong class="mono" id="calcDosesPerVial">—</strong><span>doses in vial</span></div>
+          <div><strong class="mono" id="calcConc">—</strong><span>mg/mL</span></div>
+          <div><strong class="mono" id="calcMl">—</strong><span>mL / dose</span></div>
+          <div><strong class="mono" id="calcDosesPerVial">—</strong><span>doses / vial</span></div>
         </div>
-        <div class="footnote" id="calcPerUnit" style="margin-top:8px;text-align:center;"></div>
+        <div class="footnote cf-perunit" id="calcPerUnit"></div>
 
-        <div style="margin-top:16px;">
-          <label style="font-size:12px;color:var(--muted);display:block;margin-bottom:6px;">Syringe size</label>
-          <div class="syr-size-row" id="calcSyringeSizeRow"></div>
-        </div>
-        <div style="margin-top:12px;">
+        <div class="calc-syr">
+          <div class="calc-syr-h"><span>Syringe</span><div class="syr-size-row" id="calcSyringeSizeRow"></div></div>
           <div class="syringe-caption"><span id="calcSyringeCaption">—</span><span id="calcSyringeUnitsLabel">—</span></div>
           <div class="syringe-wrap" id="calcSyringeGraphic"></div>
           <div class="syringe-cap-warn" id="calcSyringeWarn" hidden></div>
         </div>
-
-        <div class="disclaimer" style="margin-top:14px;">Research use only. Not medical advice — this tool does arithmetic, it doesn't evaluate dosing decisions.</div>
-
+        <div class="calc-fine">Research use only. This tool does arithmetic; it doesn't evaluate dosing decisions.</div>
       </div>
 
-      <div class="card" id="endoCard">
-        <h3 style="font-size:16px;margin-bottom:4px;">Endotoxin check</h3>
-        <p class="footnote" style="margin-bottom:14px;">Compares a dose, a stack or a whole cycle against the FDA/USP &lt;85&gt; endotoxin reference ceiling, the way PeptideSafe does. It uses the vial, water and dose from the calculator above. Enter the total EU for the whole vial from an independent LAL test (not EU/mg, and not the vendor's CoA).</p>
+      <div class="card calc-card" id="endoCard">
+        <h3>Endotoxin check</h3>
+        <p class="footnote endo-lede">Checks your injection against the FDA/USP &lt;85&gt; endotoxin ceiling using the vial, water and dose above.</p>
         <div class="endo-form">
-          <div class="field" style="grid-column:1/-1;"><label for="endoCompound">Compound (optional, adds the typical and reference max dose)</label>
-            <input type="text" id="endoCompound" list="endoCompounds" placeholder="Type to search, e.g. BPC-157" autocomplete="off">
+          <div class="field endo-wide"><label for="endoCompound">Compound (optional)</label>
+            <input type="text" id="endoCompound" list="endoCompounds" placeholder="Search, e.g. BPC-157" autocomplete="off">
             <datalist id="endoCompounds"></datalist>
-            <div class="footnote" id="endoCompoundNote" style="margin-top:4px;"></div></div>
-          <div class="field"><label for="endoWeight">Body weight (kg)</label><input type="number" id="endoWeight" inputmode="decimal" min="0" step="any" placeholder="75"></div>
+            <div class="footnote" id="endoCompoundNote"></div></div>
+          <div class="field"><label for="endoWeight">Weight (kg)</label><input type="number" id="endoWeight" inputmode="decimal" min="0" step="any" placeholder="75"></div>
+          <div class="field"><label for="endoEU">Vial EU</label><input type="number" id="endoEU" inputmode="decimal" min="0" step="any" placeholder="25"></div>
           <div class="field"><label for="endoRoute">Route</label>
             <select id="endoRoute">
-              <option value="SubQ">SubQ (subcutaneous)</option>
-              <option value="IM">IM (intramuscular)</option>
-              <option value="IV">IV (intravenous)</option>
-              <option value="IT">Intrathecal / spinal / epidural</option>
+              <option value="SubQ">SubQ</option>
+              <option value="IM">IM</option>
+              <option value="IV">IV</option>
+              <option value="IT">Spinal</option>
             </select></div>
-          <div class="field"><label for="endoEU">Total EU in this vial</label><input type="number" id="endoEU" inputmode="decimal" min="0" step="any" placeholder="e.g. 25"></div>
+        </div>
+        <div class="footnote endo-eu-help">Vial EU is the total for the whole vial from an independent LAL test, not EU/mg and not the vendor's CoA.</div>
+
+        <div class="endo-opts">
+          <label class="endo-check"><input type="checkbox" id="endoPen"> Pen injector</label>
+          <label class="endo-check"><input type="checkbox" id="endoCycle"> Cycle total</label>
+          <button class="btn btn-sm" type="button" id="endoAddBtn">+ Compound</button>
+        </div>
+        <div id="endoPenBox" class="endo-sub" hidden>
+          <div class="field"><label for="endoClick">Units per click</label>
+            <select id="endoClick"><option value="0.5">0.5 units (0.005 mL)</option><option value="1" selected>1 unit (0.01 mL), most common</option><option value="2">2 units (0.02 mL)</option></select></div>
+        </div>
+        <div id="endoStack"></div>
+        <div id="endoCycleBox" class="endo-form endo-sub" hidden>
+          <div class="field"><label for="endoPerDay">Per day</label><select id="endoPerDay"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
+          <div class="field"><label for="endoDays">Days/week</label><select id="endoDays"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></div>
+          <div class="field"><label for="endoWeeks">Weeks</label><select id="endoWeeks"><option>2</option><option>4</option><option>6</option><option>8</option><option>10</option><option selected>12</option><option>16</option><option>20</option><option>24</option></select></div>
         </div>
 
-        <div class="endo-opt">
-          <label class="endo-check"><input type="checkbox" id="endoPen"> Using a pen injector</label>
-          <div id="endoPenBox" hidden>
-            <div class="field" style="max-width:340px;"><label for="endoClick">Units delivered per click</label>
-              <select id="endoClick"><option value="0.5">0.5 units per click (0.005 mL)</option><option value="1" selected>1 unit per click (0.01 mL), most common</option><option value="2">2 units per click (0.02 mL)</option></select></div>
-            <div class="footnote" style="margin-top:4px;">Check your pen's dial markings. Standard U-100 pens: 1 unit = 0.01 mL.</div>
-          </div>
-        </div>
-
-        <div class="endo-opt">
-          <div id="endoStack"></div>
-          <button class="btn btn-sm" type="button" id="endoAddBtn">+ Add another compound to this injection</button>
-        </div>
-
-        <div class="endo-opt">
-          <label class="endo-check"><input type="checkbox" id="endoCycle"> Calculate cumulative cycle exposure</label>
-          <div id="endoCycleBox" class="endo-form" hidden style="margin-top:10px;">
-            <div class="field"><label for="endoPerDay">Injections per day</label><select id="endoPerDay"><option>1</option><option>2</option><option>3</option><option>4</option></select></div>
-            <div class="field"><label for="endoDays">Days per week</label><select id="endoDays"><option>1</option><option>2</option><option>3</option><option>4</option><option selected>5</option><option>6</option><option>7</option></select></div>
-            <div class="field"><label for="endoWeeks">Weeks</label><select id="endoWeeks"><option>2</option><option>4</option><option>6</option><option>8</option><option>10</option><option selected>12</option><option>16</option><option>20</option><option>24</option></select></div>
-          </div>
-        </div>
-
-        <div id="endoResult" style="margin-top:14px;"></div>
-        <details class="endo-table" style="margin-top:14px;">
-          <summary>FDA endotoxin thresholds by body weight</summary>
-          <p class="footnote" style="margin:8px 0;">Maximum EU per dose for IV, IM and SubQ at 5 EU/kg. Intrathecal and spinal routes use 0.2 EU/kg.</p>
+        <div id="endoResult"></div>
+        <details class="endo-table">
+          <summary>Thresholds &amp; how this works</summary>
+          <p class="footnote" style="margin:8px 0;">Compares a dose, a stack or a whole cycle against the FDA/USP &lt;85&gt; endotoxin reference ceiling, the way PeptideSafe does. Maximum EU per dose for IV, IM and SubQ is 5 EU/kg; intrathecal and spinal routes use 0.2 EU/kg. Standard U-100 pens deliver 1 unit = 0.01 mL; check your pen's dial.</p>
           <div style="overflow-x:auto;"><table class="endo-tbl" id="endoTable"></table></div>
+          <p class="footnote" style="margin-top:8px;">Research and education only. Informational estimates, not dosing instructions or a safety guarantee. The FDA/USP limit is a manufacturing reference, not a statement that any dose is safe for any person. Modeled on <a href="https://peptidesafe.lovable.app/" target="_blank" rel="noopener">PeptideSafe</a>.</p>
         </details>
-        <div class="disclaimer" style="margin-top:14px;">Research and education only. Informational estimates, not dosing instructions or a safety guarantee. The FDA/USP limit is a manufacturing reference, not a statement that any dose is safe for any person. Modeled on <a href="https://peptidesafe.lovable.app/" target="_blank" rel="noopener">PeptideSafe</a>.</div>
       </div>
 
         <div class="card">
