@@ -1734,7 +1734,7 @@ function attachSerumScrub(wrap, ctx){
     const left = xv/SV.W*r.width, w = tip.offsetWidth;
     tip.style.left = Math.max(0, Math.min(r.width - w, left - w/2)) + 'px';
   };
-  bindScrub(wrap, show, cancel=> { if(cancel) hide(); });
+  bindScrub(wrap, show, ()=> hide());
   return {hide};
 }
 function serumCtx(shownS, now, pct){
@@ -2933,7 +2933,7 @@ function attachLineScrub(root){
         out.classList.add('on');
       }
     };
-    bindScrub(wrap, show, cancel=> { if(cancel) hide(); });
+    bindScrub(wrap, show, ()=> hide());
   });
 }
 
@@ -2949,6 +2949,27 @@ function loadCheckinForm(iso){
   $('#ciWeight').value = w!=null ? Math.round(w*10)/10 : '';
   $('#ciStatus').textContent = c ? `Editing the entry for ${fmtDateShort(iso)}.` : '';
   $('#ciDelete').hidden = !c;
+}
+/* Card titles (plus any filter chips right under them) sit above their card, like the serum chart. Moving the
+   nodes keeps their ids and listeners, so the render code that fills them is unaffected. */
+function liftCardHeads(){
+  $$('main .view .card').forEach(card=>{
+    if(card.closest('.serum-block, .card-block, #askChat') || card.matches('#askSetup, details')) return;
+    const head = card.firstElementChild;
+    if(!head) return;
+    const isTitle = head.classList.contains('card-h') || head.tagName==='H3'
+      || (head.tagName==='DIV' && head.children.length<=3 && head.querySelector(':scope > h3'));
+    if(!isTitle) return;
+    if(head.tagName==='DIV'){ head.removeAttribute('style'); head.classList.add('card-h'); }
+    else if(head.tagName==='H3') head.removeAttribute('style');
+    const block = document.createElement('section'); block.className = 'card-block';
+    const bh = document.createElement('div'); bh.className = 'card-block-head';
+    card.before(block);
+    bh.appendChild(head);
+    const next = card.firstElementChild;
+    if(next && next.classList.contains('chip-row')) bh.appendChild(next);
+    block.append(bh, card);
+  });
 }
 function initCheckinForm(){
   const maxISO = todayISO();
@@ -3494,6 +3515,7 @@ async function openGhostCamera(angle, onCapture){
   render();
 }
 function initProgress(){
+  liftCardHeads();
   initCheckinForm();
   initPhotos();
   $('#trendRange').addEventListener('click', e=>{
