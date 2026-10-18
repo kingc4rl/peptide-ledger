@@ -1880,7 +1880,7 @@ function renderVials(){
       return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
         <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty+(isOpen?1:0)>1?`<span class="lot-qty">×${qty+(isOpen?1:0)}</span>`:''}</div>
         <div class="lot-info">
-          <div class="lot-top"><div class="lot-name">${esc(v.pharmacy||'No vendor')}</div>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
+          <div class="lot-top"><span class="lot-name">${esc(v.pharmacy||'No vendor')}</span>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
           <div class="lot-pills">${status}
             ${activeFor? `<span class="pill pill-info">In use</span>` : ''}
             ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : ''}
@@ -1888,7 +1888,9 @@ function renderVials(){
           </div>
           ${(()=>{ const bits = [meta, Array.isArray(v.finishedLog)&&v.finishedLog.length ? `${v.finishedLog.length} finished` : ''].filter(Boolean); return bits.length ? `<div class="lot-meta">${bits.join(' · ')}</div>` : ''; })()}
         </div>
-        ${tests.length ? `<div class="lot-coas">${tests.map((t,k)=>`<button type="button" class="coa-mini" data-coa-vial="${v.id}" data-coa-i="${k}" aria-label="View certificate of analysis${t.lab?' from '+esc(t.lab):''}">${coaMiniSVG(t, mg)}</button>`).join('')}</div>` : ''}
+        ${tests.length ? `<div class="lot-coas"><button type="button" class="coa-mini ${tests.length>1?'stack':''}" data-coa-vial="${v.id}" data-coa-i="0" aria-label="View ${tests.length>1 ? tests.length+' certificates of analysis' : 'certificate of analysis'+(tests[0].lab?' from '+esc(tests[0].lab):'')}">
+          <span class="coa-fan">${tests.slice(0,3).map((t,k,a)=>`<span class="coa-sheet" style="--k:${k - (a.length-1)/2};z-index:${k}">${coaMiniSVG(t, mg)}</span>`).join('')}</span>
+          <span class="coa-cap">${tests.length>1 ? `${tests.length} COAs` : 'COA'}</span></button></div>` : ''}
       </div>`;
     }).join('');
     const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
@@ -2058,20 +2060,19 @@ function coaMiniSVG(t, labelMg){
     ${[['massG',25],['purG',31],['endoG',37]].map(([k,y])=>`<rect x="6" y="${y}" width="22" height="2" rx="1" fill="#cfc8bd"/><circle cx="35" cy="${y+1}" r="2" fill="${dot(g[k])}"/>`).join('')}
     <circle cx="33" cy="47" r="6" fill="none" stroke="#b33a3a" stroke-width="1.2" stroke-opacity=".75"/><circle cx="33" cy="47" r="3.6" fill="none" stroke="#b33a3a" stroke-width=".7" stroke-opacity=".6"/>
     <rect x="6" y="46" width="14" height="1.4" fill="#8d857b"/>
-  </svg><span>COA</span>`;
+  </svg>`;
 }
 /* Full certificate, rebuilt from what the user entered for this vial's lab test. */
-function openCoaModal(v, i){
-  const t = vialTests(v)[i]; if(!t) return;
+/* One rebuilt certificate sheet for a lab test on a vial. */
+function coaDocHTML(v, t){
   const labelMg = num(v.mgPerVial,0);
   const g = coaGrades(t, labelMg);
   const chip = k=> k ? `<span class="coa-res ${k}">${k==='ok'?'Conforms':k==='warn'?'Borderline':'Out of range'}</span>` : '<span class="coa-res">—</span>';
   const fmt = (x,d=2)=> x==null ? '—' : String(Math.round(x*10**d)/10**d);
-  const coa = safeUrl(t.coaUrl);
   const lab = t.lab || 'Independent laboratory';
   const ref = `${(lab.replace(/[^A-Za-z]/g,'').slice(0,3)||'LAB').toUpperCase()}-${(t.date||'').replace(/-/g,'') || '000000'}-${(v.lot||v.id||'').toString().replace(/[^A-Za-z0-9]/g,'').slice(-5).toUpperCase() || '00000'}`;
-  openModal('Certificate of analysis', `
-    <div class="coa-doc">
+  const coa = safeUrl(t.coaUrl);
+  return `<div class="coa-doc">
       <div class="coa-band"><div class="coa-logo">${esc(lab.slice(0,1).toUpperCase())}</div><div><div class="coa-lab">${esc(lab)}</div><div class="coa-sub">Analytical testing report</div></div></div>
       <div class="coa-title">Certificate of Analysis</div>
       <div class="coa-ref mono">Ref ${esc(ref)}</div>
@@ -2095,9 +2096,31 @@ function openCoaModal(v, i){
         <div class="coa-seal"><span>${esc(lab.slice(0,12).toUpperCase())}</span><b>TESTED</b><span>${t.date?esc(fmtDateShort(t.date)):''}</span></div>
       </div>
     </div>
+    ${coa ? `<a class="btn btn-sm coa-orig" href="${esc(coa)}" target="_blank" rel="noopener">Open original report ↗</a>` : ''}`;
+}
+/* Certificates for a vial; several are laid side by side and swiped between, starting at index i. */
+function openCoaModal(v, i){
+  const tests = vialTests(v); if(!tests[i]) return;
+  const many = tests.length > 1;
+  openModal(many ? `Certificates of analysis` : 'Certificate of analysis', `
+    ${many ? `<div class="coa-pager"><button type="button" class="coa-nav" id="coaPrev" aria-label="Previous certificate">‹</button><span id="coaCount" class="mono">1 / ${tests.length}</span><button type="button" class="coa-nav" id="coaNext" aria-label="Next certificate">›</button></div>` : ''}
+    <div class="coa-track ${many?'many':''}" id="coaTrack">${tests.map(t=>`<div class="coa-slide">${coaDocHTML(v, t)}</div>`).join('')}</div>
+    ${many ? `<div class="coa-dots" id="coaDots">${tests.map((_,k)=>`<i data-k="${k}"></i>`).join('')}</div>` : ''}
     <p class="footnote" style="margin-top:10px;">Rebuilt from the values you entered for this vial. Grades: mass 90–110% of label, purity ≥ 98%, endotoxin ≤ 1 EU/mg.</p>
-    <div class="form-actions">${coa?`<a class="btn" href="${esc(coa)}" target="_blank" rel="noopener">Open original report ↗</a>`:''}<button type="button" class="btn btn-accent-pep" id="coaEdit">Edit vial</button></div>
-  `, body=>{ $('#coaEdit',body).addEventListener('click', ()=>{ closeModal(); openVialModal(v); }); });
+    <div class="form-actions"><button type="button" class="btn btn-accent-pep" id="coaEdit">Edit vial</button></div>
+  `, body=>{
+    $('#coaEdit',body).addEventListener('click', ()=>{ closeModal(); openVialModal(v); });
+    if(!many) return;
+    const track = $('#coaTrack',body), dots = $$('#coaDots i',body), count = $('#coaCount',body);
+    const cur = ()=> Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
+    const go = k=> track.scrollTo({left: Math.max(0, Math.min(tests.length-1, k)) * track.clientWidth, behavior:'smooth'});
+    const sync = ()=>{ const k = cur(); count.textContent = `${k+1} / ${tests.length}`; dots.forEach((d,j)=> d.classList.toggle('on', j===k)); $('#coaPrev',body).disabled = k===0; $('#coaNext',body).disabled = k===tests.length-1; };
+    track.addEventListener('scroll', ()=> requestAnimationFrame(sync), {passive:true});
+    $('#coaPrev',body).addEventListener('click', ()=> go(cur()-1));
+    $('#coaNext',body).addEventListener('click', ()=> go(cur()+1));
+    dots.forEach(d=> d.addEventListener('click', ()=> go(+d.dataset.k)));
+    requestAnimationFrame(()=>{ track.scrollLeft = i * track.clientWidth; sync(); });
+  });
 }
 /* Lab tests on a vial: the first lives in flat fields (testLab, testMassMg, …); more go in v.extraTests. */
 function testFilled(t){ return !!(t && (t.lab || t.massMg || t.purity || t.endo || t.coaUrl)); }

@@ -918,9 +918,24 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .lot-meta{ font-size:11.5px; color:var(--muted); overflow-wrap:anywhere; }
 .lot-coas{ flex:none; display:flex; gap:4px; }
 .coa-mini{ display:flex; flex-direction:column; align-items:center; gap:2px; padding:0; border:0; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent; }
-.coa-mini svg{ width:34px; height:43px; filter:drop-shadow(0 2px 3px rgba(60,40,20,.18)); transform:rotate(-4deg); transition:transform .15s; }
-.coa-mini:active svg{ transform:rotate(0) scale(.95); }
-.coa-mini span{ font-size:9.5px; font-weight:800; letter-spacing:.06em; color:#2f4a6b; }
+.coa-fan{ position:relative; display:block; width:56px; height:66px; }
+.coa-sheet{ position:absolute; left:50%; top:50%; width:46px; height:58px; margin:-29px 0 0 -23px; transform:translateX(calc(var(--k) * 7px)) rotate(calc(var(--k) * 9deg - 3deg)); transform-origin:50% 90%; transition:transform .2s; }
+.coa-mini:not(.stack) .coa-sheet{ transform:rotate(-4deg); }
+.coa-sheet svg{ width:100%; height:100%; display:block; filter:drop-shadow(0 2px 4px rgba(40,50,80,.22)); }
+.coa-mini.stack .coa-fan{ width:66px; }
+.coa-mini:active .coa-sheet{ transform:translateX(calc(var(--k) * 10px)) rotate(calc(var(--k) * 13deg - 3deg)); }
+.coa-cap{ font-size:10px; font-weight:800; letter-spacing:.05em; color:#2f4a6b; }
+/* Certificate viewer: swipe between sheets */
+.coa-track{ display:flex; overflow-x:auto; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; margin:0 -10px; }
+.coa-track::-webkit-scrollbar{ display:none; }
+.coa-slide{ flex:0 0 100%; scroll-snap-align:center; scroll-snap-stop:always; padding:6px 10px 22px; box-sizing:border-box; min-width:0; }
+.coa-orig{ margin-top:10px; }
+.coa-pager{ display:flex; align-items:center; justify-content:center; gap:14px; margin-bottom:8px; font-size:13px; color:var(--muted); }
+.coa-nav{ width:32px; height:32px; border-radius:50%; border:1px solid rgba(255,255,255,.85); background:rgba(255,255,255,.6); font-size:19px; line-height:1; cursor:pointer; color:var(--ink); padding:0 0 2px; }
+.coa-nav:disabled{ opacity:.3; cursor:default; }
+.coa-dots{ display:flex; justify-content:center; gap:6px; margin-top:2px; }
+.coa-dots i{ width:7px; height:7px; border-radius:50%; background:rgba(40,50,80,.2); cursor:pointer; transition:width .2s, background .2s; }
+.coa-dots i.on{ width:18px; border-radius:99px; background:#2f4a6b; }
 /* Full certificate */
 .coa-doc{ background:#fffdf9; color:#2b2622; border:1px solid rgba(60,50,40,.18); border-radius:6px; padding:0 0 14px; box-shadow:0 8px 24px rgba(40,30,20,.12); overflow:hidden; font-size:13px; }
 .coa-band{ display:flex; align-items:center; gap:10px; background:#2f4a6b; color:#fff; padding:10px 14px; }
@@ -962,9 +977,10 @@ body{ overscroll-behavior:none; }
 .vial-alert.none, .vial-alert.unopened{ background:rgba(231,240,252,.7); border-color:rgba(90,169,255,.4) !important; }
 .vial-alert span{ flex:1; min-width:0; }
 .vial-alert .btn{ flex:none; }
-.lot-top{ display:flex; align-items:flex-start; justify-content:space-between; gap:8px; min-width:0; }
-.lot-top .lot-name{ min-width:0; }
-.lot-act{ flex:none; margin-top:1px; border:1px solid rgba(255,159,67,.55); background:rgba(255,236,214,.7); color:var(--accent-pep-strong); font-family:inherit; font-size:10.5px; font-weight:700; line-height:1; border-radius:99px; padding:4px 8px; cursor:pointer; position:relative; }
+.lot-top{ display:block; min-width:0; line-height:1.35; }
+.lot-top .lot-name{ display:inline; margin-right:6px; vertical-align:middle; }
+.lot-top .lot-act{ vertical-align:middle; }
+.lot-act{ display:inline-block; white-space:nowrap; border:1px solid rgba(255,159,67,.55); background:rgba(255,236,214,.7); color:var(--accent-pep-strong); font-family:inherit; font-size:10.5px; font-weight:700; line-height:1; border-radius:99px; padding:4px 8px; cursor:pointer; position:relative; }
 .lot-act::after{ content:''; position:absolute; inset:-8px -6px; }
 .swap-sec{ margin-top:12px; }
 .swap-sec:first-child{ margin-top:0; }
