@@ -1023,6 +1023,13 @@ body{ overscroll-behavior:none; }
 .log-time input{ width:136px; padding:7px 9px; }
 .log-go{ width:100%; justify-content:center; gap:8px; display:flex; align-items:center; }
 .log-go svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; }
+
+/* Pens and vials float on the page instead of sitting in a card */
+.card.bare{ background:none; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; padding:0; border-radius:0; }
+.card.bare .pen-list{ gap:6px; }
+.card.bare .vial-detail{ margin-left:0; margin-right:0; background:linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5)); -webkit-backdrop-filter:blur(20px) saturate(160%); backdrop-filter:blur(20px) saturate(160%); box-shadow:0 0 0 .5px rgba(20,25,35,.07), 0 8px 24px rgba(20,25,35,.06); }
+.card.bare .vial-tile.on{ background:rgba(255,255,255,.55); }
+.card.bare .empty{ background:linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.42)); border-radius:22px; box-shadow:0 0 0 .5px rgba(20,25,35,.07); }
 </style>
 </head>
 <body>
@@ -1047,7 +1054,7 @@ body{ overscroll-behavior:none; }
 
       <section id="doseView" class="view">
 
-        <div class="card">
+        <div class="card bare">
           <div class="card-h"><h3>Log a dose</h3><span class="footnote" id="doseTodayLabel"></span></div>
           <div id="protocolList"></div>
         </div>
@@ -1092,7 +1099,7 @@ body{ overscroll-behavior:none; }
 
       <section id="inventoryView" class="view" hidden>
 
-        <div class="card">
+        <div class="card bare">
           <div class="card-h"><h3>Stash</h3><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div>
           <div id="vialList"></div>
         </div>
