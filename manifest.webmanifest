@@ -1,6 +1,6 @@
 {
-  "name": "Peptide Ledger",
-  "short_name": "Peptides",
+  "name": "Pep Prep",
+  "short_name": "Pep Prep",
   "description": "Private peptide tracker: dosing, protocols, inventory and progress. Data stays on your device.",
   "id": "./",
   "start_url": "./",

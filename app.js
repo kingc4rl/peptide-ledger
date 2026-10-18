@@ -4445,7 +4445,7 @@ let askConv = null, askBusy = false, askAbort = null, askStream = null;
 const claudeKey = ()=> lsGet('ledger.claudeKey','');
 const claudeModel = ()=> CLAUDE_MODELS[lsGet('ledger.claudeModel','')] ? lsGet('ledger.claudeModel','') : 'claude-opus-5-5';
 function askSystemPrompt(){
-  return `You are the assistant inside Peptide Ledger, the user's private app for tracking peptide protocols, doses, vials, vendors and weight. Today is ${fmtDate(todayISO())}.
+  return `You are the assistant inside Pep Prep, the user's private app for tracking peptide protocols, doses, vials, vendors and weight. Today is ${fmtDate(todayISO())}.
 
 About the user:
 - An adult who uses research and grey-market peptides, and who is a type 1 diabetic.
@@ -4682,12 +4682,12 @@ async function exportBackup(){
   const payload = {app:'peptide-ledger', format:1, exportedAt:new Date().toISOString(), collections:{}, blobs,
     settings:{weightUnit: weightUnit(), endoWeight: lsGet('ledger.endoWeight',''), urineStrip: lsGet('ledger.urineStrip','10')}};
   COLLECTIONS.forEach(k=> payload.collections[k] = state[k]);
-  const name = `peptide-ledger-backup-${todayISO()}.json`;
+  const name = `pep-prep-backup-${todayISO()}.json`;
   const file = new File([JSON.stringify(payload)], name, {type:'application/json'});
   const touch = matchMedia('(pointer: coarse)').matches;
   let done = false;
   if(touch && navigator.canShare && navigator.canShare({files:[file]})){
-    try{ await navigator.share({files:[file], title:'Peptide Ledger backup'}); done = true; }
+    try{ await navigator.share({files:[file], title:'Pep Prep backup'}); done = true; }
     catch(e){ if(e && e.name==='AbortError') return false; }
   }
   if(!done){
@@ -4702,8 +4702,8 @@ async function exportBackup(){
 }
 async function importBackup(file){
   let data;
-  try{ data = JSON.parse(await file.text()); }catch(e){ throw new Error('That file isn\'t a Peptide Ledger backup.'); }
-  if(!data || data.app!=='peptide-ledger' || !data.collections) throw new Error('That file isn\'t a Peptide Ledger backup.');
+  try{ data = JSON.parse(await file.text()); }catch(e){ throw new Error('That file isn\'t a Pep Prep backup.'); }
+  if(!data || data.app!=='peptide-ledger' || !data.collections) throw new Error('That file isn\'t a Pep Prep backup.');
   blobUrlCache.forEach(u=> URL.revokeObjectURL(u)); blobUrlCache.clear();
   await clearBlobs();
   for(const k of COLLECTIONS){ state[k] = Array.isArray(data.collections[k]) ? data.collections[k] : []; await persist(k); }
@@ -4757,7 +4757,7 @@ async function openBackupModal(){
     $('#bkClose',body).addEventListener('click', closeModal);
     $('#bkExport',body).addEventListener('click', async ()=>{
       st.textContent = 'Preparing backup…';
-      try{ const ok = await exportBackup(); st.textContent = ok ? `Backup created: peptide-ledger-backup-${todayISO()}.json` : 'Export cancelled.'; }
+      try{ const ok = await exportBackup(); st.textContent = ok ? `Backup created: pep-prep-backup-${todayISO()}.json` : 'Export cancelled.'; }
       catch(e){ st.textContent = 'Export failed. Try again.'; }
     });
     $('#bkFile',body).addEventListener('change', ()=>{
@@ -4774,7 +4774,7 @@ async function openBackupModal(){
     });
     $('#bkErase',body).addEventListener('click', ()=>{
       closeModal();
-      confirmAction('Erase all Peptide Ledger data from this device? This cannot be undone.', eraseAll, 'Erase everything');
+      confirmAction('Erase all Pep Prep data from this device? This cannot be undone.', eraseAll, 'Erase everything');
     });
   });
 }
@@ -4783,7 +4783,7 @@ function isStandalone(){ return matchMedia('(display-mode: standalone)').matches
 function renderInstallCard(){
   const el = $('#installInfo'); if(!el) return;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-  if(isStandalone()){ el.innerHTML = `<p class="footnote">Installed. You're running Peptide Ledger as an app.</p>`; return; }
+  if(isStandalone()){ el.innerHTML = `<p class="footnote">Installed. You're running Pep Prep as an app.</p>`; return; }
   if(deferredInstall){ el.innerHTML = `<button class="btn btn-accent-pep btn-sm" id="installBtn">Install app</button>`; $('#installBtn').addEventListener('click', async ()=>{ deferredInstall.prompt(); await deferredInstall.userChoice.catch(()=>{}); deferredInstall = null; renderInstallCard(); }); return; }
   el.innerHTML = ios
     ? `<p class="footnote">In Safari, tap the Share button, then <strong>Add to Home Screen</strong>. Open the app from its icon so your data stays in one place.</p>`
