@@ -1878,7 +1878,7 @@ function renderVials(){
       const tests = vialTests(v);
       const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
       return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
-        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty+(isOpen?1:0)>1?`<span class="lot-qty">×${qty+(isOpen?1:0)}</span>`:''}</div>
+        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, `l${gi}_${i}`)}${qty+(isOpen?1:0)>1?`<span class="lot-qty">×${qty+(isOpen?1:0)}</span>`:''}</div>
         <div class="lot-info">
           <div class="lot-top"><span class="lot-name">${esc(v.pharmacy||'No vendor')}</span>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
           <div class="lot-pills">${status}
@@ -1897,7 +1897,8 @@ function renderVials(){
     const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
     const meta = `${totalQty} vial${totalQty===1?'':'s'}${anyCalc ? ` · ${totalDays<=0?'out':'~'+totalDays+'d'}` : ''}`;
     const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
-    return {compound, color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
+    const vendors = [...new Set(lots.map(v=> (v.pharmacy||'').trim()).filter(Boolean))];
+    return {compound, name: compound, brand: vendors.length===1 ? vendors[0] : '', color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
   });
   if(stashSel && !groups[stashSel]) stashSel = null;
   el.innerHTML = `<div class="vial-shelf">${shelf.map((g,i)=>`
@@ -1968,74 +1969,103 @@ function colorFor(compound, i){
   const pool = free.length ? free : PROTOCOL_COLORS;
   return pool[i % pool.length];
 }
-/* A glass vial: coloured cap, liquid at the open vial's remaining level, or a powder cake when still sealed. */
+/* Lighten (k>0) or darken (k<0) a #rrggbb colour. */
+function shade(hex, k){
+  const n = parseInt(String(hex).slice(1),16); const r=n>>16, g=(n>>8)&255, b=n&255;
+  const f = v=> Math.round(k>0 ? v+(255-v)*k : v*(1+k));
+  return '#'+[f(r),f(g),f(b)].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('');
+}
+/* A realistic serum vial: brushed silver cap and crimp, stopper in the neck, thick clear glass with refraction
+   edges, liquid at the open vial's remaining level (or a powder cake while sealed), and a clinical pharmacy label.
+   g: {color, pct (0-1 or null), mgTag, name, brand (vendor), lot}. */
 function vialSVG(g, i){
-  const id = 'vg'+i, top = 30, bot = 112, h = bot - top - 6;
-  const lvl = g.pct==null ? null : Math.max(0.04, g.pct);
-  const ly = lvl==null ? 0 : bot - 4 - h*lvl;
-  return `<svg class="vial-svg" viewBox="0 0 64 118" aria-hidden="true">
-    <defs>
-      <linearGradient id="${id}c" x1="0" x2="1"><stop offset="0" stop-color="${g.color}"/><stop offset=".45" stop-color="#fff" stop-opacity=".55"/><stop offset=".55" stop-color="${g.color}"/><stop offset="1" stop-color="${g.color}" stop-opacity=".8"/></linearGradient>
-      <linearGradient id="${id}m" x1="0" x2="1"><stop offset="0" stop-color="#b9b9c0"/><stop offset=".4" stop-color="#f4f4f7"/><stop offset="1" stop-color="#a5a5ad"/></linearGradient>
-      <clipPath id="${id}b"><rect x="9" y="${top}" width="46" height="${bot-top}" rx="9"/></clipPath>
-    </defs>
-    <rect x="15" y="3" width="34" height="13" rx="4" fill="url(#${id}c)"/>
-    <rect x="13" y="14" width="38" height="8" rx="2.5" fill="url(#${id}m)"/>
-    <rect x="18" y="22" width="28" height="9" fill="rgba(255,255,255,.55)" stroke="rgba(60,50,40,.18)"/>
-    <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="rgba(255,255,255,.5)"/>
-    <g clip-path="url(#${id}b)">
-      ${lvl==null
-        ? `<rect x="9" y="${bot-15}" width="46" height="15" fill="#f6f0e4"/><rect x="9" y="${bot-16}" width="46" height="2" fill="#e7dcc7"/>`
-        : `<rect x="9" y="${ly}" width="46" height="${bot-ly}" fill="${g.color}" fill-opacity=".38"/><rect x="9" y="${ly}" width="46" height="2.2" fill="${g.color}" fill-opacity=".7"/>`}
-      <rect x="14" y="${top+4}" width="5" height="${bot-top-14}" rx="2.5" fill="#fff" fill-opacity=".7"/>
-    </g>
-    ${g.brand ? vialBrandLabel(g, id) : g.mgTag ? `${holoLabel(id, 52, 22, g.color)}
-    <text x="32" y="68.5" text-anchor="middle" font-size="10.5" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#2b2622" stroke="rgba(255,255,255,.55)" stroke-width="1.6" paint-order="stroke">${esc(g.mgTag)}</text>` : ''}
-    <rect x="9" y="${top}" width="46" height="${bot-top}" rx="9" fill="none" stroke="rgba(60,50,40,.28)" stroke-width="1.2"/>
+  const id = 'vg'+i, W=80, H=156, bx=11, bw=58, by=46, bb=146, cx=40, c0 = g.color;
+  const m = ['#7d8088','#c9ccd2','#f4f5f7','#a9acb3','#e6e8ec','#8a8d95'];
+  const inner = {x:bx+2.8, w:bw-5.6, top:by+3, bot:bb-7};
+  const ly = g.pct==null ? null : inner.bot - (inner.bot-inner.top-6)*Math.max(.03, g.pct);
+  const body = `M${cx-19} 30 L${cx-19} 36 C${cx-19} 41 ${bx} 40 ${bx} ${by+5} V${bb-5} Q${bx} ${bb} ${bx+6} ${bb} H${bx+bw-6} Q${bx+bw} ${bb} ${bx+bw} ${bb-5} V${by+5} C${bx+bw} 40 ${cx+19} 41 ${cx+19} 36 L${cx+19} 30Z`;
+  const powderTop = `M${inner.x} ${inner.bot-16} q6 -2.4 11 -.8 t11 -.6 t11 .9 t11 -.7 t${inner.w-44} .4`;
+  return `<svg class="vial-svg" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>
+    <linearGradient id="${id}cap" x1="0" x2="1">${m.map((c,k)=>`<stop offset="${[0,.18,.34,.55,.78,1][k]}" stop-color="${c}"/>`).join('')}</linearGradient>
+    <linearGradient id="${id}capT" x1="0" x2="1" y1="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".9"/><stop offset=".5" stop-color="${m[2]}"/><stop offset="1" stop-color="${m[3]}"/></linearGradient>
+    <linearGradient id="${id}skirt" x1="0" x2="1"><stop offset="0" stop-color="#6d7078"/><stop offset=".3" stop-color="#d9dbe0"/><stop offset=".5" stop-color="#9da0a8"/><stop offset=".8" stop-color="#eceef1"/><stop offset="1" stop-color="#6a6d75"/></linearGradient>
+    <linearGradient id="${id}glass" x1="0" x2="1"><stop offset="0" stop-color="#7f97a8" stop-opacity=".75"/><stop offset=".045" stop-color="#c9d8e2" stop-opacity=".45"/><stop offset=".12" stop-color="#f4f8fb" stop-opacity=".2"/><stop offset=".5" stop-color="#fff" stop-opacity=".1"/><stop offset=".88" stop-color="#f4f8fb" stop-opacity=".18"/><stop offset=".955" stop-color="#c3d3de" stop-opacity=".45"/><stop offset="1" stop-color="#6f879a" stop-opacity=".8"/></linearGradient>
+    <linearGradient id="${id}liq" x1="0" x2="1"><stop offset="0" stop-color="${shade(c0,-.35)}" stop-opacity=".75"/><stop offset=".25" stop-color="${c0}" stop-opacity=".45"/><stop offset=".6" stop-color="${shade(c0,.35)}" stop-opacity=".35"/><stop offset="1" stop-color="${shade(c0,-.4)}" stop-opacity=".75"/></linearGradient>
+    <linearGradient id="${id}pow" x1="0" x2="1"><stop offset="0" stop-color="#cfcbc4"/><stop offset=".3" stop-color="#f4f2ee"/><stop offset=".7" stop-color="#fbfaf8"/><stop offset="1" stop-color="#c8c4bc"/></linearGradient>
+    <linearGradient id="${id}hl" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset=".45" stop-color="#fff" stop-opacity=".85"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></linearGradient>
+    <radialGradient id="${id}sh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#1c2a3a" stop-opacity=".35"/><stop offset="1" stop-color="#1c2a3a" stop-opacity="0"/></radialGradient>
+    <clipPath id="${id}in"><rect x="${inner.x}" y="${inner.top}" width="${inner.w}" height="${inner.bot-inner.top}" rx="5"/></clipPath>
+    <clipPath id="${id}bd"><path d="${body}"/></clipPath>
+  </defs>
+  <ellipse cx="${cx}" cy="${bb+3}" rx="34" ry="5" fill="url(#${id}sh)"/>
+  <path d="${body}" fill="url(#${id}glass)"/>
+  <rect x="${cx-17.5}" y="30" width="35" height="7" rx="1.5" fill="#4d5057"/><rect x="${cx-17.5}" y="35.5" width="35" height="1.5" fill="#2f3136" fill-opacity=".6"/>
+  <g clip-path="url(#${id}in)">
+    ${ly==null
+      ? `<path d="${powderTop} V${inner.bot+2} H${inner.x}Z" fill="url(#${id}pow)"/><path d="${powderTop}" fill="none" stroke="#fff" stroke-opacity=".9" stroke-width=".8"/>`
+      : `<rect x="${inner.x}" y="${ly}" width="${inner.w}" height="${inner.bot-ly+2}" fill="url(#${id}liq)"/>
+         <ellipse cx="${cx}" cy="${ly}" rx="${inner.w/2}" ry="2.2" fill="${shade(c0,.45)}" fill-opacity=".55"/>
+         <ellipse cx="${cx}" cy="${ly}" rx="${inner.w/2}" ry="2.2" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width=".6"/>`}
+  </g>
+  <g clip-path="url(#${id}bd)">
+    <rect x="${bx}" y="${bb-8}" width="${bw}" height="8" fill="#d3e2ec" fill-opacity=".6"/>
+    <ellipse cx="${cx}" cy="${bb-7.5}" rx="${bw/2-3}" ry="2" fill="none" stroke="#fff" stroke-opacity=".8" stroke-width=".7"/>
+    <rect x="${inner.x}" y="${inner.top-2}" width="${inner.w}" height="${inner.bot-inner.top+2}" rx="5" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width=".6"/>
+    <rect x="${bx+5}" y="${by+2}" width="6.5" height="${bb-by-12}" rx="3" fill="url(#${id}hl)"/>
+    <rect x="${bx+bw-8}" y="${by+4}" width="2.2" height="${bb-by-18}" rx="1.1" fill="#fff" fill-opacity=".6"/>
+    <rect x="${bx+bw-4.5}" y="${by}" width="1.4" height="${bb-by-6}" fill="#5f7382" fill-opacity=".25"/>
+    <rect x="${bx+3}" y="${by}" width="1.2" height="${bb-by-6}" fill="#5f7382" fill-opacity=".22"/>
+  </g>
+  ${vialLabelSVG(id, g, bx, bw)}
+  <path d="${body}" fill="none" stroke="#6d8292" stroke-opacity=".55" stroke-width=".9"/>
+  <rect x="${cx-21}" y="25" width="42" height="6" rx="1.2" fill="url(#${id}skirt)"/>
+  <rect x="${cx-21}" y="28.6" width="42" height=".7" fill="#000" fill-opacity=".2"/>
+  <rect x="${cx-26}" y="8" width="52" height="19" rx="3" fill="url(#${id}cap)"/>
+  <rect x="${cx-26}" y="13.7" width="52" height=".35" fill="#fff" fill-opacity=".2"/><rect x="${cx-26}" y="19.8" width="52" height=".35" fill="#fff" fill-opacity=".2"/>
+  <ellipse cx="${cx}" cy="8.5" rx="26" ry="4" fill="url(#${id}capT)"/>
+  <ellipse cx="${cx}" cy="8.5" rx="8" ry="1.5" fill="${m[0]}" fill-opacity=".5"/>
+  <rect x="${cx-26}" y="25.6" width="52" height="1.4" rx=".7" fill="${m[0]}" fill-opacity=".65"/>
   </svg>`;
 }
-/* Printed label for a single lot's vial: vendor name over the mg, squeezed to fit long names. */
-/* Holographic foil label, like silver holo sticker stock: a brushed-silver base with soft horizontal rainbow
-   streaks and a couple of iridescent patches. The streaks drift slowly and a sheen passes over. */
-function holoLabel(id, y, h, color){
-  const band = (o, c, a)=> `<stop offset="${o}" stop-color="${c}" stop-opacity="${a}"/>`;
-  return `<defs>
-      <linearGradient id="${id}ag" x1="0" x2=".25" y1="0" y2="1">
-        <stop offset="0" stop-color="#b8b9c1"/><stop offset=".22" stop-color="#e9eaee"/><stop offset=".45" stop-color="#c3c4cb"/><stop offset=".7" stop-color="#eeeff2"/><stop offset="1" stop-color="#b3b4bc"/>
-      </linearGradient>
-      <linearGradient id="${id}h" x1="0" x2="0" y1="0" y2="1">
-        ${band(0,'#fff',0)}${band(.1,'#fff',0)}${band(.135,'#ff8fb0',.75)}${band(.165,'#ffd36b',.8)}${band(.195,'#93ef9f',.8)}${band(.225,'#78d3ff',.8)}${band(.255,'#a99cff',.6)}${band(.29,'#fff',0)}
-        ${band(.6,'#fff',0)}${band(.635,'#ff8fb0',.65)}${band(.665,'#ffd36b',.7)}${band(.695,'#93ef9f',.7)}${band(.725,'#78d3ff',.7)}${band(.755,'#b39cff',.5)}${band(.79,'#fff',0)}${band(1,'#fff',0)}
-      </linearGradient>
-      <linearGradient id="${id}fx" x1="0" x2="1"><stop offset="0" stop-color="#fff" stop-opacity=".55"/><stop offset=".45" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity=".45"/></linearGradient>
-      <mask id="${id}mk"><rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}fx)"/></mask>
-      <radialGradient id="${id}p1" cx=".2" cy=".2" r=".6"><stop offset="0" stop-color="#ffb3e6" stop-opacity=".3"/><stop offset="1" stop-color="#ffb3e6" stop-opacity="0"/></radialGradient>
-      <radialGradient id="${id}p2" cx=".85" cy=".85" r=".55"><stop offset="0" stop-color="#9fe8ff" stop-opacity=".3"/><stop offset="1" stop-color="#9fe8ff" stop-opacity="0"/></radialGradient>
-      <linearGradient id="${id}s" x1="0" x2="1" y1="0" y2="1">
-        <stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".48" stop-color="#fff" stop-opacity=".9"/><stop offset=".56" stop-color="#fff" stop-opacity="0"/>
-      </linearGradient>
-      <clipPath id="${id}l"><rect x="9" y="${y}" width="46" height="${h}" rx="1.5"/></clipPath>
-    </defs>
-    <g clip-path="url(#${id}l)">
-      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}ag)"/>
-      <g mask="url(#${id}mk)"><rect class="holo-shift" x="9" y="${y-h*0.6}" width="46" height="${h*2.2}" fill="url(#${id}h)"/></g>
-      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}p1)"/>
-      <rect x="9" y="${y}" width="46" height="${h}" fill="url(#${id}p2)"/>
-      <rect x="9" y="${y+h*0.18}" width="46" height="${Math.max(1, h*0.06)}" fill="#fff" fill-opacity=".55"/>
-      <rect class="holo-sheen" x="-20" y="${y}" width="60" height="${h}" fill="url(#${id}s)"/>
-    </g>
-    <rect x="9.3" y="${y+0.3}" width="45.4" height="${h-0.6}" rx="1.5" fill="none" stroke="rgba(120,122,130,.45)" stroke-width=".6"/>`;
-}
-function vialBrandLabel(g, id){
+/* Clinical pharmacy label: matte white paper, a colour band with the vendor, the peptide name, mg, lot and a barcode,
+   a round holographic security seal on the band, and a clear viewing window with ticks so the fill level shows. */
+function vialLabelSVG(id, g, bx, bw){
+  const LY = 64, LH = 46, tx = bx+4;
+  const fit = (t, w, n)=> String(t).length > n ? ` textLength="${w}" lengthAdjust="spacingAndGlyphs"` : '';
+  const wx = bx+bw-11, wy = LY+13, wh = LH-17;
+  const ticks = Array.from({length:7},(_,k)=>{ const y = wy + wh*(k/6), long = k%2===0;
+    return `<rect x="${wx-(long?4:2.4)}" y="${y-.25}" width="${long?4:2.4}" height=".5" fill="#3b3f46"/>`; }).join('');
   // long vendor names keep whole words (e.g. "Peptide Sciences Research Supply" -> "PEPTIDE SCIENCES")
-  const words = String(g.brand).toUpperCase().trim().split(/\s+/);
-  let name = words[0].slice(0, 14);
-  for(const w of words.slice(1)){ if((name+' '+w).length > 16) break; name += ' '+w; }
-  const fit = name.length > 7 ? ` textLength="40" lengthAdjust="spacingAndGlyphs"` : '';
-  const halo = ` stroke="rgba(255,255,255,.6)" stroke-width="1.6" paint-order="stroke"`;
-  return `${holoLabel(id, 48, 32, g.color)}
-    <text x="32" y="62.5" text-anchor="middle" font-size="8.5" font-weight="800" letter-spacing=".4" font-family="system-ui, sans-serif" fill="#221d19"${halo}${fit}>${esc(name)}</text>
-    ${g.mgTag ? `<text x="32" y="74.5" text-anchor="middle" font-size="9" font-weight="700" font-family="IBM Plex Mono, monospace" fill="#3d3530"${halo}>${esc(g.mgTag)}</text>` : ''}`;
+  const words = String(g.brand || 'Research peptide').toUpperCase().trim().split(/\s+/);
+  let brand = words[0].slice(0, 16);
+  for(const w of words.slice(1)){ if((brand+' '+w).length > 16) break; brand += ' '+w; }
+  const name = g.name || g.compound || '';
+  const lotLine = g.lot ? `Lyophilized · Lot ${g.lot}` : 'Lyophilized · Research use';
+  const bars = [0,1.2,2,3.4,4.2,5,6.6,7.4,8.8,9.6,10.4,12,12.8,14.2,15].map((d,k)=>`<rect x="${tx+d}" y="${LY+36.5}" width="${k%3?0.55:1.05}" height="6" fill="#22252b"/>`).join('');
+  const sx = bx+bw-7.5, sy = LY+5.2;
+  return `<defs>
+      <mask id="${id}lm"><rect x="${bx}" y="${LY}" width="${bw}" height="${LH}" fill="#fff"/><rect x="${wx}" y="${wy}" width="7" height="${wh}" rx="3.5" fill="#000"/></mask>
+      <linearGradient id="${id}lc" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".32"/><stop offset=".14" stop-color="#000" stop-opacity="0"/><stop offset=".24" stop-color="#fff" stop-opacity=".45"/><stop offset=".34" stop-color="#fff" stop-opacity="0"/><stop offset=".86" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".34"/></linearGradient>
+      <radialGradient id="${id}hs" cx=".32" cy=".3" r=".85"><stop offset="0" stop-color="#ffffff"/><stop offset=".22" stop-color="#ffc6e0"/><stop offset=".42" stop-color="#ffe7a3"/><stop offset=".58" stop-color="#bff3d0"/><stop offset=".74" stop-color="#a9dcff"/><stop offset=".88" stop-color="#d9c8ff"/><stop offset="1" stop-color="#b9bbc4"/></radialGradient>
+    </defs>
+    <g mask="url(#${id}lm)">
+      <rect x="${bx}" y="${LY}" width="${bw}" height="${LH}" fill="#fbfaf7"/>
+      <rect x="${bx}" y="${LY}" width="${bw}" height="9" fill="${g.color}"/>
+      <text x="${tx}" y="${LY+6.6}" font-size="5.4" font-weight="800" letter-spacing=".6" font-family="system-ui,sans-serif" fill="#fff"${fit(brand,34,10)}>${esc(brand)}</text>
+      <text x="${tx}" y="${LY+19}" font-size="8.6" font-weight="800" font-family="system-ui,sans-serif" fill="#15181c"${fit(name,37,9)}>${esc(name)}</text>
+      ${g.mgTag ? `<text x="${tx}" y="${LY+28}" font-size="8" font-weight="700" font-family="ui-monospace,Menlo,monospace" fill="#2b2f36">${esc(g.mgTag)}</text>` : ''}
+      <text x="${tx}" y="${LY+34}" font-size="3.6" font-family="system-ui,sans-serif" fill="#7a7e86"${fit(lotLine,35,18)}>${esc(lotLine)}</text>
+      ${bars}
+      <g opacity=".7">${ticks}</g>
+      <rect x="${bx}" y="${LY}" width="${bw}" height="${LH}" fill="url(#${id}lc)"/>
+    </g>
+    <rect x="${wx}" y="${wy}" width="7" height="${wh}" rx="3.5" fill="none" stroke="rgba(30,40,50,.35)" stroke-width=".5"/>
+    <rect x="${bx}" y="${LY}" width="${bw}" height=".6" fill="#fff" fill-opacity=".7"/><rect x="${bx}" y="${LY+LH-.6}" width="${bw}" height=".6" fill="#000" fill-opacity=".18"/>
+    <circle cx="${sx}" cy="${sy}" r="5.8" fill="url(#${id}hs)"/>
+    <circle class="holo-glint" cx="${sx-1.6}" cy="${sy-1.8}" r="1.6" fill="#fff" fill-opacity=".8"/>
+    <circle cx="${sx}" cy="${sy}" r="5.8" fill="none" stroke="#fff" stroke-width=".6"/>
+    <circle cx="${sx}" cy="${sy}" r="3.9" fill="none" stroke="#8e9099" stroke-opacity=".5" stroke-width=".3"/>
+    <text x="${sx}" y="${sy+1.3}" text-anchor="middle" font-size="3.4" font-weight="900" font-family="system-ui,sans-serif" fill="#5c5f68" fill-opacity=".85">✓</text>`;
 }
 /* Mass as a share of the label claim, and a traffic-light grade for each assay. */
 function coaGrades(t, labelMg){
@@ -2194,7 +2224,7 @@ function openVialSwapModal({p=null, cur=null, preselect=null}={}){
   let chosen = preselect ? preselect.id : (cands[0] ? cands[0].id : '');
   const perInj = mgPerInjection(p);
   const bacDefault = (p && num(p.bacMl,0)) || num(cur && cur.bacMl,0) || 2;
-  const vialBit = (v, pct, tag)=> `<div class="swap-vial">${vialSVG({color, pct, mgTag: num(v.mgPerVial,0)?`${num(v.mgPerVial,0)} mg`:'', brand: v.pharmacy||compound}, tag)}</div>`;
+  const vialBit = (v, pct, tag)=> `<div class="swap-vial">${vialSVG({color, pct, mgTag: num(v.mgPerVial,0)?`${num(v.mgPerVial,0)} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, tag)}</div>`;
   const optMeta = v=>{
     if(finishing && v.id===finishing.id) return `Same lot · ${num(v.qty,0)} sealed${v.bud?` · BUD ${fmtDateShort(v.bud)}`:''}`;
     if(v.remainingMg!=null) return `Already open · ${round2(num(v.remainingMg,0))} mg left`;

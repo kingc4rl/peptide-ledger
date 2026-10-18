@@ -890,7 +890,7 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .vial-tile{ position:relative; display:flex; flex-direction:column; align-items:center; gap:2px; padding:10px 4px 8px; border-radius:18px; border:1px solid transparent; background:transparent; cursor:pointer; font:inherit; color:inherit; -webkit-tap-highlight-color:transparent; transition:background .2s, border-color .2s, transform .15s; min-width:0; }
 .vial-tile:active{ transform:scale(.96); }
 .vial-tile.on{ background:rgba(255,255,255,.65); border-color:rgba(255,255,255,.9); box-shadow:0 6px 18px rgba(60,40,20,.12); }
-.vial-svg{ width:74px; height:136px; filter:drop-shadow(0 4px 6px rgba(60,40,20,.14)); transition:transform .2s; }
+.vial-svg{ width:76px; height:148px; transition:transform .2s; }
 .vial-tile.on .vial-svg{ transform:translateY(-3px); }
 .vial-label{ font-weight:700; font-size:13px; line-height:1.2; text-align:center; max-width:100%; overflow-wrap:anywhere; margin-top:4px; }
 .vial-meta{ font-size:11px; color:var(--muted); white-space:nowrap; }
@@ -907,8 +907,8 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .lot{ display:flex; align-items:center; gap:10px; padding:8px 10px 8px 6px; border-radius:14px; background:rgba(255,255,255,.6); border:1px solid rgba(40,30,20,.08); cursor:pointer; margin-top:6px; min-width:0; }
 .lot:first-of-type{ margin-top:0; }
 .lot:active{ transform:scale(.99); }
-.lot-vial{ position:relative; flex:none; width:58px; }
-.lot-vial .vial-svg{ width:58px; height:107px; }
+.lot-vial{ position:relative; flex:none; width:60px; }
+.lot-vial .vial-svg{ width:60px; height:117px; }
 .lot-qty{ position:absolute; right:-6px; bottom:2px; font:700 10.5px/1 "IBM Plex Mono",monospace; background:var(--ink); color:#fff; border-radius:99px; padding:3px 5px; }
 .lot-info{ flex:1; min-width:0; display:flex; flex-direction:column; gap:4px; }
 .lot-name{ font-weight:700; font-size:14px; overflow-wrap:anywhere; }
@@ -964,7 +964,9 @@ input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep); }
 .holo-sheen{ animation:holoSheen 4.5s ease-in-out infinite; }
 @keyframes holoShift{ from{ transform:translateY(-10px); } to{ transform:translateY(10px); } }
 @keyframes holoSheen{ 0%,15%{ transform:translateX(-30px); } 60%,100%{ transform:translateX(70px); } }
-@media (prefers-reduced-motion: reduce){ .holo-shift, .holo-sheen{ animation:none; } }
+.holo-glint{ animation:holoGlint 5s ease-in-out infinite; }
+@keyframes holoGlint{ 0%,70%,100%{ opacity:.15; } 82%{ opacity:.95; } }
+@media (prefers-reduced-motion: reduce){ .holo-shift, .holo-sheen, .holo-glint{ animation:none; } }
 /* Keep the tab bar pinned: no rubber-band bounce on the page itself, and its own compositing layer on iOS */
 html{ overscroll-behavior:none; }
 body{ overscroll-behavior:none; }
@@ -987,7 +989,7 @@ body{ overscroll-behavior:none; }
 .swap-sec h4{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px; }
 .swap-row{ display:flex; align-items:center; gap:12px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.55); border:1px solid rgba(40,30,20,.08); }
 .swap-vial{ flex:none; width:40px; }
-.swap-vial .vial-svg{ width:40px; height:74px; }
+.swap-vial .vial-svg{ width:42px; height:82px; }
 .swap-opts{ display:flex; flex-direction:column; gap:6px; }
 .swap-opt{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.55); border:1.5px solid rgba(40,30,20,.08); cursor:pointer; }
 .swap-opt:has(input:checked){ border-color:var(--accent-pep); background:rgba(255,240,224,.8); }
