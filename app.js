@@ -1880,14 +1880,13 @@ function renderVials(){
       return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
         <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', brand: v.pharmacy||compound}, `l${gi}_${i}`)}${qty>1?`<span class="lot-qty">×${qty}</span>`:''}</div>
         <div class="lot-info">
-          <div class="lot-name">${esc(v.pharmacy||'No vendor')}</div>
+          <div class="lot-top"><div class="lot-name">${esc(v.pharmacy||'No vendor')}</div>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
           <div class="lot-pills">${status}
             ${activeFor? `<span class="pill pill-info">In use</span>` : ''}
             ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : ''}
             ${v.bud? `<span class="pill ${budSoon?'pill-warn':'pill-muted'}">BUD ${esc(fmtDateShort(v.bud))}</span>` : ''}
           </div>
           <div class="lot-meta">${qty} sealed${isOpen?' + 1 open':''}${meta?' · '+meta:''}${Array.isArray(v.finishedLog)&&v.finishedLog.length?` · ${v.finishedLog.length} finished`:''}</div>
-          <div class="lot-acts">${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish vial</button>` : ''}${qty>=1 && !isOpen ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open a vial</button>` : ''}</div>
         </div>
         ${tests.length ? `<div class="lot-coas">${tests.map((t,k)=>`<button type="button" class="coa-mini" data-coa-vial="${v.id}" data-coa-i="${k}" aria-label="View certificate of analysis${t.lab?' from '+esc(t.lab):''}">${coaMiniSVG(t, mg)}</button>`).join('')}</div>` : ''}
       </div>`;
