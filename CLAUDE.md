@@ -22,6 +22,7 @@ Do not stop at "branch pushed" or open a PR unless the owner asks for one. After
   (pepEquipment, labs and urine no longer have a screen but are kept so old records and backups survive.)
 - Tabs: Dose (home), Protocols, Inventory, Claude (centre orb button), Progress, Tools, Resources.
 - Claude tab: calls the Messages API from the browser with the owner's own key (localStorage `ledger.claudeKey`, never in backups). Chats are saved in the `research` collection (`messages`, `system`, `model`, `costUsd`); keep conversations append-only.
+- Vials: each record is a lot (`qty` sealed, plus one open vial while `remainingMg` is set). "Finish & open next" logs finished vials in `finishedLog`, stores `bacMl`/`concentration` when opening, and marks an empty lot `depleted` (hidden from the stash, kept for cost history).
 - Changes must stay backward compatible with existing records and with backup files (`format: 1`). Add fields with safe defaults; never rename or drop fields without a migration in `loadAll()`.
 - Backup/restore is in the "Backup, restore, install" section of `app.js`.
 

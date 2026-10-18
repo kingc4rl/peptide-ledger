@@ -789,6 +789,12 @@ function renderProtocols(){
   }));
   $$('[data-dose-history]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory)); }));
   $$('[data-edit-protocol]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openProtocolModal(state.protocols.find(p=>p.id===b.dataset.editProtocol)); }));
+  $$('[data-vial-swap]',el).forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const p = state.protocols.find(x=>x.id===b.dataset.vialSwap); if(!p) return;
+    const vs = vialState(p);
+    openVialSwapModal({p, cur: vs.vial, preselect: vs.kind==='unopened' ? vs.vial : null});
+  }));
   $$('[data-goto-checkin]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); setTab('progress'); }));
   $$('[data-mini]',el).forEach(w=>{
     const now = Date.now();
@@ -841,6 +847,8 @@ function doseCardHTML(p, color, day, serum){
   else { status = 'Not scheduled'; stCls = 'muted'; }
   const lastEv = injectionEvents(p).sort((x,y)=> y.t-x.t)[0];
   const vial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
+  const vs = vialState(p);
+  const vialTag = vs.kind==='empty' ? '<span class="dc-tag bad">Vial empty</span>' : vs.kind==='low' ? '<span class="dc-tag due">Vial low</span>' : '';
   const open = expandedCards.has(p.id);
   const logBtn = notStarted ? '' : `<button type="button" class="dc-log ${complete&&done>0?'done':''}" data-mark-dose="${p.id}" aria-label="${complete&&done>0?'Dose logged today. Tap to undo':'Log dose now'}" title="${complete&&done>0?'Logged. Tap to undo':'Log dose'}">${complete&&done>0 ? CHECK_ICON : SYRINGE_ICON}</button>`;
   const head = `<div class="dc-head" data-card-toggle="${p.id}" role="button" tabindex="0" aria-expanded="${open}">
@@ -848,7 +856,7 @@ function doseCardHTML(p, color, day, serum){
              : `<div class="dc-amt"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`}
       <div class="dc-main">
         <div class="dc-title"><strong class="dc-name">${esc(p.compound||'Untitled')}</strong><span class="dc-chev" aria-hidden="true">${open?'▴':'▾'}</span></div>
-        <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span></div>
+        <div class="dc-tags"><span class="dc-tag info">${esc(scheduleTag(p))}</span><span class="dc-tag ${stCls}">${esc(status)}</span>${vialTag}</div>
         ${open ? `<div class="dc-sub">${[time, lastEv ? `Last ${fmtShortMoment(lastEv.t)}` : 'No doses yet'].filter(Boolean).map(esc).join(' · ')}</div>` : ''}
       </div>
       ${logBtn}
@@ -884,11 +892,13 @@ function doseCardHTML(p, color, day, serum){
         <div class="dc-cell"><span class="dc-k">Last dose</span><span class="dc-v">${lastEv ? `${esc(fmtMoment(lastEv.t))} · ${esc(fmtAmount(lastEv.mg))}` : 'None logged'}</span></div>
         <div class="dc-cell"><span class="dc-k">Remaining</span><span class="dc-v">${remaining}</span></div>
       </div>
+      ${vialAlertHTML(p, vs)}
       <div class="dc-sec"><h4>Quick actions</h4>
         <div class="qa-grid">
           ${notStarted ? '' : `<button type="button" class="qa-btn primary" data-mark-dose="${p.id}">${complete&&done>0 ? CHECK_ICON+'<span>Undo dose</span>' : SYRINGE_ICON+'<span>Log dose</span>'}</button>`}
           <button type="button" class="qa-btn" data-dose-history="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><span>History &amp; backfill</span></button>
           <button type="button" class="qa-btn" data-goto-checkin><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Add check-in</span></button>
+          ${vs.vial || nextVialCandidates(p.compound, null).length ? `<button type="button" class="qa-btn" data-vial-swap="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="3" rx="1"/><path d="M9 5.5v2.5M15 5.5v2.5"/><rect x="6.5" y="8" width="11" height="13.5" rx="2.5"/><path d="M6.5 15h11"/></svg><span>${vs.kind==='ok'||vs.kind==='low'||vs.kind==='empty' ? 'Finish vial' : 'Open vial'}</span></button>` : ''}
           <button type="button" class="qa-btn" data-edit-protocol="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7"/></svg><span>Protocol</span></button>
         </div>
       </div>
@@ -898,6 +908,17 @@ function doseCardHTML(p, color, day, serum){
       ${snap}
     </div>`;
   return `<div class="dc open" style="--pc:${color}">${head}${body}</div>`;
+}
+/* Note on an expanded dose card when its vial needs attention. */
+function vialAlertHTML(p, vs){
+  const per = mgPerInjection(p);
+  let msg = '', btn = '';
+  if(vs.kind==='empty'){ msg = 'Your active vial is empty.'; btn = 'Finish & open next'; }
+  else if(vs.kind==='low'){ msg = `Vial almost empty: ${round2(vs.left)} mg left, less than one ${fmtAmount(per)} dose.`; btn = 'Finish & open next'; }
+  else if(vs.kind==='unopened'){ msg = 'Your active vial hasn\'t been opened yet.'; btn = 'Open vial'; }
+  else if(vs.kind==='none' && nextVialCandidates(p.compound, null).length){ msg = 'No active vial. Open one from your stash to track what\'s left.'; btn = 'Open a vial'; }
+  if(!msg) return '';
+  return `<div class="dc-sec vial-alert ${vs.kind}"><span>${esc(msg)}</span><button type="button" class="btn btn-sm btn-accent-pep" data-vial-swap="${p.id}">${esc(btn)}</button></div>`;
 }
 const round2 = n => Math.round(n*100)/100;
 /* The card button logs the next injection for today; once the day is complete it undoes the last one. */
@@ -1166,7 +1187,7 @@ function renderArchivedProtocols(){
 
 function activeVialOptions(compound, selectedId){
   const c = (compound||'').trim().toLowerCase();
-  const list = c ? state.vials.filter(v=> (v.compound||'').trim().toLowerCase()===c) : [];
+  const list = c ? state.vials.filter(v=> !isDepleted(v) && (v.compound||'').trim().toLowerCase()===c) : [];
   return `<option value="">${c && !list.length ? 'No vials of this compound in your stash' : 'None'}</option>` +
     list.map(v=>`<option value="${v.id}" ${selectedId===v.id?'selected':''}>${esc(vialLabel(v))}</option>`).join('');
 }
@@ -1817,13 +1838,13 @@ function renderSerum(){
 /* ===================== Peptides: Stash ===================== */
 function renderVials(){
   const el = $('#vialList');
-  if(!state.vials.length){
+  if(!state.vials.some(v=>!isDepleted(v))){
     el.innerHTML = `<div class="empty"><div class="glyph">🧪</div><p>No vials logged. Add one to see how long your stash will last.</p></div>`;
     return;
   }
   const groups = {};
   const order = [];
-  state.vials.forEach(v=>{
+  state.vials.filter(v=>!isDepleted(v)).forEach(v=>{
     const key = v.compound || 'Vial';
     if(!groups[key]){ groups[key] = []; order.push(key); }
     groups[key].push(v);
@@ -1865,7 +1886,8 @@ function renderVials(){
             ${calc && calc.daysRemaining!=null ? `<span class="pill ${low?'pill-warn':'pill-good'}">${calc.daysRemaining<=0?'Out':calc.daysRemaining+'d left'}</span>` : ''}
             ${v.bud? `<span class="pill ${budSoon?'pill-warn':'pill-muted'}">BUD ${esc(fmtDateShort(v.bud))}</span>` : ''}
           </div>
-          <div class="lot-meta">${qty} vial${qty===1?'':'s'}${meta?' · '+meta:''}</div>
+          <div class="lot-meta">${qty} sealed${isOpen?' + 1 open':''}${meta?' · '+meta:''}${Array.isArray(v.finishedLog)&&v.finishedLog.length?` · ${v.finishedLog.length} finished`:''}</div>
+          <div class="lot-acts">${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish vial</button>` : ''}${qty>=1 && !isOpen ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open a vial</button>` : ''}</div>
         </div>
         ${tests.length ? `<div class="lot-coas">${tests.map((t,k)=>`<button type="button" class="coa-mini" data-coa-vial="${v.id}" data-coa-i="${k}" aria-label="View certificate of analysis${t.lab?' from '+esc(t.lab):''}">${coaMiniSVG(t, mg)}</button>`).join('')}</div>` : ''}
       </div>`;
@@ -1910,6 +1932,18 @@ function renderVials(){
   $$('[data-add-vial]',el).forEach(b=> b.addEventListener('click', ()=>{
     openVialModal(null);
     const f = $('#vCompound'); if(f) f.value = b.dataset.addVial;
+  }));
+  $$('[data-finish-vial]',el).forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = state.vials.find(x=>x.id===b.dataset.finishVial); if(!v) return;
+    const p = protocolForVial(v);
+    openVialSwapModal({p: p && (p.activeVialId===v.id || !p.activeVialId) ? p : null, cur:v});
+  }));
+  $$('[data-open-lot]',el).forEach(b=> b.addEventListener('click', e=>{
+    e.stopPropagation();
+    const v = state.vials.find(x=>x.id===b.dataset.openLot); if(!v) return;
+    // opening from the stash only switches the protocol over; a vial still in use stays open until finished
+    openVialSwapModal({p: protocolForVial(v), preselect:v});
   }));
   $$('[data-coa-vial]',el).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
@@ -2095,6 +2129,138 @@ function labTestHTML(v){
     const coa = safeUrl(t.coaUrl);
     return `<div class="lab-test"><span class="pill pill-good">🔬 Tested${t.lab?` · ${esc(t.lab)}`:''}</span>${bits.length||t.date?`<span class="footnote">${esc(bits.join(' · '))}${t.date?`${bits.length?' · ':''}${esc(fmtDateShort(t.date))}`:''}</span>`:''}${coa?`<a href="${esc(coa)}" target="_blank" rel="noopener" data-coa>View COA ↗</a>`:''}</div>`;
   }).join('');
+}
+/* ===================== Peptides: finishing a vial and opening the next ===================== */
+/* A vial record is a lot: qty sealed vials plus, while remainingMg is set, one open vial being drawn from.
+   Finishing clears the open vial and logs it in finishedLog; a lot with nothing sealed or open is marked depleted
+   (kept for cost history, hidden from the stash). */
+function isDepleted(v){ return !!(v && v.depleted); }
+function mgPerInjection(p){
+  if(!p) return 0;
+  const d = doseAt(p, todayISO());
+  return (doseToMg(d.dose, d.doseUnit) || 0) / splitCount(p);
+}
+/* Where a protocol stands with its vial: none / unopened / ok / low (less than one injection left) / empty. */
+function vialState(p){
+  const vial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
+  if(!vial || isDepleted(vial)) return {kind:'none', vial:null};
+  if(vial.remainingMg==null) return {kind:'unopened', vial};
+  const left = num(vial.remainingMg,0), per = mgPerInjection(p);
+  if(left <= 0.001) return {kind:'empty', vial, left:0};
+  if(per && left < per - 0.001) return {kind:'low', vial, left};
+  return {kind:'ok', vial, left};
+}
+/* Vials that could be opened next for a compound: the lot being finished first, then soonest BUD.
+   Already-open vials from other lots are offered as "switch to" without opening anything. */
+function nextVialCandidates(compound, cur){
+  const c = (compound||'').trim().toLowerCase();
+  const BUD_MAX = '9999-12-31';
+  return state.vials
+    .filter(v=> !isDepleted(v) && (v.compound||'').trim().toLowerCase()===c)
+    .filter(v=> (cur && v.id===cur.id) ? num(v.qty,0)>=1 : (v.remainingMg!=null ? num(v.remainingMg,0)>0.001 : num(v.qty,1)>=1))
+    .sort((a,b)=>{
+      if(cur && a.id===cur.id) return -1;
+      if(cur && b.id===cur.id) return 1;
+      return (a.bud||BUD_MAX).localeCompare(b.bud||BUD_MAX);
+    });
+}
+function openVialSwapModal({p=null, cur=null, preselect=null}={}){
+  const finishing = cur && cur.remainingMg!=null ? cur : null;
+  const compound = (p && p.compound) || (cur && cur.compound) || (preselect && preselect.compound) || '';
+  const color = colorFor(compound, 0);
+  const cands = nextVialCandidates(compound, finishing);
+  let chosen = preselect ? preselect.id : (cands[0] ? cands[0].id : '');
+  const perInj = mgPerInjection(p);
+  const bacDefault = (p && num(p.bacMl,0)) || num(cur && cur.bacMl,0) || 2;
+  const vialBit = (v, pct, tag)=> `<div class="swap-vial">${vialSVG({color, pct, mgTag: num(v.mgPerVial,0)?`${num(v.mgPerVial,0)} mg`:'', brand: v.pharmacy||compound}, tag)}</div>`;
+  const optMeta = v=>{
+    if(finishing && v.id===finishing.id) return `Same lot · ${num(v.qty,0)} sealed${v.bud?` · BUD ${fmtDateShort(v.bud)}`:''}`;
+    if(v.remainingMg!=null) return `Already open · ${round2(num(v.remainingMg,0))} mg left`;
+    return `${num(v.qty,1)} sealed${v.bud?` · BUD ${fmtDateShort(v.bud)}`:''}${v.lot?` · Lot ${v.lot}`:''}`;
+  };
+  const left = finishing ? round2(num(finishing.remainingMg,0)) : 0;
+  openModal(finishing ? 'Finish & open next' : 'Open a vial', `
+    ${finishing ? `<div class="swap-sec"><h4>Finishing</h4>
+      <div class="swap-row">${vialBit(finishing, num(finishing.mgPerVial,0)>0 ? left/num(finishing.mgPerVial,1) : 0, 'sw_f')}
+        <div><strong>${esc(finishing.pharmacy||compound)}</strong><div class="footnote">${num(finishing.mgPerVial,0)} mg vial${finishing.dateOpened?` · opened ${esc(fmtDateShort(finishing.dateOpened))}`:''}</div>
+        <div class="footnote">${left>0.05 ? `${left} mg left, counted as discarded` : 'Empty'}</div></div></div></div>` : ''}
+    <div class="swap-sec"><h4>${finishing ? 'Open next' : 'Choose a vial'}</h4>
+      ${cands.length ? `<div class="swap-opts">${cands.map((v,i)=>`
+        <label class="swap-opt"><input type="radio" name="swapNext" value="${v.id}" ${chosen===v.id?'checked':''}>
+          ${vialBit(v, v.remainingMg!=null && num(v.mgPerVial,0)>0 && !(finishing && v.id===finishing.id) ? num(v.remainingMg,0)/num(v.mgPerVial,1) : null, 'sw_'+i)}
+          <span class="swap-opt-t"><strong>${esc(v.pharmacy||'No vendor')}${num(v.mgPerVial,0)?` · ${num(v.mgPerVial,0)} mg`:''}</strong><span class="footnote">${esc(optMeta(v))}</span></span></label>`).join('')}
+        ${finishing ? `<label class="swap-opt swap-none"><input type="radio" name="swapNext" value="" ${chosen===''?'checked':''}><span class="swap-opt-t"><strong>Don't open another now</strong><span class="footnote">Just mark this vial finished</span></span></label>` : ''}
+      </div>` : `<p class="footnote">No sealed ${esc(compound||'')} vials left in your stash.</p>`}
+    </div>
+    <div class="swap-sec" id="swapRecon">
+      <h4>Reconstitute</h4>
+      <div class="form-grid">
+        <div class="field"><label for="swapBac">BAC water (mL)</label><input id="swapBac" type="number" inputmode="decimal" step="any" min="0" value="${esc(String(bacDefault))}"></div>
+        <div class="field"><label for="swapDate">Date opened</label><input id="swapDate" type="date" value="${todayISO()}" max="${todayISO()}"></div>
+      </div>
+      <div class="swap-out mono" id="swapOut"></div>
+    </div>
+    ${p ? `<p class="footnote" id="swapLinkNote" style="margin-top:8px;"></p>` : ''}
+    <div class="form-actions"><button type="button" class="btn" id="swapCancel">Cancel</button><button type="button" class="btn btn-accent-pep" id="swapGo"></button></div>
+  `, body=>{
+    const recon = $('#swapRecon',body), out = $('#swapOut',body), go = $('#swapGo',body), note = $('#swapLinkNote',body);
+    const pick = ()=> state.vials.find(v=>v.id===chosen) || null;
+    const refresh = ()=>{
+      const v = pick();
+      const opening = v && (v.remainingMg==null || (finishing && v.id===finishing.id));
+      recon.hidden = !opening;
+      if(opening){
+        const mg = num(v.mgPerVial,0), bac = num($('#swapBac',body).value,0);
+        const conc = mg && bac ? mg/bac : null;
+        out.textContent = conc ? `${round2(conc)} mg/mL${perInj ? ` · ${fmtAmount(perInj)} dose = ${Math.round(perInj/conc*100*10)/10} units` : ''}` : 'Enter the BAC water to see the concentration.';
+      }
+      go.textContent = finishing ? (v ? (opening ? 'Finish & open' : 'Finish & switch') : 'Mark finished') : 'Open vial';
+      go.disabled = !finishing && !v;
+      if(note) note.textContent = v ? `This becomes the active vial for ${p.compound||'this protocol'}.` : finishing ? `${p.compound||'This protocol'} will have no active vial until you open one.` : '';
+    };
+    $$('input[name="swapNext"]',body).forEach(r=> r.addEventListener('change', ()=>{ chosen = r.value; refresh(); }));
+    $('#swapBac',body).addEventListener('input', refresh);
+    $('#swapCancel',body).addEventListener('click', closeModal);
+    go.addEventListener('click', async ()=>{
+      go.disabled = true;
+      const today = todayISO();
+      if(finishing){
+        const fresh = state.vials.find(v=>v.id===finishing.id) || finishing;
+        const log = (Array.isArray(fresh.finishedLog) ? fresh.finishedLog : []).concat({opened: fresh.dateOpened||'', finished: today, leftoverMg: round2(num(fresh.remainingMg,0))});
+        const upd = {...stripId(fresh), remainingMg:null, dateOpened:'', finishedLog:log};
+        if(num(fresh.qty,0) <= 0) upd.depleted = true;
+        await dbSet('vials', fresh.id, upd);
+      }
+      const nv = chosen ? state.vials.find(v=>v.id===chosen) : null;
+      let bac = null;
+      if(nv && nv.remainingMg==null){
+        bac = num($('#swapBac',body).value, null);
+        const mg = num(nv.mgPerVial,0);
+        await dbSet('vials', nv.id, {...stripId(nv),
+          qty: Math.max(0, num(nv.qty,1)-1),
+          dateOpened: $('#swapDate',body).value || today,
+          remainingMg: mg,
+          bacMl: bac!=null ? String(bac) : (nv.bacMl||''),
+          concentration: mg && bac ? String(round2(mg/bac)) : (nv.concentration||''),
+          protocolId: p ? p.id : (nv.protocolId||null)});
+      }
+      if(p){
+        const fp = state.protocols.find(x=>x.id===p.id) || p;
+        const pu = {...stripId(fp), activeVialId: nv ? nv.id : ''};
+        if(nv && bac!=null){ pu.vialMg = String(num(nv.mgPerVial,0)); pu.bacMl = String(bac); }
+        await dbSet('protocols', fp.id, pu);
+      }
+      closeModal();
+    });
+    refresh();
+  });
+}
+/* The active protocol (if any) for a compound, used when opening or finishing from the stash. */
+function protocolForVial(v){
+  const linked = state.protocols.find(p=> p.status!=='archived' && p.activeVialId===v.id);
+  if(linked) return linked;
+  const c = (v.compound||'').trim().toLowerCase();
+  return state.protocols.find(p=> isActiveP(p) && (p.compound||'').trim().toLowerCase()===c) || null;
 }
 function openVialModal(existing){
   const v = existing || {};
@@ -2510,7 +2676,8 @@ function renderCostTracking(){
   state.protocols.filter(isActiveP).forEach(p=>{
     const vial = priced.find(v=> v.protocolId===p.id) || priced.find(v=> (v.compound||'').toLowerCase()===(p.compound||'').toLowerCase());
     if(!vial) return;
-    const mgTotal = num(vial.mgPerVial,0)*(num(vial.qty,1) + (vial.remainingMg!=null ? 1 : 0));   // opening a vial moves one out of the sealed count
+    const used = Array.isArray(vial.finishedLog) ? vial.finishedLog.length : 0;
+    const mgTotal = num(vial.mgPerVial,0)*(num(vial.qty,1) + (vial.remainingMg!=null ? 1 : 0) + used);   // opening a vial moves one out of the sealed count; finished ones were paid for too
     if(!mgTotal) return;
     const costPerMg = num(vial.price,0)/mgTotal;
     const dNow = doseAt(p, todayISO());
@@ -3999,7 +4166,7 @@ function stackContextForAsk(){
   return {
     today: todayISO(),
     vendors: state.vendors.map(v=>({name:v.name, url:v.url||null, deal:v.deal||null, notes:v.notes||null})),
-    vials: state.vials.map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, vendor:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTests: vialTests(v).map(t=>({lab:t.lab||null, massMg:num(t.massMg,null), purityPct:num(t.purity,null), endotoxinEUperMg:num(t.endo,null), date:t.date||null, coa:safeUrl(t.coaUrl)||null}))})),
+    vials: state.vials.filter(v=>!isDepleted(v)).map(v=>({compound:v.compound, mgPerVial:num(v.mgPerVial,null), qty:num(v.qty,1), price:v.price?num(v.price):null, vendor:v.pharmacy||null, concentration:v.concentration?num(v.concentration):null, remainingMg: v.remainingMg??null, bud: v.bud||null, labTests: vialTests(v).map(t=>({lab:t.lab||null, massMg:num(t.massMg,null), purityPct:num(t.purity,null), endotoxinEUperMg:num(t.endo,null), date:t.date||null, coa:safeUrl(t.coaUrl)||null}))})),
     protocols: state.protocols.filter(p=>p.status!=='archived').map(p=>{
       const d = doseAt(p, day);
       return {compound:p.compound, status:p.status||'active', currentDose: fmtDose(d.dose, d.doseUnit), splitInjections: splitCount(p), frequencyDays:p.frequencyDays, doseWeekdays:(weekdaysOf(p)||[]).map(i=>DOW[i]), usualDoseTime:p.doseTime||null, halfLifeHours:halfLifeOf(p), blend: blendParts(p) ? blendParts(p).map(c=>({peptide:c.name, mgPerVial:c.mg, share:Math.round(c.frac*1000)/1000, halfLifeHours:c.hl||null})) : null,

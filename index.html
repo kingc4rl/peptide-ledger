@@ -955,6 +955,30 @@ html{ overscroll-behavior:none; }
 body{ overscroll-behavior:none; }
 .tabbar{ transform:translateZ(0); -webkit-transform:translateZ(0); will-change:transform; }
 @media (min-width:900px){ .tabbar{ transform:translateX(-50%) translateZ(0); } }
+
+/* Finish & open next */
+.vial-alert{ display:flex; align-items:center; gap:10px; padding:10px 12px !important; border-radius:14px; background:rgba(255,236,214,.7); border:1px solid rgba(255,159,67,.45) !important; font-size:13px; font-weight:600; }
+.vial-alert.empty{ background:rgba(253,234,234,.75); border-color:rgba(207,52,52,.35) !important; }
+.vial-alert.none, .vial-alert.unopened{ background:rgba(231,240,252,.7); border-color:rgba(90,169,255,.4) !important; }
+.vial-alert span{ flex:1; min-width:0; }
+.vial-alert .btn{ flex:none; }
+.lot-acts:empty{ display:none; }
+.lot-acts{ display:flex; gap:6px; }
+.lot-act{ border:1px solid rgba(255,159,67,.6); background:rgba(255,236,214,.75); color:var(--accent-pep-strong); font:700 11.5px/1 inherit; font-family:inherit; border-radius:99px; padding:6px 10px; cursor:pointer; }
+.swap-sec{ margin-top:12px; }
+.swap-sec:first-child{ margin-top:0; }
+.swap-sec h4{ font-size:12px; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); margin-bottom:6px; }
+.swap-row{ display:flex; align-items:center; gap:12px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.55); border:1px solid rgba(40,30,20,.08); }
+.swap-vial{ flex:none; width:40px; }
+.swap-vial .vial-svg{ width:40px; height:74px; }
+.swap-opts{ display:flex; flex-direction:column; gap:6px; }
+.swap-opt{ display:flex; align-items:center; gap:10px; padding:8px 10px; border-radius:14px; background:rgba(255,255,255,.55); border:1.5px solid rgba(40,30,20,.08); cursor:pointer; }
+.swap-opt:has(input:checked){ border-color:var(--accent-pep); background:rgba(255,240,224,.8); }
+.swap-opt input{ accent-color:var(--accent-pep); flex:none; }
+.swap-opt-t{ display:flex; flex-direction:column; gap:2px; min-width:0; }
+.swap-opt-t strong{ font-size:13.5px; overflow-wrap:anywhere; }
+.swap-none{ padding:10px; }
+.swap-out{ margin-top:8px; font-size:13px; color:var(--accent-pep-strong); font-weight:600; }
 </style>
 </head>
 <body>
