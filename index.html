@@ -1028,8 +1028,32 @@ body{ overscroll-behavior:none; }
 .card.bare{ background:none; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; padding:0; border-radius:0; }
 .card.bare .pen-list{ gap:6px; }
 .card.bare .vial-detail{ margin-left:0; margin-right:0; background:linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5)); -webkit-backdrop-filter:blur(20px) saturate(160%); backdrop-filter:blur(20px) saturate(160%); box-shadow:0 0 0 .5px rgba(20,25,35,.07), 0 8px 24px rgba(20,25,35,.06); }
-.card.bare .vial-tile.on{ background:rgba(255,255,255,.55); }
 .card.bare .empty{ background:linear-gradient(180deg, rgba(255,255,255,.6), rgba(255,255,255,.42)); border-radius:22px; box-shadow:0 0 0 .5px rgba(20,25,35,.07); }
+
+/* Stash: picking a vial magnifies it instead of putting it on a card; lots float in a row underneath */
+.vial-tile.on{ background:none !important; border-color:transparent !important; box-shadow:none !important; }
+.vial-tile .vial-svg{ transform-origin:50% 92%; transition:transform .28s cubic-bezier(.2,.8,.2,1.15), opacity .2s, filter .2s; }
+.vial-tile.on .vial-svg{ transform:scale(1.2) translateY(-2px); filter:drop-shadow(0 10px 14px rgba(20,25,35,.18)); }
+.vial-shelf.has-sel .vial-tile:not(.on){ opacity:.5; }
+.vial-tile.on .vial-label{ font-size:14px; }
+.card.bare .vial-detail{ background:none; border:0; box-shadow:none; -webkit-backdrop-filter:none; backdrop-filter:none; padding:6px 0 0; animation:none; }
+.card.bare .vial-detail::before{ display:none; }
+.card.bare .vial-detail-h{ padding:0 2px; }
+.lot-row{ display:flex; gap:6px; overflow-x:auto; padding:16px 6px 4px; margin:0 -6px; scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.lot-row::-webkit-scrollbar{ display:none; }
+.lot-tile{ position:relative; flex:none; width:74px; padding:6px 4px 4px; border:0; background:none; cursor:pointer; scroll-snap-align:start; -webkit-tap-highlight-color:transparent; transition:opacity .2s; }
+.lot-tile .vial-svg{ width:62px; height:121px; display:block; margin:0 auto; transform-origin:50% 92%; transition:transform .28s cubic-bezier(.2,.8,.2,1.15), filter .2s; }
+.lot-tile.on .vial-svg{ transform:scale(1.2) translateY(-2px); filter:drop-shadow(0 10px 14px rgba(20,25,35,.18)); }
+.lot-row.has-sel .lot-tile:not(.on){ opacity:.5; }
+.lot-tile .lot-qty{ right:4px; bottom:8px; }
+.lot-tile:active .vial-svg{ transform:scale(.96); }
+.lot-tile.on:active .vial-svg{ transform:scale(1.15); }
+.lot-hint{ text-align:center; margin:4px 0 0; }
+.lot-card{ position:relative; display:flex; flex-wrap:wrap; align-items:flex-start; gap:10px; margin-top:10px; padding:12px; border-radius:18px;
+  background:linear-gradient(180deg, rgba(255,255,255,.72), rgba(255,255,255,.52)); -webkit-backdrop-filter:blur(20px) saturate(160%); backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:0 0 0 .5px rgba(20,25,35,.07), 0 8px 24px rgba(20,25,35,.06); border-top:3px solid var(--vc); animation:vialOpen .22s ease; }
+.lot-card .lot-info{ flex:1; min-width:0; }
+.lot-card .lot-edit{ flex-basis:100%; text-align:left; font-weight:600; padding:2px 0 0; }
 </style>
 </head>
 <body>

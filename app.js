@@ -2012,8 +2012,10 @@ function renderVials(){
         : `<span class="pill pill-muted">Unopened</span>`;
       const tests = vialTests(v);
       const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
-      return `<div class="lot" data-open-vial="${v.id}" role="button" tabindex="0" aria-label="Edit ${esc(v.pharmacy||compound)} lot">
-        <div class="lot-vial">${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, `l${gi}_${i}`)}${qty+(isOpen?1:0)>1?`<span class="lot-qty">×${qty+(isOpen?1:0)}</span>`:''}</div>
+      const total = qty+(isOpen?1:0);
+      const tile = `<button type="button" class="lot-tile ${lotSel===v.id?'on':''}" data-lot="${v.id}" aria-expanded="${lotSel===v.id}" aria-label="${esc(`${v.pharmacy||'No vendor'} ${compound} lot, ${total} vial${total===1?'':'s'}`)}">
+        ${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, `l${gi}_${i}`)}${total>1?`<span class="lot-qty">×${total}</span>`:''}</button>`;
+      const card = `<div class="lot-card" style="--vc:${color}">
         <div class="lot-info">
           <div class="lot-top"><span class="lot-name">${esc(v.pharmacy||'No vendor')}</span>${isOpen ? `<button type="button" class="lot-act" data-finish-vial="${v.id}">Finish</button>` : qty>=1 ? `<button type="button" class="lot-act" data-open-lot="${v.id}">Open</button>` : ''}</div>
           <div class="lot-pills">${status}
@@ -2026,8 +2028,10 @@ function renderVials(){
         ${tests.length ? `<div class="lot-coas"><button type="button" class="coa-mini ${tests.length>1?'stack':''}" data-coa-vial="${v.id}" data-coa-i="0" aria-label="View ${tests.length>1 ? tests.length+' certificates of analysis' : 'certificate of analysis'+(tests[0].lab?' from '+esc(tests[0].lab):'')}">
           <span class="coa-fan">${tests.slice(0,3).map((t,k,a)=>`<span class="coa-sheet" style="--k:${k - (a.length-1)/2};z-index:${k}">${coaMiniSVG(t, mg)}</span>`).join('')}</span>
           <span class="coa-cap">${tests.length>1 ? `${tests.length} COAs` : 'COA'}</span></button></div>` : ''}
+        <button type="button" class="link-btn lot-edit" data-open-vial="${v.id}">Edit lot</button>
       </div>`;
-    }).join('');
+      return {id: v.id, tile, card};
+    });
     const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
     const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
     const meta = `${totalQty} vial${totalQty===1?'':'s'}${anyCalc ? ` · ${totalDays<=0?'out':'~'+totalDays+'d'}` : ''}`;
@@ -2036,7 +2040,8 @@ function renderVials(){
     return {compound, name: compound, brand: vendors.length===1 ? vendors[0] : '', color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
   });
   if(stashSel && !groups[stashSel]) stashSel = null;
-  el.innerHTML = `<div class="vial-shelf">${shelf.map((g,i)=>`
+  if(lotSel && !(stashSel && groups[stashSel].some(v=>v.id===lotSel))) lotSel = null;
+  el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''}">${shelf.map((g,i)=>`
     <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}">
       ${vialSVG(g, i)}
       <span class="vial-label">${esc(g.compound)}</span>
@@ -2054,17 +2059,27 @@ function renderVials(){
     det.className = 'vial-detail';
     det.style.setProperty('--vc', g.color);
     det.style.setProperty('--caret', `${((selIdx%cols)+0.5)/cols*100}%`);
+    const pickedLot = g.rows.find(r=> r.id===lotSel);
     det.innerHTML = `<div class="vial-detail-h"><strong>${esc(g.compound)}</strong>
         <span class="pill pill-muted">${g.totalQty} vial${g.totalQty===1?'':'s'}</span>
         ${g.anyCalc ? `<span class="pill ${g.low?'pill-warn':'pill-good'}">${g.totalDays<=0?'Out':'~'+g.totalDays+'d left'}</span>` : ''}
         <button type="button" class="link-btn vial-add" data-add-vial="${esc(g.compound)}">+ Add vial</button></div>
-      ${g.rows}`;
+      <div class="lot-row ${lotSel?'has-sel':''}">${g.rows.map(r=> r.tile).join('')}</div>
+      ${pickedLot ? pickedLot.card : `<p class="footnote lot-hint">Tap a vial to see that lot.</p>`}`;
     rowEnd.after(det);
   }
   $$('[data-vial-group]',el).forEach(b=> b.addEventListener('click', ()=>{
     stashSel = stashSel===b.dataset.vialGroup ? null : b.dataset.vialGroup;
+    lotSel = null;
     renderVials();
     const t = $(`.vial-detail`, el); if(t) t.scrollIntoView({behavior:'smooth', block:'nearest'});
+  }));
+  $$('[data-lot]',el).forEach(b=> b.addEventListener('click', ()=>{
+    lotSel = lotSel===b.dataset.lot ? null : b.dataset.lot;
+    const x = $('.lot-row', el) ? $('.lot-row', el).scrollLeft : 0;
+    renderVials();
+    const row = $('.lot-row', el); if(row) row.scrollLeft = x;
+    const c = $('.lot-card', el); if(c) c.scrollIntoView({behavior:'smooth', block:'nearest'});
   }));
   $$('[data-add-vial]',el).forEach(b=> b.addEventListener('click', ()=>{
     openVialModal(null);
@@ -2092,7 +2107,8 @@ function renderVials(){
     card.addEventListener('keydown', e=>{ if((e.key==='Enter'||e.key===' ') && e.target===card){ e.preventDefault(); open(); } });
   });
 }
-let stashSel = null;   // compound whose stash detail is open under its vial
+let stashSel = null;   // compound whose lots are shown under its vial
+let lotSel = null;     // lot whose details card is open under the lot row
 /* Colour for a compound's vial cap and liquid: its protocol's colour when there is one. */
 function colorFor(compound, i){
   const cm = protocolColorMap(), key = (compound||'').trim().toLowerCase();
