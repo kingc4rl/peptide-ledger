@@ -1003,6 +1003,26 @@ body{ overscroll-behavior:none; }
 .vial-detail{ margin-left:-8px; margin-right:-8px; padding:10px 6px 8px; }
 .vial-detail-h{ padding:0 4px; }
 .lot{ gap:8px; padding:8px 8px 8px 4px; }
+
+/* Dose page: one injection pen per protocol; tapping opens the review & log screen */
+.pen-list{ display:flex; flex-direction:column; gap:2px; }
+.dose-pen{ display:block; width:100%; padding:0; margin:0; border:0; background:none; cursor:pointer; -webkit-tap-highlight-color:transparent; border-radius:14px; transition:transform .15s; }
+.dose-pen:active{ transform:scale(.98); }
+.dose-pen:focus-visible{ outline:2px solid var(--info); outline-offset:2px; }
+.dose-pen.static{ cursor:default; }
+.pen-svg{ width:100%; height:auto; display:block; }
+.pen-hero{ margin:-6px -6px 4px; }
+.log-box{ border-radius:16px; padding:12px; background:rgba(255,255,255,.6); border:1px solid rgba(40,30,20,.1); margin-bottom:10px; display:flex; flex-direction:column; gap:10px; }
+.log-box.done, .log-box.muted{ flex-direction:row; align-items:center; justify-content:space-between; }
+.log-box.done strong{ color:var(--good); display:block; }
+.log-box.muted strong{ display:block; }
+.log-row{ display:flex; align-items:flex-end; justify-content:space-between; gap:12px; }
+.log-row strong{ display:block; font-size:16px; margin-top:2px; }
+.log-row .footnote{ display:block; margin-top:2px; }
+.log-time{ display:flex; flex-direction:column; gap:2px; }
+.log-time input{ width:136px; padding:7px 9px; }
+.log-go{ width:100%; justify-content:center; gap:8px; display:flex; align-items:center; }
+.log-go svg{ width:18px; height:18px; fill:none; stroke:currentColor; stroke-width:2; }
 </style>
 </head>
 <body>

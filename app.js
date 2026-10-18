@@ -772,43 +772,142 @@ function renderProtocols(){
   const colorMap = protocolColorMap();
   const day = doseDayISO();
   const serum = serumSeries().series;
-  el.innerHTML = ordered.map(p=> doseCardHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, serum)).join('');
-  $$('[data-syr-units]',el).forEach(w=> renderSyringeInto(w, num(w.dataset.syrUnits,0), num(w.dataset.syrCap,100), {compact:true, color: w.dataset.syrColor||undefined}));
-  $$('[data-card-toggle]',el).forEach(h=> h.addEventListener('click', ()=>{
-    const id = h.dataset.cardToggle;
-    if(expandedCards.has(id)) expandedCards.delete(id); else expandedCards.add(id);
-    renderProtocols();
-  }));
-  $$('[data-card-toggle]',el).forEach(h=> h.addEventListener('keydown', e=>{ if(e.target===h && (e.key==='Enter'||e.key===' ')){ e.preventDefault(); h.click(); } }));
-  $$('[data-mark-dose]',el).forEach(b=> b.addEventListener('click', e=>{
-    e.stopPropagation();
-    const p = state.protocols.find(x=>x.id===b.dataset.markDose);
-    if(!p) return;
-    if(injectionsOn(p, doseDayISO()) >= splitCount(p)) confirmAction(`Undo today's logged ${p.compound||''} dose?`, ()=> markDoseTaken(p), 'Undo dose');
-    else markDoseTaken(p);
-  }));
-  $$('[data-dose-history]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory)); }));
-  $$('[data-edit-protocol]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openProtocolModal(state.protocols.find(p=>p.id===b.dataset.editProtocol)); }));
-  $$('[data-vial-swap]',el).forEach(b=> b.addEventListener('click', e=>{
+  el.innerHTML = `<div class="pen-list">${ordered.map((p,i)=> penRowHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, i)).join('')}</div>`;
+  $$('[data-pen]',el).forEach(b=> b.addEventListener('click', ()=> openDoseModal(state.protocols.find(x=>x.id===b.dataset.pen))));
+}
+/* Buttons and widgets inside a protocol's dose details (now shown in the review screen). */
+function bindDoseDetail(root, serum){
+  $$('[data-syr-units]',root).forEach(w=> renderSyringeInto(w, num(w.dataset.syrUnits,0), num(w.dataset.syrCap,100), {compact:true, color: w.dataset.syrColor||undefined}));
+  $$('[data-dose-history]',root).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.doseHistory)); }));
+  $$('[data-edit-protocol]',root).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); openProtocolModal(state.protocols.find(p=>p.id===b.dataset.editProtocol)); }));
+  $$('[data-vial-swap]',root).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
     const p = state.protocols.find(x=>x.id===b.dataset.vialSwap); if(!p) return;
     const vs = vialState(p);
     openVialSwapModal({p, cur: vs.vial, preselect: vs.kind==='unopened' ? vs.vial : null});
   }));
-  $$('[data-goto-checkin]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); setTab('progress'); }));
-  $$('[data-mini]',el).forEach(w=>{
+  $$('[data-goto-checkin]',root).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); closeModal(); setTab('progress'); }));
+  $$('[data-mini]',root).forEach(w=>{
     const now = Date.now();
     const ctx = serumCtx(serum.filter(s=>s.p.id===w.dataset.mini), now, false);
     serumSvgInner(ctx, now + 2*24*HOUR, 7*24*HOUR);   // sets ctx.scale to match the drawn chart
     attachSerumScrub(w, ctx);
   });
-  $$('[data-full-chart]',el).forEach(b=> b.addEventListener('click', e=>{
+  $$('[data-full-chart]',root).forEach(b=> b.addEventListener('click', e=>{
     e.stopPropagation();
     const pid = b.dataset.fullChart;
     [...serumHidden].forEach(id=>{ if(id===pid || id.startsWith(pid+':')) serumHidden.delete(id); });
-    saveSerumHidden(); renderSerum();
+    saveSerumHidden(); closeModal(); renderSerum();
     const c = $('#serumCard'); if(c) c.scrollIntoView({behavior:'smooth', block:'start'});
   }));
+}
+/* One protocol as an injection pen; the whole pen is a button that opens the review screen. */
+function penRowHTML(p, color, day, i){
+  const m = doseCardHTML(p, color, day, null, {meta:true});
+  const pct = m.vs.vial ? (m.vs.vial.remainingMg==null ? 1 : num(m.vs.vial.mgPerVial,0)>0 ? num(m.vs.vial.remainingMg,0)/num(m.vs.vial.mgPerVial,1) : null) : null;
+  const status = m.vs.kind==='empty' ? 'Vial empty' : m.vs.kind==='low' && !m.complete ? `${m.status} · vial low` : m.status;
+  const kind = m.vs.kind==='empty' ? 'bad' : m.stCls;
+  const dose = m.amt.replace(/^([\d.]+)([a-z]+)$/i, '$1 $2');
+  return `<button type="button" class="dose-pen" data-pen="${p.id}" aria-label="${esc(`${p.compound||'Protocol'}, ${dose}, ${status}. Tap to review and log.`)}">
+    ${penSVG({color, name: p.compound||'Untitled', dose, units: m.u!=null ? m.u : '—', sched: scheduleTag(p), status, kind, pct}, 'pn'+i)}</button>`;
+}
+/* Review & log screen for a protocol: the pen, a confirm box with dose, units and time, then the full details. */
+function openDoseModal(p){
+  if(!p) return;
+  const color = protocolColorMap().get(p.id) || PROTOCOL_COLORS[0];
+  const day = doseDayISO(), serum = serumSeries().series;
+  const m = doseCardHTML(p, color, day, serum, {meta:true});
+  const now = new Date(), hh = String(now.getHours()).padStart(2,'0'), mm = String(now.getMinutes()).padStart(2,'0');
+  const doneTimes = (Array.isArray(p.doseTimes) ? p.doseTimes : []).filter(x=> x && x.day===day).map(x=> new Date(x.t).toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}));
+  const dose = m.amt.replace(/^([\d.]+)([a-z]+)$/i, '$1 $2');
+  const box = m.notStarted
+    ? `<div class="log-box muted"><strong>${esc(m.status)}</strong><span class="footnote">Logging opens on the start date.</span></div>`
+    : m.complete && m.done>0
+    ? `<div class="log-box done"><div><strong>✓ Logged today</strong><span class="footnote">${doneTimes.length ? 'at '+esc(doneTimes.join(', ')) : esc(fmtDateShort(day))}</span></div><button type="button" class="btn btn-sm" id="doseUndo">Undo</button></div>`
+    : `<div class="log-box">
+        <div class="log-row"><div><span class="dc-k">Dose</span><strong class="mono">${esc(dose)}${m.u!=null?` · ${m.u} units`:''}</strong>${m.n>1?`<span class="footnote">Injection ${m.done+1} of ${m.n} today</span>`:''}</div>
+          <label class="log-time"><span class="dc-k">Time</span><input type="time" id="doseTime" value="${hh}:${mm}"></label></div>
+        <button type="button" class="btn btn-accent-pep log-go" id="doseGo">${SYRINGE_ICON}<span>Log dose</span></button>
+      </div>`;
+  openModal(p.compound || 'Dose', `
+    <div class="pen-hero">${penRowHTML(p, color, day, 'm').replace('<button type="button" class="dose-pen"', '<div class="dose-pen static"').replace(/<\/button>$/, '</div>')}</div>
+    ${box}
+    ${doseCardHTML(p, color, day, serum, {bodyOnly:true})}
+  `, body=>{
+    bindDoseDetail(body, serum);
+    const go = $('#doseGo',body);
+    if(go) go.addEventListener('click', async ()=>{ go.disabled = true; await logInjection(p, day, 1, $('#doseTime',body).value); closeModal(); });
+    const undo = $('#doseUndo',body);
+    if(undo) undo.addEventListener('click', async ()=>{ undo.disabled = true; await logInjection(p, day, -1); closeModal(); });
+  });
+}
+/* ===================== Injection pen drawing ===================== */
+/* A white reusable injection pen, drawn horizontally: needle and threaded hub, clear cartridge holder with a printed
+   scale (the rubber plunger sits further toward the needle as the active vial empties), a matte white body carrying the
+   label, an arrow notch and dose-number window, and a knurled twist dial forming the end, with a thin peptide-colour ring.
+   o: {color, name, dose, units, sched, status, kind (good|due|bad|muted), pct (0-1 or null)} */
+function penSVG(o, id){
+  const A = o.color, W = 360, H = 64, cy = 30, R = 15, r = 12;
+  const hubX = 22, holderX = 36, bodyX = 138, dialX = 300, end = 344;
+  const mat = (gid, c, k=1)=> `<linearGradient id="${gid}" x1="0" x2="0" y1="0" y2="1">
+    <stop offset="0" stop-color="${shade(c,-.28*k)}"/><stop offset=".1" stop-color="${shade(c,.12*k)}"/><stop offset=".3" stop-color="${shade(c,.3*k)}"/>
+    <stop offset=".5" stop-color="${shade(c,.08*k)}"/><stop offset=".78" stop-color="${shade(c,-.12*k)}"/><stop offset=".92" stop-color="${shade(c,-.3*k)}"/><stop offset="1" stop-color="${shade(c,-.18*k)}"/></linearGradient>`;
+  const cartL = holderX+12, cartR = bodyX-6;
+  const lvl = o.pct==null ? 1 : Math.max(.03, Math.min(1, o.pct));
+  const plX = cartL + (cartR - cartL - 9) * lvl;
+  const chip = {good:['#17844f','#e2f4ea'], due:['#c25e00','#fff0de'], bad:['#c0392b','#fdeaea'], muted:['#4c535c','#eceef2']}[o.kind] || ['#4c535c','#eceef2'];
+  const statusTxt = String(o.status).toUpperCase();
+  const sw = 10 + statusTxt.length*4.3, chipX = dialX-48-sw, tx = bodyX+12;
+  const sub = `${o.dose} · ${o.sched}`, room = chipX-4-tx;
+  const holder = `M${holderX} ${cy-r+3} Q${holderX} ${cy-r} ${holderX+4} ${cy-r} H${bodyX+2} V${cy+r} H${holderX+4} Q${holderX} ${cy+r} ${holderX} ${cy+r-3}Z`;
+  const units = o.units;
+  return `<svg class="pen-svg" viewBox="0 0 ${W} ${H}" aria-hidden="true"><defs>
+    ${mat(id+'b','#eceef1')}${mat(id+'d','#c9ccd3',1.2)}${mat(id+'h','#ffffff',.7)}
+    <linearGradient id="${id}gl" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#7f93a2" stop-opacity=".7"/><stop offset=".12" stop-color="#ffffff" stop-opacity=".55"/><stop offset=".26" stop-color="#ffffff" stop-opacity=".9"/><stop offset=".38" stop-color="#eef5f9" stop-opacity=".25"/><stop offset=".8" stop-color="#dce8f0" stop-opacity=".25"/><stop offset=".94" stop-color="#9fb3c2" stop-opacity=".55"/><stop offset="1" stop-color="#ffffff" stop-opacity=".6"/></linearGradient>
+    <linearGradient id="${id}lq" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${shade(A,-.1)}" stop-opacity=".55"/><stop offset=".35" stop-color="${shade(A,.55)}" stop-opacity=".35"/><stop offset="1" stop-color="${shade(A,-.2)}" stop-opacity=".6"/></linearGradient>
+    <linearGradient id="${id}rub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset=".3" stop-color="#6b6e75"/><stop offset=".6" stop-color="#3a3c41"/><stop offset="1" stop-color="#1c1d20"/></linearGradient>
+    <linearGradient id="${id}rod" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8d9098"/><stop offset=".4" stop-color="#f1f2f4"/><stop offset="1" stop-color="#7a7d85"/></linearGradient>
+    <radialGradient id="${id}sh" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#1c2a3a" stop-opacity=".28"/><stop offset="1" stop-color="#1c2a3a" stop-opacity="0"/></radialGradient>
+    <clipPath id="${id}cart"><rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" rx="3"/></clipPath>
+  </defs>
+  <ellipse cx="${W/2+10}" cy="${cy+R+7}" rx="${W/2-24}" ry="4.5" fill="url(#${id}sh)"/>
+  <rect x="3" y="${cy-.55}" width="${hubX-1}" height="1.1" fill="url(#${id}rod)"/>
+  <rect x="${hubX-6}" y="${cy-2}" width="7" height="4" rx="1" fill="url(#${id}h)"/>
+  <rect x="${hubX}" y="${cy-7}" width="${holderX-hubX+2}" height="14" rx="2.5" fill="url(#${id}h)"/>
+  ${Array.from({length:5},(_,i)=>`<rect x="${hubX+2+i*2.6}" y="${cy-7}" width=".8" height="14" fill="#000" fill-opacity=".14"/>`).join('')}
+  <path d="${holder}" fill="#eaf1f6" fill-opacity=".35"/>
+  <g clip-path="url(#${id}cart)">
+    <rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" fill="#f6fafc" fill-opacity=".5"/>
+    ${o.pct==null ? '' : `<rect x="${cartL}" y="${cy-8.5}" width="${plX-cartL}" height="17" fill="url(#${id}lq)"/>`}
+    <rect x="${plX+9}" y="${cy-1.6}" width="${cartR-plX}" height="3.2" fill="url(#${id}rod)"/>
+    <rect x="${plX}" y="${cy-8.5}" width="9" height="17" rx="1.5" fill="url(#${id}rub)"/>
+    <rect x="${plX+2.6}" y="${cy-8.5}" width=".6" height="17" fill="#000" fill-opacity=".45"/><rect x="${plX+5.6}" y="${cy-8.5}" width=".6" height="17" fill="#000" fill-opacity=".45"/>
+  </g>
+  <rect x="${cartL}" y="${cy-8.5}" width="${cartR-cartL}" height="17" rx="3" fill="none" stroke="#9fb2c0" stroke-opacity=".7" stroke-width=".5"/>
+  <path d="M${cartL} ${cy-5} q-6 0 -8 3 v4 q2 3 8 3" fill="#f6fafc" fill-opacity=".6" stroke="#9fb2c0" stroke-opacity=".6" stroke-width=".5"/>
+  ${Array.from({length:11},(_,i)=>{ const x = cartR - 4 - i*((cartR-cartL-8)/10), lab = i%2===0 && i>0;
+    return `<rect x="${x}" y="${cy+6.5}" width=".55" height="${lab?4:2.5}" fill="#1d2026" fill-opacity=".75"/>${lab?`<text x="${x}" y="${cy+14.3}" text-anchor="middle" font-size="3.6" font-weight="700" font-family="system-ui,sans-serif" fill="#1d2026" fill-opacity=".75">${i*10}</text>`:''}`; }).join('')}
+  <path d="${holder}" fill="url(#${id}gl)"/>
+  <path d="${holder}" fill="none" stroke="#7f93a2" stroke-opacity=".55" stroke-width=".6"/>
+  <path d="M${bodyX+4} ${cy-R} H${dialX} V${cy+R} H${bodyX+4} Q${bodyX} ${cy+R} ${bodyX} ${cy+R-4} V${cy-R+4} Q${bodyX} ${cy-R} ${bodyX+4} ${cy-R}Z" fill="url(#${id}b)"/>
+  <rect x="${bodyX}" y="${cy-R+2}" width="1.4" height="${2*R-4}" fill="#000" fill-opacity=".18"/>
+  <text x="${tx}" y="${cy-1.5}" font-size="10.6" font-weight="800" font-family="system-ui,-apple-system,sans-serif" fill="#15181c"${String(o.name).length>14?` textLength="100" lengthAdjust="spacingAndGlyphs"`:''}>${esc(o.name)}</text>
+  <text x="${tx}" y="${cy+9.5}" font-size="7" font-weight="600" font-family="system-ui,-apple-system,sans-serif" fill="#3b4149"${sub.length*3.6>room?` textLength="${room}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(sub)}</text>
+  <rect x="${chipX}" y="${cy+2.2}" width="${sw}" height="10" rx="5" fill="${chip[1]}"/>
+  <text x="${chipX+sw/2}" y="${cy+9.4}" text-anchor="middle" font-size="6.2" font-weight="800" font-family="system-ui,sans-serif" fill="${chip[0]}"${statusTxt.length>12?` textLength="${sw-8}" lengthAdjust="spacingAndGlyphs"`:''}>${esc(statusTxt)}</text>
+  <path d="M${dialX-44} ${cy} l10 -5.5 v11z" fill="#b9bcc3" opacity=".8"/>
+  <path d="M${dialX-44} ${cy} l10 -5.5" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width=".6"/>
+  <rect x="${dialX-30}" y="${cy-8}" width="24" height="16" rx="2.5" fill="#26282d"/>
+  <rect x="${dialX-28.5}" y="${cy-6.5}" width="21" height="13" rx="1.5" fill="#fbfbf8"/>
+  ${typeof units==='number' ? `<text x="${dialX-18}" y="${cy-7.6}" text-anchor="middle" font-size="4" font-weight="700" font-family="ui-monospace,monospace" fill="#9a9da3">${Math.max(0,units-2)}</text>` : ''}
+  <text x="${dialX-18}" y="${cy+3.3}" text-anchor="middle" font-size="${String(units).length>3?7:9}" font-weight="800" font-family="ui-monospace,Menlo,monospace" fill="#111">${esc(String(units))}</text>
+  <rect x="${dialX-28.5}" y="${cy-6.5}" width="21" height="3.2" fill="#000" fill-opacity=".08"/><rect x="${dialX-28.5}" y="${cy+3.4}" width="21" height="3.1" fill="#000" fill-opacity=".1"/>
+  <path d="M${dialX} ${cy-R-1} H${end-7} Q${end} ${cy-R-1} ${end} ${cy-R+6} V${cy+R-6} Q${end} ${cy+R+1} ${end-7} ${cy+R+1} H${dialX}Z" fill="url(#${id}d)"/>
+  ${Array.from({length:13},(_,i)=>`<rect x="${dialX+3+i*2.4}" y="${cy-R}" width=".9" height="${2*R}" fill="#000" fill-opacity=".2"/><rect x="${dialX+3.9+i*2.4}" y="${cy-R}" width=".5" height="${2*R}" fill="#fff" fill-opacity=".14"/>`).join('')}
+  <path d="M${end-6} ${cy-R} Q${end-.5} ${cy-R} ${end-.5} ${cy-R+6} V${cy+R-6} Q${end-.5} ${cy+R} ${end-6} ${cy+R}" fill="none" stroke="#fff" stroke-opacity=".45" stroke-width=".8"/>
+  <rect x="${dialX-1.6}" y="${cy-R}" width="2.2" height="${2*R}" fill="${A}"/>
+  <rect x="${dialX+.6}" y="${cy-R-1}" width="1" height="${2*R+2}" fill="#000" fill-opacity=".22"/>
+  </svg>`;
 }
 const SYRINGE_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 2l4 4"/><path d="M17 7l3-3"/><path d="M19 9L8.7 19.3a2.4 2.4 0 0 1-3.4 0l-.6-.6a2.4 2.4 0 0 1 0-3.4L15 5"/><path d="M9 11l4 4"/><path d="M5 19l-3 3"/><path d="M14 4l6 6"/></svg>';
 const CHECK_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>';
@@ -826,7 +925,7 @@ function scheduleTag(p){
 }
 /* One active protocol on the Dose tab: a compact header that always shows the dose,
    and an expandable body with due info, quick actions, composition, syringe and a mini level chart. */
-function doseCardHTML(p, color, day, serum){
+function doseCardHTML(p, color, day, serum, opts={}){
   const n = splitCount(p);
   const done = injectionsOn(p, day);
   const complete = done >= n;
@@ -848,8 +947,9 @@ function doseCardHTML(p, color, day, serum){
   const lastEv = injectionEvents(p).sort((x,y)=> y.t-x.t)[0];
   const vial = p.activeVialId ? state.vials.find(v=>v.id===p.activeVialId) : null;
   const vs = vialState(p);
+  if(opts.meta) return {status, stCls, amt, u, n, done, complete, notStarted, vs, d};
   const vialTag = vs.kind==='empty' ? '<span class="dc-tag bad">Vial empty</span>' : vs.kind==='low' ? '<span class="dc-tag due">Vial low</span>' : '';
-  const open = expandedCards.has(p.id);
+  const open = opts.bodyOnly || expandedCards.has(p.id);
   const logBtn = notStarted ? '' : `<button type="button" class="dc-log ${complete&&done>0?'done':''}" data-mark-dose="${p.id}" aria-label="${complete&&done>0?'Dose logged today. Tap to undo':'Log dose now'}" title="${complete&&done>0?'Logged. Tap to undo':'Log dose'}">${complete&&done>0 ? CHECK_ICON : SYRINGE_ICON}</button>`;
   const head = `<div class="dc-head" data-card-toggle="${p.id}" role="button" tabindex="0" aria-expanded="${open}">
       ${open ? `<div class="dc-ring" style="border-color:${color}"><span class="mono">${esc(amt)}</span>${u!=null?`<span class="mono dc-u">${u}u</span>`:''}</div>`
@@ -895,7 +995,7 @@ function doseCardHTML(p, color, day, serum){
       ${vialAlertHTML(p, vs)}
       <div class="dc-sec"><h4>Quick actions</h4>
         <div class="qa-grid">
-          ${notStarted ? '' : `<button type="button" class="qa-btn primary" data-mark-dose="${p.id}">${complete&&done>0 ? CHECK_ICON+'<span>Undo dose</span>' : SYRINGE_ICON+'<span>Log dose</span>'}</button>`}
+          ${notStarted || opts.bodyOnly ? '' : `<button type="button" class="qa-btn primary" data-mark-dose="${p.id}">${complete&&done>0 ? CHECK_ICON+'<span>Undo dose</span>' : SYRINGE_ICON+'<span>Log dose</span>'}</button>`}
           <button type="button" class="qa-btn" data-dose-history="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg><span>History &amp; backfill</span></button>
           <button type="button" class="qa-btn" data-goto-checkin><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12h4l3-7 4 14 3-7h4"/></svg><span>Add check-in</span></button>
           ${vs.vial || nextVialCandidates(p.compound, null).length ? `<button type="button" class="qa-btn" data-vial-swap="${p.id}"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="3" rx="1"/><path d="M9 5.5v2.5M15 5.5v2.5"/><rect x="6.5" y="8" width="11" height="13.5" rx="2.5"/><path d="M6.5 15h11"/></svg><span>${vs.kind==='ok'||vs.kind==='low'||vs.kind==='empty' ? 'Finish vial' : 'Open vial'}</span></button>` : ''}
@@ -907,6 +1007,7 @@ function doseCardHTML(p, color, day, serum){
       <div class="dc-sec">${siteRowHTML(p).replace('class="site-row"','class="site-row" style="margin-top:0"')}</div>
       ${snap}
     </div>`;
+  if(opts.bodyOnly) return body;
   return `<div class="dc open" style="--pc:${color}">${head}${body}</div>`;
 }
 /* Note on an expanded dose card when its vial needs attention. */
