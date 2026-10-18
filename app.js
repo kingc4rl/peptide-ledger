@@ -693,33 +693,81 @@ function doseDatesInRange(p, startISO, endISO){
   return dates;
 }
 
-function renderProtocolCalendar(){
-  const el = $('#protocolCalendar');
-  if(!el) return;
-  const activeProtocols = state.protocols.filter(isActiveP);
-  if(!activeProtocols.length){ el.innerHTML=''; return; }
-  const days = 14;
-  const startISO = todayISO();
-  const endISO = addDays(startISO, days-1);
-  const colorMap = protocolColorMap();
-  const perProtocol = activeProtocols.map((p)=> ({p, color: colorMap.get(p.id), dates: new Set(doseDatesInRange(p, startISO, endISO))}));
-  let html = `<div class="footnote" style="margin-bottom:6px;">Next ${days} days</div><div class="week-strip">`;
-  for(let i=0;i<days;i++){
-    const iso = addDays(startISO, i);
-    const d = new Date(iso+'T00:00:00');
-    const hits = perProtocol.filter(x=> x.dates.has(iso));
-    html += `<div class="day-chip ${i===0?'today':''}" style="cursor:default;" title="${hits.map(h=>esc(h.p.compound||'')).join(', ')}">
+/* Dose tab: one calendar for past and upcoming doses. Pick a day to see what was logged
+   (or missed) on it, or what is scheduled for it. Filled dots = logged, rings = scheduled or missed. */
+let calDay = null;
+const CAL_BACK = 28, CAL_AHEAD = 21;
+function dosesOnDay(iso){
+  const today = doseDayISO(), colorMap = protocolColorMap(), out = [];
+  state.protocols.filter(p=>p.status!=='archived').forEach(p=>{
+    const color = colorMap.get(p.id) || 'var(--muted)';
+    injectionEvents(p).filter(e=>e.day===iso).forEach(e=> out.push({kind:'taken', p, color, t:e.t, amt:fmtAmount(e.mg)}));
+    if(!isActiveP(p) || (p.startDate && iso < p.startDate)) return;
+    const sched = iso < today ? doseDatesInRange({...p, nextDose:null}, iso, iso) : doseDatesInRange(p, iso, iso);
+    if(!sched.length) return;
+    const n = splitCount(p), left = n - injectionsOn(p, iso);
+    const d = doseAt(p, iso), units = unitsPerInjection(p, iso);
+    const amt = fmtDose(num(d.dose)/n, d.doseUnit) + (units!=null ? ` · ${units}u` : '');
+    const base = momentOn(iso, p.doseTime||'') || new Date(iso+'T12:00:00').getTime();
+    for(let i=0;i<left;i++) out.push({kind: iso < today ? 'missed' : 'due', p, color, t: base + i*Math.min(8, 12/n)*HOUR, amt, timed: !!p.doseTime});
+  });
+  return out.sort((a,b)=> a.t-b.t);
+}
+function renderDoseCalendar(){
+  const el = $('#doseCalendar'), list = $('#doseDayList');
+  if(!el || !list) return;
+  const today = doseDayISO();
+  if(!calDay || daysBetween(calDay, today) > CAL_BACK || daysBetween(today, calDay) > CAL_AHEAD) calDay = today;
+  const start = addDays(today, -CAL_BACK);
+  let html = `<div class="week-strip cal-strip">`;
+  for(let i=0;i<=CAL_BACK+CAL_AHEAD;i++){
+    const iso = addDays(start, i), d = new Date(iso+'T00:00:00');
+    const marks = dosesOnDay(iso).map(x=> x.kind==='taken'
+      ? `<span style="background:${x.color};"></span>`
+      : `<span style="border:1.5px solid ${x.color};${x.kind==='missed'?'opacity:.55;':''}"></span>`).join('');
+    html += `<button type="button" class="day-chip ${iso===today?'today':''} ${iso===calDay?'sel':''} ${iso<today?'past':''}" data-cal-day="${iso}" aria-pressed="${iso===calDay}" aria-label="${esc(d.toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'}))}">
       <div class="dow">${d.toLocaleDateString(undefined,{weekday:'short'})}</div>
       <div class="num">${d.getDate()}</div>
-      <div class="marks">${hits.map(h=>`<span style="background:${h.color};"></span>`).join('')}</div>
-    </div>`;
+      <div class="marks">${marks}</div>
+    </button>`;
   }
-  html += `</div>`;
-  html += `<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:8px;">${perProtocol.map(x=>`
-    <span style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--muted);">
-      <span style="width:8px;height:8px;border-radius:50%;background:${x.color};display:inline-block;flex:none;"></span>${esc(x.p.compound||'Untitled')}
-    </span>`).join('')}</div>`;
+  html += `</div><div class="cal-key"><span><i class="k-fill"></i>Logged</span><span><i class="k-ring"></i>Scheduled</span>${calDay!==today?`<button type="button" class="link-btn" data-cal-today>Back to today</button>`:''}</div>`;
   el.innerHTML = html;
+  const strip = $('.cal-strip', el), sel = $('.day-chip.sel', el);
+  if(sel) strip.scrollLeft = sel.offsetLeft - strip.offsetLeft - (strip.clientWidth - sel.offsetWidth)/2;
+  $$('[data-cal-day]', el).forEach(b=> b.addEventListener('click', ()=>{
+    const left = strip.scrollLeft;
+    calDay = b.dataset.calDay; renderDoseCalendar();
+    const s2 = $('.cal-strip', el); if(s2) s2.scrollLeft = left;   // keep the strip where the finger left it
+  }));
+  const back = $('[data-cal-today]', el);
+  if(back) back.addEventListener('click', ()=>{ calDay = today; renderDoseCalendar(); });
+
+  const lbl = $('#doseDayLabel');
+  const diff = daysBetween(today, calDay);
+  const dayName = diff===0 ? 'Today' : diff===1 ? 'Tomorrow' : diff===-1 ? 'Yesterday' : new Date(calDay+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
+  if(lbl) lbl.textContent = dayName;
+  const rows = dosesOnDay(calDay);
+  if(!rows.length){
+    list.innerHTML = `<p class="footnote cal-empty">${!state.protocols.some(isActiveP) && diff>=0 ? 'No active protocols. Set a schedule on the Protocols tab.' : diff<0 ? `Nothing logged ${diff===-1?'yesterday':'on this day'}.` : `No doses scheduled ${diff===0?'today':diff===1?'tomorrow':'on this day'}.`}</p>`;
+    return;
+  }
+  const pill = {taken:'<span class="pill pill-good">Taken</span>', due: diff===0 ? '<span class="pill pill-pep">Due</span>' : '<span class="pill pill-info">Scheduled</span>', missed:'<span class="pill pill-warn">Missed</span>'};
+  list.innerHTML = rows.map((r,i)=>{
+    const time = r.kind==='taken' || r.timed ? new Date(r.t).toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}) : '';
+    return `<button type="button" class="dose-row" data-cal-row="${i}">
+      <span class="what"><span class="serum-dot" style="display:inline-block;background:${r.color};margin-right:6px;"></span>${esc(r.p.compound||'Untitled')}${time?` <span class="footnote">${esc(time)}</span>`:''}</span>
+      <span class="amt mono">${esc(r.amt)}</span>
+      <span class="cal-pill">${pill[r.kind]}</span>
+    </button>`;
+  }).join('') + (diff<=0 ? `<p class="footnote" style="margin-top:6px;">Tap a dose to edit it or backfill a missed one.</p>` : '');
+  $$('[data-cal-row]', list).forEach(b=> b.addEventListener('click', ()=>{
+    const r = rows[+b.dataset.calRow], p = state.protocols.find(x=>x.id===r.p.id);
+    if(!p) return;
+    if(r.kind==='due' && diff===0) openDoseModal(p);
+    else if(r.kind==='due') openProtocolModal(p);
+    else openDoseHistoryModal(p);
+  }));
 }
 
 /* Dose-tab cards start minimised; expanded ones stay open until the app is reloaded. */
@@ -740,7 +788,6 @@ function nextDoseMoment(p){
   return momentOn(p.nextDose, p.doseTime||'') || new Date(p.nextDose+'T12:00:00').getTime();
 }
 function renderProtocols(){
-  renderProtocolCalendar();
   const el = $('#protocolList');
   const active = state.protocols.filter(isActiveP);
   const paused = state.protocols.filter(p=>p.status==='paused').sort((a,b)=> (a.compound||'').localeCompare(b.compound||''));
@@ -1202,61 +1249,6 @@ async function resumeProtocol(p){
   await dbSet('protocols', p.id, {...stripId(p), status:'active', pausedDate:null, pauseLog: log, nextDose});
 }
 function stripId(obj){ const {id, ...rest} = obj; return rest; }
-/* Dose tab: the next scheduled doses across active protocols, in time order. */
-function renderUpcoming(){
-  const el = $('#upcomingList');
-  if(!el) return;
-  const now = Date.now(), until = now + 21*24*HOUR;
-  const colorMap = protocolColorMap();
-  const evs = [];
-  state.protocols.filter(isActiveP).forEach(p=>{
-    const d = doseAt(p, doseDayISO());
-    scheduledEvents(p, now - 20*HOUR, until).forEach(e=>{
-      const iso = isoFromDate(new Date(e.t - 2*HOUR));
-      if(injectionsOn(p, iso) >= splitCount(p)) return;        // already logged for that dose day
-      const dd = doseAt(p, iso);
-      evs.push({p, t:e.t, iso, dose: fmtDose(num(dd.dose)/splitCount(p), dd.doseUnit), units: unitsPerInjection(p, iso), color: colorMap.get(p.id)});
-    });
-  });
-  evs.sort((x,y)=> x.t-y.t);
-  if(!evs.length){ el.innerHTML = `<p class="footnote">No scheduled doses in the next 3 weeks. Set a schedule on the Protocols tab.</p>`; return; }
-  const today = doseDayISO();
-  el.innerHTML = evs.slice(0,8).map(e=>{
-    const day = daysBetween(today, e.iso);
-    const when = day<0 ? 'Overdue' : day===0 ? 'Today' : day===1 ? 'Tomorrow' : new Date(e.iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'});
-    const time = e.p.doseTime ? fmtClock(e.p.doseTime) : '';
-    return `<button type="button" class="dose-row" data-hist-pid="${e.p.id}">
-      <span class="when" style="${day<=0?'color:var(--accent-pep-strong)':''}">${esc(when)}</span>
-      <span class="what"><span class="serum-dot" style="display:inline-block;background:${e.color};margin-right:6px;"></span>${esc(e.p.compound||'Untitled')}${time?` <span class="footnote">${esc(time)}</span>`:''}</span>
-      <span class="amt mono">${esc(e.dose)}${e.units!=null?` <span class="footnote">${e.units}u</span>`:''}</span>
-    </button>`;
-  }).join('');
-  $$('[data-hist-pid]',el).forEach(b=> b.addEventListener('click', ()=> openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.histPid))));
-}
-/* Dose tab: every logged injection across protocols, newest first. */
-function renderRecentDoses(){
-  const el = $('#recentDoseList');
-  if(!el) return;
-  const colorMap = protocolColorMap();
-  const all = [];
-  state.protocols.filter(p=>p.status!=='archived').forEach(p=>{
-    injectionEvents(p).forEach(e=> all.push({p, ...e}));
-  });
-  all.sort((x,y)=> y.t-x.t);
-  if(!all.length){ el.innerHTML = `<p class="footnote">No doses logged yet. Tap Mark taken above when you inject.</p>`; return; }
-  const show = all.slice(0, lsGet('ledger.histAll','')==='1' ? 200 : 10);
-  el.innerHTML = show.map(e=>{
-    const d = new Date(e.t);
-    return `<button type="button" class="dose-row" data-hist-pid="${e.p.id}">
-      <span class="when">${esc(d.toLocaleDateString(undefined,{weekday:'short', month:'short', day:'numeric'}))}</span>
-      <span class="what"><span class="serum-dot" style="display:inline-block;background:${colorMap.get(e.p.id)||'var(--muted)'};margin-right:6px;"></span>${esc(e.p.compound||'Untitled')} <span class="footnote">${esc(d.toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}))}</span></span>
-      <span class="amt mono">${esc(fmtAmount(e.mg))}</span>
-    </button>`;
-  }).join('') + (all.length>10 ? `<button type="button" class="btn btn-sm" id="histMore" style="margin-top:8px;">${lsGet('ledger.histAll','')==='1' ? 'Show fewer' : `Show all ${all.length}`}</button>` : '');
-  $$('[data-hist-pid]',el).forEach(b=> b.addEventListener('click', ()=> openDoseHistoryModal(state.protocols.find(p=>p.id===b.dataset.histPid))));
-  const more = $('#histMore',el);
-  if(more) more.addEventListener('click', ()=>{ lsSet('ledger.histAll', lsGet('ledger.histAll','')==='1' ? '' : '1'); renderRecentDoses(); });
-}
 /* Protocols tab: every non-archived protocol, tap to edit. */
 function renderProtocolManager(){
   const el = $('#protocolManager');
@@ -4815,8 +4807,7 @@ function registerServiceWorker(){
 /* ===================== Render all ===================== */
 function renderAll(){
   renderProtocols();
-  renderUpcoming();
-  renderRecentDoses();
+  renderDoseCalendar();
   renderProtocolManager();
   renderSerum();
   renderArchivedProtocols();

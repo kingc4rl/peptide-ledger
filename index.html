@@ -1054,6 +1054,24 @@ body{ overscroll-behavior:none; }
   box-shadow:0 0 0 .5px rgba(20,25,35,.07), 0 8px 24px rgba(20,25,35,.06); border-top:3px solid var(--vc); animation:vialOpen .22s ease; }
 .lot-card .lot-info{ flex:1; min-width:0; }
 .lot-card .lot-edit{ flex-basis:100%; text-align:left; font-weight:600; padding:2px 0 0; }
+
+/* Doses calendar (past + upcoming) */
+.cal-strip{ scrollbar-width:none; scroll-behavior:auto; padding:2px 1px 4px; }
+.cal-strip::-webkit-scrollbar{ display:none; }
+.cal-strip .day-chip{ flex:0 0 46px; font:inherit; color:var(--ink); -webkit-tap-highlight-color:transparent; }
+.cal-strip .day-chip.past .num{ color:var(--muted); }
+.cal-strip .day-chip.sel{ border-color:var(--accent-pep); background:var(--accent-pep); color:#fff; box-shadow:0 4px 12px rgba(0,0,0,.12); }
+.cal-strip .day-chip.sel .dow, .cal-strip .day-chip.sel .num{ color:#fff; }
+.cal-strip .day-chip.sel .marks span{ outline:1.5px solid rgba(255,255,255,.9); }
+.cal-key{ display:flex; align-items:center; gap:12px; margin:8px 2px 4px; font-size:11.5px; color:var(--muted); }
+.cal-key i{ display:inline-block; width:7px; height:7px; border-radius:50%; margin-right:5px; vertical-align:1px; }
+.cal-key .k-fill{ background:var(--muted); }
+.cal-key .k-ring{ border:1.5px solid var(--muted); box-sizing:border-box; }
+.cal-key .link-btn{ margin-left:auto; background:none; border:none; padding:0; font:inherit; font-size:12px; font-weight:600; color:var(--accent-pep-strong); cursor:pointer; }
+#doseDayList{ margin-top:6px; border-top:1px solid var(--line-soft); }
+#doseDayList .dose-row:first-child{ border-top:none; }
+#doseDayList .dose-row{ grid-template-columns:1fr auto auto; }
+.cal-empty{ padding:12px 0 2px; }
 </style>
 </head>
 <body>
@@ -1093,16 +1111,13 @@ body{ overscroll-behavior:none; }
           </div>
         </section>
 
-        <div class="card">
-          <div class="card-h"><h3>Upcoming doses</h3></div>
-          <div id="protocolCalendar" style="margin-bottom:12px;"></div>
-          <div id="upcomingList"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h3>Dose history</h3><span class="footnote">Tap a dose to edit or backfill</span></div>
-          <div id="recentDoseList"></div>
-        </div>
+        <section class="card-block">
+          <div class="card-block-head"><div class="card-h"><h3>Doses</h3><span class="footnote" id="doseDayLabel"></span></div></div>
+          <div class="card">
+            <div id="doseCalendar"></div>
+            <div id="doseDayList"></div>
+          </div>
+        </section>
 
       </section>
 
