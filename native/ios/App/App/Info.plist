@@ -2,12 +2,12 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CAPACITOR_DEBUG</key>
+	<key>CAPACITOR_DEBUG</key>
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Pep Prep</string>
+	<string>Pep Prep</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -22,27 +22,61 @@
 	<string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>LSSupportsOpeningDocumentsInPlace</key>
+	<true/>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Pep Prep adds your upcoming doses to your calendar and replaces them when your schedule changes.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Pep Prep adds your upcoming doses to your calendar.</string>
+	<key>NSCalendarsWriteOnlyAccessUsageDescription</key>
+	<string>Pep Prep adds your upcoming doses to your calendar.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Pep Prep uses the camera for progress photos and to scan vial barcodes.</string>
+	<key>NSHealthShareUsageDescription</key>
+	<string>Pep Prep reads your weight from Apple Health so weigh-ins from a smart scale show up in your progress.</string>
+	<key>NSHealthUpdateUsageDescription</key>
+	<string>Pep Prep saves the weights you log to Apple Health.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Pep Prep can save images you export to your photo library.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Pep Prep lets you pick progress photos and lab results from your library.</string>
+	<key>NSUbiquitousContainers</key>
+	<dict>
+		<key>iCloud.com.kingc4rl.pepprep</key>
+		<dict>
+			<key>NSUbiquitousContainerIsDocumentScopePublic</key>
+			<true/>
+			<key>NSUbiquitousContainerName</key>
+			<string>Pep Prep</string>
+			<key>NSUbiquitousContainerSupportedFolderLevels</key>
+			<string>Any</string>
+		</dict>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
-    <false/>
-    <key>UISceneConfigurations</key>
-    <dict>
-      <key>UIWindowSceneSessionRoleApplication</key>
-      <array>
-        <dict>
-            <key>UISceneConfigurationName</key>
-            <string>Default Configuration</string>
-            <key>UISceneDelegateClassName</key>
-            <string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
-            <key>UISceneStoryboardFile</key>
-            <string>Main</string>
-        </dict>
-      </array>
-    </dict>
+		<false/>
+		<key>UISceneConfigurations</key>
+		<dict>
+			<key>UIWindowSceneSessionRoleApplication</key>
+			<array>
+				<dict>
+					<key>UISceneConfigurationName</key>
+					<string>Default Configuration</string>
+					<key>UISceneDelegateClassName</key>
+					<string>$(PRODUCT_MODULE_NAME).SceneDelegate</string>
+					<key>UISceneStoryboardFile</key>
+					<string>Main</string>
+				</dict>
+			</array>
+		</dict>
 	</dict>
+	<key>UIFileSharingEnabled</key>
+	<true/>
 	<key>UILaunchStoryboardName</key>
 	<string>LaunchScreen</string>
 	<key>UIMainStoryboardFile</key>
@@ -51,14 +85,6 @@
 	<array>
 		<string>arm64</string>
 	</array>
-	<key>ITSAppUsesNonExemptEncryption</key>
-	<false/>
-	<key>NSCameraUsageDescription</key>
-	<string>Pep Prep uses the camera for your progress photos.</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Pep Prep lets you pick progress photos and lab results from your library.</string>
-	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>Pep Prep can save images you export to your photo library.</string>
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -72,5 +98,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>WKAppBoundDomains</key>
+	<array>
+		<string>kingc4rl.github.io</string>
+	</array>
 </dict>
 </plist>

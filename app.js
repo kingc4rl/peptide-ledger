@@ -1044,7 +1044,7 @@ function renderDoseCalendar(){
   if(sel) strip.scrollLeft = sel.offsetLeft - strip.offsetLeft - (strip.clientWidth - sel.offsetWidth)/2;
   $$('[data-cal-day]', el).forEach(b=> b.addEventListener('click', ()=>{
     const left = strip.scrollLeft;
-    calDay = b.dataset.calDay; renderDoseCalendar();
+    calDay = b.dataset.calDay; haptic('select'); renderDoseCalendar();
     const s2 = $('.cal-strip', el); if(s2) s2.scrollLeft = left;   // keep the strip where the finger left it
   }));
   const back = $('[data-cal-today]', el);
@@ -1425,6 +1425,7 @@ function momentOn(day, hhmm){
   return d.getTime();
 }
 async function logInjection(p, day, delta, hhmm){
+  if(delta>0) haptic('success');
   if(!p) return;
   const n = splitCount(p);
   const log = Array.isArray(p.doseLog) ? p.doseLog.slice() : [];
@@ -2762,8 +2763,8 @@ function protocolForVial(v){
   const c = (v.compound||'').trim().toLowerCase();
   return state.protocols.find(p=> isActiveP(p) && (p.compound||'').trim().toLowerCase()===c) || null;
 }
-function openVialModal(existing){
-  const v = existing || {};
+function openVialModal(existing, prefill){
+  const v = existing || prefill || {};
   const protocolOptions = state.protocols.map(p=>`<option value="${p.id}" ${v.protocolId===p.id?'selected':''}>${esc(p.compound)}</option>`).join('');
   openModal(existing?'Edit vial':'Add vial', `
     <div class="form-grid">
@@ -2773,6 +2774,7 @@ function openVialModal(existing){
       <div class="field"><label for="vConc">Concentration (mg/mL)</label><input id="vConc" type="number" step="any" value="${esc(v.concentration||'')}" placeholder="After reconstitution"></div>
       <div class="field"><label for="vPrice">Price paid ($, for this whole entry)</label><input id="vPrice" type="number" step="any" value="${esc(v.price||'')}" placeholder="e.g. 65"></div>
       <div class="field"><label for="vLot">Lot #</label><input id="vLot" type="text" value="${esc(v.lot||'')}"></div>
+      ${(v.barcode || capPlugin('CapacitorBarcodeScanner')) ? `<div class="field"><label for="vBarcode">Barcode / QR</label><div class="scan-row"><input id="vBarcode" type="text" value="${esc(v.barcode||'')}">${capPlugin('CapacitorBarcodeScanner') ? `<button type="button" class="btn btn-sm" id="vScan">Scan</button>` : ''}</div></div>` : ''}
       <div class="field span2"><label for="vVendor">Vendor</label>
         <select id="vVendor">${vendorOptions(v.pharmacy)}</select>
         <div id="vNewVendorBox" hidden style="margin-top:8px;">
@@ -2794,6 +2796,7 @@ function openVialModal(existing){
       <button class="btn" id="vCancel">Cancel</button><button class="btn btn-accent-pep" id="vSave">Save</button>
     </div>
   `, body=>{
+    const scanB = $('#vScan',body); if(scanB) scanB.addEventListener('click', async ()=>{ const c = await scanCode(); if(c) $('#vBarcode',body).value = c; });
     let tests = vialTests(v).map(t=>({...t}));
     if(!tests.length) tests.push({lab:'',massMg:'',purity:'',endo:'',date:'',coaUrl:''});
     const drawTests = ()=>{
@@ -2835,7 +2838,7 @@ function openVialModal(existing){
         const dup = state.vendors.some(x=> (x.name||'').trim().toLowerCase()===vendor.toLowerCase());
         if($('#vSaveVendor',body).checked && !dup) await dbAdd('vendors', {name:vendor, subtext:'', url:'', deal:'', notes:''});
       }
-      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:($('#vQty',body).value==='' ? (v.remainingMg!=null ? 0 : 1) : $('#vQty',body).value), concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), pharmacy:vendor,
+      const data = {...stripId(v), compound, mgPerVial:$('#vMg',body).value, qty:($('#vQty',body).value==='' ? (v.remainingMg!=null ? 0 : 1) : $('#vQty',body).value), concentration:$('#vConc',body).value, price:$('#vPrice',body).value, lot:$('#vLot',body).value.trim(), barcode: $('#vBarcode',body) ? $('#vBarcode',body).value.trim() : (v.barcode||''), pharmacy:vendor,
         ...(()=>{ const ts = tests.map(t=>({...t, lab:(t.lab||'').trim(), coaUrl:(t.coaUrl||'').trim()})).filter(testFilled); const f = ts[0] || {};
           return {testLab:f.lab||'', testMassMg:f.massMg||'', testPurity:f.purity||'', testEndo:f.endo||'', testDate:f.date||'', coaUrl:f.coaUrl||'', extraTests: ts.slice(1)}; })(),
         dateOpened:$('#vOpened',body).value, bud:$('#vBud',body).value, protocolId:$('#vProtocol',body).value||null};
@@ -3852,6 +3855,7 @@ function initCheckinForm(){
     // keep any mood, energy or note an older entry already has
     const data = {...(existing ? stripId(existing) : {}), date, weight: num(weight), weightUnit: 'lb'};
     if(existing) await dbSet('checkins', existing.id, data); else await dbAdd('checkins', data);
+    exportWeightToHealth(date, num(weight));
     $('#ciStatus').textContent = `✓ Saved for ${fmtDateShort(date)}`;
     $('#ciDelete').hidden = false;
     $('#ciSave').textContent = 'Update weight';
@@ -4970,12 +4974,16 @@ function renderBackupNudge(){
   $('#backupNudgeText').textContent = last ? `Last backup ${fmtDate(last)}. Your data lives only on this device.` : 'No backup yet. Your data lives only on this device.';
 }
 function blobToDataURL(b){ return new Promise((res,rej)=>{ const r = new FileReader(); r.onload = ()=> res(r.result); r.onerror = ()=> rej(r.error); r.readAsDataURL(b); }); }
-async function exportBackup(){
+async function buildBackupPayload(){
   const blobs = {};
   for(const k of await allBlobKeys()){ const b = await getBlob(k); if(b) blobs[k] = await blobToDataURL(b); }
   const payload = {app:'peptide-ledger', format:1, exportedAt:new Date().toISOString(), collections:{}, blobs,
     settings:{weightUnit: weightUnit(), endoWeight: lsGet('ledger.endoWeight',''), urineStrip: lsGet('ledger.urineStrip','10')}};
   COLLECTIONS.forEach(k=> payload.collections[k] = state[k]);
+  return payload;
+}
+async function exportBackup(){
+  const payload = await buildBackupPayload();
   const name = `pep-prep-backup-${todayISO()}.json`;
   const file = new File([JSON.stringify(payload)], name, {type:'application/json'});
   const touch = matchMedia('(pointer: coarse)').matches;
@@ -5082,12 +5090,7 @@ function isStandalone(){ return matchMedia('(display-mode: standalone)').matches
 function renderInstallCard(){
   const el = $('#installInfo'); if(!el) return;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
-  if(IS_NATIVE){
-    el.innerHTML = `<p class="footnote">You're using the Pep Prep iPhone app.</p>
-      <label class="pc-toggle"><input type="checkbox" id="remindToggle" ${remindersOn()?'checked':''}><span>Dose reminders at each dose time</span></label>`;
-    $('#remindToggle').addEventListener('change', e=> setRemindersOn(e.target.checked));
-    return;
-  }
+  if(IS_NATIVE){ el.innerHTML = nativeSettingsHTML(); bindNativeSettings(el); return; }
   if(isStandalone()){ el.innerHTML = `<p class="footnote">Installed. You're running Pep Prep as an app.</p>`; return; }
   if(deferredInstall){ el.innerHTML = `<button class="btn btn-accent-pep btn-sm" id="installBtn">Install app</button>`; $('#installBtn').addEventListener('click', async ()=>{ deferredInstall.prompt(); await deferredInstall.userChoice.catch(()=>{}); deferredInstall = null; renderInstallCard(); }); return; }
   el.innerHTML = ios
@@ -5096,15 +5099,14 @@ function renderInstallCard(){
 }
 function showAppVersion(){
   const el = $('#appVersion'); if(!el) return;
-  if(IS_NATIVE){ el.textContent = `App version ${window.PEP_NATIVE_VERSION||''} · iPhone app`; return; }
-  if(!('caches' in window)) return;
+  if(!('caches' in window)){ if(IS_NATIVE) el.textContent = `App version ${window.PEP_NATIVE_VERSION||''} · iPhone app`; return; }
   caches.keys().then(keys=>{
     const k = keys.filter(x=> x.startsWith('ledger-shell-')).sort().pop();
-    el.textContent = k ? `App version ${k.replace('ledger-shell-','')}` : '';
+    el.textContent = k ? `App version ${k.replace('ledger-shell-','')}${IS_NATIVE?' · iPhone app':''}` : '';
   }).catch(()=>{});
 }
 function registerServiceWorker(){
-  if(IS_NATIVE || !('serviceWorker' in navigator) || location.protocol==='file:') return;
+  if(!('serviceWorker' in navigator) || location.protocol==='file:' || location.protocol==='capacitor:') return;
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     const show = ()=>{ $('#updateBanner').hidden = false; };
     if(reg.waiting && navigator.serviceWorker.controller) show();
@@ -5120,36 +5122,84 @@ function registerServiceWorker(){
 }
 
 /* ===================== iPhone app (Capacitor build in native/) =====================
-   The same code runs as the web app and inside the native shell. Inside the shell there is no service worker,
-   backups go out through the share sheet, and upcoming doses are scheduled as local notifications. */
-const capPlugin = name=> (IS_NATIVE && window.Capacitor.Plugins) ? window.Capacitor.Plugins[name] : null;
-const remindersOn = ()=> lsGet('ledger.reminders','1')!=='0';
+   The iPhone app loads this same site, so everything here runs only when IS_NATIVE and the plugin is in the
+   installed build (an older build simply skips features it doesn't have). Settings live in localStorage:
+   ledger.reminders, ledger.autoBackup, ledger.health ('1' = on). */
+const capPlugin = name=>{
+  if(!IS_NATIVE || !window.Capacitor.Plugins) return null;
+  if(window.Capacitor.isPluginAvailable && !window.Capacitor.isPluginAvailable(name)) return null;
+  return window.Capacitor.Plugins[name] || null;
+};
+const nativeOn = (key, dflt)=> lsGet('ledger.'+key, dflt)==='1';
+let resolveDataReady; const dataReady = new Promise(r=> resolveDataReady = r);
+function haptic(kind){
+  const H = capPlugin('Haptics'); if(!H) return;
+  try{
+    if(kind==='success') H.notification({type:'SUCCESS'});
+    else if(kind==='select') H.selectionChanged();
+    else H.impact({style: kind==='medium' ? 'MEDIUM' : 'LIGHT'});
+  }catch(e){}
+}
+function nowHHMM(){ const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
+
+/* ---- Dose reminders: local notifications with "Log it" and "Snooze 15 min" buttons ---- */
+const remindersOn = ()=> nativeOn('reminders','1');
 let reminderTimer = null;
+function reminderList(){
+  const now = Date.now(), until = now + 14*24*HOUR, list = [];
+  state.protocols.filter(isActiveP).forEach(p=>{
+    scheduledEvents(p, now, until).forEach(e=>{
+      const iso = isoFromDate(new Date(e.t - 2*HOUR));
+      if(injectionsOn(p, iso) >= splitCount(p)) return;      // already logged for that dose day
+      const d = doseAt(p, iso), u = unitsPerInjection(p, iso);
+      list.push({t:e.t, pid:p.id, iso, title:`${p.compound||'Dose'} is due`, body:`${fmtDose(num(d.dose)/splitCount(p), d.doseUnit)}${u!=null?` · ${u} units`:''}`});
+    });
+  });
+  return list.sort((a,b)=> a.t-b.t);
+}
 function scheduleDoseReminders(){
   const LN = capPlugin('LocalNotifications'); if(!LN) return;
   clearTimeout(reminderTimer);
   reminderTimer = setTimeout(async ()=>{
     try{
       const pending = await LN.getPending();
-      if(pending && pending.notifications && pending.notifications.length) await LN.cancel({notifications: pending.notifications.map(n=>({id:n.id}))});
+      const ours = (pending && pending.notifications || []).filter(n=> n.id>=1000 && n.id<2000);
+      if(ours.length) await LN.cancel({notifications: ours.map(n=>({id:n.id}))});
       if(!remindersOn()) return;
       const perm = await LN.checkPermissions();
       if(perm.display!=='granted') return;
-      const now = Date.now(), until = now + 14*24*HOUR, list = [];
-      state.protocols.filter(isActiveP).forEach(p=>{
-        scheduledEvents(p, now, until).forEach(e=>{
-          const iso = isoFromDate(new Date(e.t - 2*HOUR));
-          if(injectionsOn(p, iso) >= splitCount(p)) return;      // already logged for that dose day
-          const d = doseAt(p, iso), u = unitsPerInjection(p, iso);
-          list.push({t:e.t, title:`${p.compound||'Dose'} is due`, body:`${fmtDose(num(d.dose)/splitCount(p), d.doseUnit)}${u!=null?` · ${u} units`:''}. Tap to log it.`});
-        });
-      });
-      list.sort((a,b)=> a.t-b.t);
-      // iOS keeps at most 64 pending notifications per app
-      const notifications = list.slice(0, 60).map((x,i)=>({id: 1000+i, title:x.title, body:x.body, schedule:{at:new Date(x.t), allowWhileIdle:true}}));
+      // iOS keeps at most 64 pending notifications per app; leave room for snoozes
+      const notifications = reminderList().slice(0, 56).map((x,i)=>({id: 1000+i, title:x.title, body:x.body,
+        schedule:{at:new Date(x.t), allowWhileIdle:true}, actionTypeId:'DOSE', extra:{pid:x.pid, iso:x.iso}}));
       if(notifications.length) await LN.schedule({notifications});
     }catch(e){ console.warn('Reminder scheduling failed', e); }
   }, 800);
+}
+async function initNotificationActions(){
+  const LN = capPlugin('LocalNotifications'); if(!LN) return;
+  try{
+    await LN.registerActionTypes({types:[{id:'DOSE', actions:[
+      {id:'log', title:'Log it', foreground:true},
+      {id:'snooze', title:'Snooze 15 min', foreground:true}]}]});
+    LN.addListener('localNotificationActionPerformed', async ev=>{
+      await dataReady;
+      const n = ev.notification || {}, x = n.extra || {};
+      const p = state.protocols.find(q=> q.id===x.pid);
+      if(ev.actionId==='snooze'){
+        await LN.schedule({notifications:[{id: 2000 + Math.floor(Math.random()*900), title:n.title, body:n.body,
+          schedule:{at:new Date(Date.now()+15*60000), allowWhileIdle:true}, actionTypeId:'DOSE', extra:x}]});
+        showToast('Snoozed for 15 minutes');
+        return;
+      }
+      if(!p) return;
+      setTab('dose');
+      if(ev.actionId==='log'){
+        const day = x.iso || doseDayISO();
+        if(injectionsOn(p, day) < splitCount(p)){ await logInjection(p, day, 1, nowHHMM()); showToast(`Logged ${p.compound||'dose'}`); }
+        else showToast(`${p.compound||'That dose'} is already logged`);
+      } else openDoseModal(p);
+    });
+  }catch(e){ console.warn('Notification actions unavailable', e); }
 }
 async function setRemindersOn(on){
   lsSet('ledger.reminders', on ? '1' : '0');
@@ -5157,13 +5207,155 @@ async function setRemindersOn(on){
   if(on && LN){ try{ const r = await LN.requestPermissions(); if(r.display!=='granted') lsSet('ledger.reminders','0'); }catch(e){} }
   renderInstallCard(); scheduleDoseReminders();
 }
-/* Native: write a file to the app's cache and open the share sheet (Save to Files, AirDrop, Print...). */
+
+/* ---- Files: share sheet, and weekly automatic backups to iCloud Drive (Files > iCloud Drive > Pep Prep) ---- */
 async function nativeShareFile(name, text, title){
   const FS = capPlugin('Filesystem'), SH = capPlugin('Share');
   if(!FS || !SH) return false;
   const w = await FS.writeFile({path:name, data:text, directory:'CACHE', encoding:'utf8'});
   try{ await SH.share({title, url:w.uri, dialogTitle:title}); }catch(e){ if(!/cancel/i.test(String(e && e.message))) throw e; return 'cancel'; }
   return true;
+}
+async function autoBackup(force){
+  const IB = capPlugin('ICloudBackup'); if(!IB) return null;
+  if(!force && (!nativeOn('autoBackup','1') || daysBetween(lsGet('ledger.autoBackupDate','2000-01-01'), todayISO()) < 7)) return null;
+  if(!force && !(state.protocols.length || state.vials.length || state.checkins.length)) return null;   // nothing worth saving yet
+  try{
+    const r = await IB.save({name:`pep-prep-auto-${todayISO()}.json`, text: JSON.stringify(await buildBackupPayload())});
+    lsSet('ledger.autoBackupDate', todayISO()); lsSet('ledger.autoBackupWhere', r.location||'');
+    lsSet('ledger.lastBackup', todayISO()); renderBackupNudge(); renderInstallCard();
+    return r;
+  }catch(e){ console.warn('Automatic backup failed', e); return null; }
+}
+
+/* ---- Apple Health: logged weights go to Health; weigh-ins from a scale come back as check-ins ---- */
+async function setHealthOn(on){
+  const HL = capPlugin('Health');
+  if(on && HL){
+    try{
+      const a = await HL.isAvailable();
+      if(a && a.available===false){ showToast('Apple Health isn\'t available on this phone'); on = false; }
+      else await HL.requestAuthorization({read:['weight'], write:['weight']});
+    }catch(e){ on = false; showToast('Couldn\'t connect to Apple Health'); }
+  }
+  lsSet('ledger.health', on ? '1' : '0');
+  renderInstallCard();
+  if(on) importHealthWeights(true);
+}
+async function exportWeightToHealth(date, lb){
+  const HL = capPlugin('Health'); if(!HL || !nativeOn('health','0')) return;
+  try{
+    const at = date===todayISO() ? new Date() : new Date(date+'T08:00:00');
+    await HL.saveSample({dataType:'weight', value: Math.round(lb*0.45359237*100)/100, unit:'kilogram', startDate: at.toISOString(), endDate: at.toISOString()});
+  }catch(e){ console.warn('Health save failed', e); }
+}
+async function importHealthWeights(force){
+  const HL = capPlugin('Health'); if(!HL || !nativeOn('health','0')) return;
+  if(!force && lsGet('ledger.healthImport','')===todayISO()) return;
+  try{
+    const {samples} = await HL.readSamples({dataType:'weight', startDate: new Date(Date.now()-90*24*HOUR).toISOString(), endDate: new Date().toISOString(), limit: 500});
+    const byDay = new Map();
+    (samples||[]).forEach(s=>{
+      if(/pep prep/i.test(s.sourceName||'')) return;          // our own entries
+      const day = isoFromDate(new Date(s.startDate));
+      const prev = byDay.get(day);
+      if(!prev || s.startDate > prev.startDate) byDay.set(day, s);
+    });
+    let added = 0;
+    for(const [day, s] of byDay){
+      if(checkinFor(day)) continue;                             // never overwrite a weight you logged
+      const kg = s.unit==='pound' ? s.value*0.45359237 : s.value;
+      await dbAdd('checkins', {date: day, weight: Math.round(kg/0.45359237*10)/10, weightUnit:'lb', source:'health'});
+      added++;
+    }
+    lsSet('ledger.healthImport', todayISO());
+    if(added){ showToast(`Added ${added} weigh-in${added===1?'':'s'} from Apple Health`); if(currentTab==='progress') renderProgress(); }
+  }catch(e){ console.warn('Health import failed', e); }
+}
+
+/* ---- Calendar: the next 8 weeks of doses as calendar events (replaced each time) ---- */
+async function syncDoseCalendar(){
+  const CAL = capPlugin('CapacitorCalendar'); if(!CAL) return;
+  const st = $('#calSyncStatus');
+  try{
+    const r = await CAL.requestFullCalendarAccess();
+    if(r && r.result && r.result!=='granted'){ if(st) st.textContent = 'Calendar access was not allowed. You can allow it in Settings › Pep Prep.'; return; }
+    const old = (()=>{ try{ return JSON.parse(lsGet('ledger.calEvents','[]'))||[]; }catch(e){ return []; } })();
+    for(const id of old){ try{ await CAL.deleteEvent({id}); }catch(e){} }
+    const now = Date.now(), until = now + 56*24*HOUR, ids = [];
+    const evs = [];
+    state.protocols.filter(isActiveP).forEach(p=>{
+      scheduledEvents(p, now, until).forEach(e=>{
+        const iso = isoFromDate(new Date(e.t - 2*HOUR)), d = doseAt(p, iso), u = unitsPerInjection(p, iso);
+        evs.push({t:e.t, title:`💉 ${p.compound||'Dose'} ${fmtDose(num(d.dose)/splitCount(p), d.doseUnit)}${u!=null?` (${u}u)`:''}`});
+      });
+    });
+    for(const e of evs.slice(0, 200)){
+      const res = await CAL.createEvent({title:e.title, startDate:e.t, endDate:e.t + 15*60000, description:'Added by Pep Prep'});
+      if(res && res.id) ids.push(res.id);
+    }
+    lsSet('ledger.calEvents', JSON.stringify(ids)); lsSet('ledger.calSyncDate', todayISO());
+    if(st) st.textContent = `Added ${ids.length} dose${ids.length===1?'':'s'} through ${fmtDateShort(isoFromDate(new Date(until)))}. Tap again after schedule changes.`;
+    haptic('success');
+  }catch(e){ console.warn('Calendar sync failed', e); if(st) st.textContent = 'Couldn\'t update the calendar.'; }
+}
+
+/* ---- Barcode scanning (vial labels, lot numbers) ---- */
+async function scanCode(){
+  const BS = capPlugin('CapacitorBarcodeScanner'); if(!BS) return null;
+  try{ const r = await BS.scanBarcode({hint:17, scanInstructions:'Point at the vial\'s barcode or QR code', scanButton:false}); return r && r.ScanResult ? String(r.ScanResult).trim() : null; }
+  catch(e){ return null; }
+}
+async function scanFindVial(){
+  const code = await scanCode(); if(!code) return;
+  const key = code.toLowerCase();
+  const v = state.vials.find(x=> !isDepleted(x) && ((x.barcode||'').toLowerCase()===key || (x.lot||'').trim().toLowerCase()===key))
+    || state.vials.find(x=> (x.barcode||'').toLowerCase()===key || (x.lot||'').trim().toLowerCase()===key);
+  if(v && !isDepleted(v)){
+    stashSel = v.compound || 'Vial'; lotSel = v.id; renderVials(); haptic('success');
+    const el = $('.lot-card'); if(el) el.scrollIntoView({behavior:'smooth', block:'center'});
+    return;
+  }
+  showToast(`New code ${code}: add it as a vial`);
+  openVialModal(null, {barcode: code});
+}
+
+/* ---- Small toast for confirmations ---- */
+function showToast(text){
+  let t = $('#toast');
+  if(!t){ t = document.createElement('div'); t.id = 'toast'; t.className = 'toast'; t.setAttribute('role','status'); document.body.appendChild(t); }
+  t.textContent = text; t.classList.add('on');
+  clearTimeout(t._h); t._h = setTimeout(()=> t.classList.remove('on'), 2600);
+}
+
+/* Settings shown in Tools › App & backup inside the iPhone app. */
+function nativeSettingsHTML(){
+  const has = n=> !!capPlugin(n);
+  const where = lsGet('ledger.autoBackupWhere','')==='icloud' ? 'iCloud Drive › Pep Prep' : 'Files › On My iPhone › Pep Prep';
+  const last = lsGet('ledger.autoBackupDate','');
+  return `<p class="footnote">You're using the Pep Prep iPhone app.</p>
+    <div class="nat-set">
+      ${has('LocalNotifications') ? `<label class="pc-toggle"><input type="checkbox" id="remindToggle" ${remindersOn()?'checked':''}><span>Dose reminders at each dose time</span></label>` : ''}
+      ${has('ICloudBackup') ? `<label class="pc-toggle"><input type="checkbox" id="autoBackupToggle" ${nativeOn('autoBackup','1')?'checked':''}><span>Weekly automatic backup</span></label>
+        <div class="footnote nat-sub">${last ? `Last: ${esc(fmtDateShort(last))} in ${esc(where)}` : 'Saved to iCloud Drive › Pep Prep (keeps the last 8).'} <button type="button" class="link-btn" id="autoBackupNow">Back up now</button></div>` : ''}
+      ${has('Health') ? `<label class="pc-toggle"><input type="checkbox" id="healthToggle" ${nativeOn('health','0')?'checked':''}><span>Sync weight with Apple Health</span></label>` : ''}
+      ${has('CapacitorCalendar') ? `<div class="nat-row"><button type="button" class="btn btn-sm" id="calSyncBtn">Add doses to Calendar</button></div><div class="footnote nat-sub" id="calSyncStatus">${lsGet('ledger.calSyncDate','') ? `Last added ${esc(fmtDateShort(lsGet('ledger.calSyncDate','')))}.` : 'Puts the next 8 weeks of doses in your calendar.'}</div>` : ''}
+    </div>`;
+}
+function bindNativeSettings(el){
+  const on = (id, fn)=>{ const x = $('#'+id, el); if(x) x.addEventListener(x.type==='checkbox' ? 'change' : 'click', fn); };
+  on('remindToggle', e=> setRemindersOn(e.target.checked));
+  on('autoBackupToggle', e=>{ lsSet('ledger.autoBackup', e.target.checked ? '1' : '0'); });
+  on('autoBackupNow', async e=>{ e.target.disabled = true; const r = await autoBackup(true); showToast(r ? `Backed up to ${r.location==='icloud' ? 'iCloud Drive' : 'Files'}` : 'Backup failed'); renderInstallCard(); });
+  on('healthToggle', e=> setHealthOn(e.target.checked));
+  on('calSyncBtn', ()=> syncDoseCalendar());
+}
+/* Runs once the data is loaded, and again each time the app comes back to the front. */
+function nativeOnForeground(){
+  if(!IS_NATIVE) return;
+  autoBackup(false);
+  importHealthWeights(false);
+  scheduleDoseReminders();
 }
 
 /* ===================== Render all ===================== */
@@ -5196,11 +5388,15 @@ async function boot(){
   window.addEventListener('beforeinstallprompt', e=>{ e.preventDefault(); deferredInstall = e; renderInstallCard(); });
   window.addEventListener('appinstalled', ()=>{ deferredInstall = null; renderInstallCard(); });
   renderInstallCard();
+  initNotificationActions();
   await loadAll();
   loadCheckinForm($('#ciDate').value || todayISO());   // the form was filled before records loaded
   renderStoragePill();
   setTab('dose', {keepScroll:true});   // the app always opens on Dose
-  if(IS_NATIVE && lsGet('ledger.remindAsked','')!=='1'){ lsSet('ledger.remindAsked','1'); setRemindersOn(true); }
+  resolveDataReady();
+  if(IS_NATIVE && lsGet('ledger.remindAsked','')!=='1' && capPlugin('LocalNotifications')){ lsSet('ledger.remindAsked','1'); setRemindersOn(true); }
+  nativeOnForeground();
+  const scanBtn = $('#scanVialBtn'); if(scanBtn && capPlugin('CapacitorBarcodeScanner')){ scanBtn.hidden = false; scanBtn.addEventListener('click', scanFindVial); }
   renderAll();
   registerServiceWorker();
   showAppVersion();
@@ -5210,6 +5406,7 @@ async function boot(){
     if(document.hidden) return;
     if(doseDayISO()!==lastDay){ lastDay = doseDayISO(); $('#ciDate').max = todayISO(); }
     renderAll();
+    nativeOnForeground();
   });
 }
 boot();

@@ -1209,6 +1209,18 @@ body{ overscroll-behavior:none; }
   body.printing-labels::before, body.printing-labels::after{ display:none !important; }
   .pl-label{ break-inside:avoid; }
 }
+
+/* iPhone app extras */
+.toast{ position:fixed; left:50%; bottom:calc(96px + env(safe-area-inset-bottom)); transform:translate(-50%, 20px); opacity:0; pointer-events:none; z-index:60;
+  background:rgba(29,29,32,.88); color:#fff; font-size:13.5px; font-weight:600; padding:10px 16px; border-radius:99px; box-shadow:0 8px 24px rgba(0,0,0,.2);
+  -webkit-backdrop-filter:blur(12px); backdrop-filter:blur(12px); transition:opacity .2s, transform .2s; max-width:calc(100vw - 40px); text-align:center; }
+.toast.on{ opacity:1; transform:translate(-50%, 0); }
+.scan-row{ display:flex; gap:6px; align-items:center; }
+.scan-row input{ flex:1; min-width:0; }
+.nat-set{ display:flex; flex-direction:column; gap:4px; margin-top:4px; }
+.nat-sub{ margin:-2px 0 6px 26px; }
+.nat-row{ margin-top:10px; }
+.nat-set .pc-toggle span{ color:var(--ink); }
 </style>
 </head>
 <body>
@@ -1276,7 +1288,7 @@ body{ overscroll-behavior:none; }
       <section id="inventoryView" class="view" hidden>
 
         <div class="card bare">
-          <div class="card-h"><h3>Stash</h3><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div>
+          <div class="card-h"><h3>Stash</h3><div class="card-actions"><button class="btn btn-sm" id="scanVialBtn" hidden>Scan</button><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div></div>
           <div id="vialList"></div>
         </div>
 

@@ -2,10 +2,15 @@
   "appId": "com.kingc4rl.pepprep",
   "appName": "Pep Prep",
   "webDir": "www",
+  "server": {
+    "url": "https://kingc4rl.github.io/peptide-ledger/",
+    "errorPath": "offline.html"
+  },
   "ios": {
     "contentInset": "never",
     "scheme": "Pep Prep",
-    "backgroundColor": "#f4f5f7"
+    "backgroundColor": "#f4f5f7",
+    "limitsNavigationsToAppBoundDomains": true
   },
   "plugins": {
     "LocalNotifications": {
