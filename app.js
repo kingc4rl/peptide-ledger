@@ -268,12 +268,16 @@ function vialLabel(v){
 }
 
 /* ===================== Peptides: Calculator ===================== */
+/* Reconstitution and dosing for a 3 mL vial or pen cartridge. Modes: Standard, Reverse (work backwards) and Blend.
+   Devices: syringe, pen, nasal spray. Everything is plain arithmetic:
+   concentration = mg ÷ mL of water, units on a U-100 syringe = mL × 100. */
 const PEPTIDE_PRESETS = [
   {name:'BPC-157', vial:5, doseLow:250, doseHigh:500, doseUnit:'mcg', freq:'1×/day'},
   {name:'TB-500', vial:10, doseLow:2, doseHigh:2.5, doseUnit:'mg', freq:'2×/week'},
   {name:'Semaglutide', vial:5, doseLow:0.25, doseHigh:2.4, doseUnit:'mg', freq:'weekly'},
   {name:'Tirzepatide', vial:5, doseLow:2.5, doseHigh:15, doseUnit:'mg', freq:'weekly'},
   {name:'Retatrutide', vial:10, doseLow:1, doseHigh:12, doseUnit:'mg', freq:'weekly'},
+  {name:'Cagrilintide', vial:5, doseLow:0.25, doseHigh:2.4, doseUnit:'mg', freq:'weekly'},
   {name:'CJC-1295 (No DAC)', vial:2, doseLow:100, doseHigh:300, doseUnit:'mcg', freq:'1×/day'},
   {name:'Ipamorelin', vial:5, doseLow:100, doseHigh:300, doseUnit:'mcg', freq:'2×/day'},
   {name:'GHK-Cu', vial:50, doseLow:1, doseHigh:2, doseUnit:'mg', freq:'1×/day'},
@@ -281,25 +285,437 @@ const PEPTIDE_PRESETS = [
   {name:'PT-141', vial:10, doseLow:0.5, doseHigh:1.75, doseUnit:'mg', freq:'as needed'},
   {name:'MOTS-c', vial:10, doseLow:2.5, doseHigh:10, doseUnit:'mg', freq:'3×/week'},
   {name:'SS-31', vial:50, doseLow:10, doseHigh:40, doseUnit:'mg', freq:'1×/day'},
-  {name:'5-Amino-1MQ', vial:50, doseLow:5, doseHigh:5, doseUnit:'mg', freq:'1×/day, morning (8–12wk on / 4wk off)'},
+  {name:'5-Amino-1MQ', vial:50, doseLow:5, doseHigh:5, doseUnit:'mg', freq:'1×/day'},
   {name:'Sermorelin', vial:9, doseLow:200, doseHigh:300, doseUnit:'mcg', freq:'5 nights/week'},
+  {name:'Selank', vial:10, doseLow:250, doseHigh:500, doseUnit:'mcg', freq:'1×/day'},
+  {name:'Semax', vial:10, doseLow:300, doseHigh:600, doseUnit:'mcg', freq:'1×/day'},
+  {name:'Epitalon', vial:10, doseLow:5, doseHigh:10, doseUnit:'mg', freq:'10–20 day course'},
+  {name:'KPV', vial:10, doseLow:250, doseHigh:500, doseUnit:'mcg', freq:'1×/day'},
+  {name:'AOD-9604', vial:5, doseLow:300, doseHigh:300, doseUnit:'mcg', freq:'1×/day'},
+  {name:'NAD+', vial:500, doseLow:50, doseHigh:100, doseUnit:'mg', freq:'2–3×/week'},
+  {name:'Thymosin Alpha-1', vial:10, doseLow:1.6, doseHigh:1.6, doseUnit:'mg', freq:'2×/week'},
 ];
-function populatePresetSelect(){
-  const sel = $('#calcPreset');
-  sel.innerHTML = `<option value="">Custom — enter manually</option>` +
-    PEPTIDE_PRESETS.map((p,i)=>`<option value="${i}">${esc(p.name)}</option>`).join('');
-  sel.addEventListener('change', ()=>{
-    const note = $('#calcPresetNote');
-    if(sel.value===''){ note.textContent=''; return; }
-    const p = PEPTIDE_PRESETS[+sel.value];
-    $('#calcVial').value = p.vial;
-    $('#calcDose').value = p.doseUnit==='mcg' ? Math.round(p.doseLow)/1000 : p.doseLow;   // the calculator works in mg by default
-    $('#calcDoseUnit').value = 'mg';
-    calcEdited('dose');
-    note.textContent = `Typical range: ${p.doseLow}–${p.doseHigh} ${p.doseUnit}, ${p.freq}. Prefilled with the low end — adjust to your actual protocol.`;
-    runCalc();
-  });
+const CALC_VIAL_ML = 3;                                    // the owner only uses 3 mL vials and cartridges
+const CALC_MG_CHIPS = [2,5,10,15,20,30,50];
+const CALC_WATER_CHIPS = [1,1.5,2,2.5,3];
+const CALC_DOSE_CHIPS = [0.1,0.25,0.5,0.75,1,1.5,2,2.5,3,4,5,7.5,10,12.5,15,20,25,30,40,50];
+const CALC_FILTERS = [{mm:4, ml:.07, note:'Single vials, least loss'}, {mm:13, ml:.28, note:'Most common'}, {mm:25, ml:.5, note:'Batches 10–100 mL'}, {mm:33, ml:.75, note:'Large batches'}];
+const CALC_BUDS = [7,14,21,28,42,56];
+const CALC_SCHEDULES = [
+  {name:'Twice daily', sub:'2× per day', perDay:d=>2},
+  {name:'Once daily', sub:'Every day', perDay:d=>1},
+  {name:'6 days on, 1 off', sub:'6 on, 1 off', perDay:d=> d%7<6 ? 1 : 0},
+  {name:'5 days on, 2 off', sub:'Weekdays', perDay:d=> d%7<5 ? 1 : 0},
+  {name:'Every other day', sub:'Alternate days', perDay:d=> d%2===0 ? 1 : 0},
+  {name:'Every 3 days', sub:'Every 3rd day', perDay:d=> d%3===0 ? 1 : 0},
+  {name:'Twice weekly', sub:'e.g. Mon & Thu', perDay:d=> (d%7===0 || d%7===3) ? 1 : 0},
+  {name:'Every 4 days', sub:'Every 4th day', perDay:d=> d%4===0 ? 1 : 0},
+  {name:'Every 5 days', sub:'Every 5th day', perDay:d=> d%5===0 ? 1 : 0},
+  {name:'Once weekly', sub:'Same day each week', perDay:d=> d%7===0 ? 1 : 0},
+  {name:'Every 10 days', sub:'Every 10th day', perDay:d=> d%10===0 ? 1 : 0},
+  {name:'Every 2 weeks', sub:'Every 14 days', perDay:d=> d%14===0 ? 1 : 0},
+];
+const CALC_DEFAULTS = {mode:'standard', device:'syringe', revTab:'units', name:'', vialMg:10, waterMl:2,
+  blend:[{name:'',mg:''},{name:'',mg:''}], doseRef:-1, filter:{on:false, mm:13, lossMl:.28, mode:'reduce'},
+  syrCap:100, rounding:'off', doseMg:0.5, doseUnit:'mg', penMax:60, penCarts:1, sprayMl:0.1,
+  revUnits:'', revDoses:'', revDrawUnits:'', revDrawMg:'', budDays:28, labelSource:'', mixDate:''};
+let C = (()=>{ try{ return {...CALC_DEFAULTS, ...JSON.parse(lsGet('ledger.calc','{}')||'{}')}; }catch(e){ return {...CALC_DEFAULTS}; } })();
+C.filter = {...CALC_DEFAULTS.filter, ...(C.filter||{})};
+if(!Array.isArray(C.blend) || !C.blend.length) C.blend = CALC_DEFAULTS.blend.map(x=>({...x}));
+const saveCalc = ()=> lsSet('ledger.calc', JSON.stringify(C));
+const trimNum = (n, dp)=> String(Math.round(n*Math.pow(10,dp))/Math.pow(10,dp));
+const cfmt = (n, dp=2)=> Number.isFinite(n) ? trimNum(n, dp) : '—';
+const cmg = mg=> !Number.isFinite(mg) ? '—' : mg>0 && mg<1 ? `${trimNum(mg*1000, 1)} mcg` : `${trimNum(mg, 3)} mg`;
+const calcDoseInput = ()=> C.doseUnit==='mcg' ? num(C.doseMg,0)*1000 : num(C.doseMg,0);
+
+/* Every number the screens need, from the current inputs. */
+function calcMath(){
+  const blend = C.mode==='blend' ? C.blend.filter(c=> num(c.mg,0)>0) : [];
+  const totalMg = C.mode==='blend' ? blend.reduce((s,c)=> s+num(c.mg,0), 0) : num(C.vialMg,0);
+  const water = num(C.waterMl,0);
+  const loss = C.filter.on ? num(C.filter.lossMl,0) : 0;
+  const extra = C.filter.on && C.filter.mode==='extra';
+  const waterAdd = extra ? water + loss : water;            // what actually goes into the vial
+  const conc = totalMg>0 && waterAdd>0 ? totalMg/waterAdd : 0;   // mg per mL
+  const usableMl = Math.max(0, extra ? water : water - loss);
+  const usableMg = conc*usableMl;
+  // dose: a blend can be dosed by the whole blend or by one compound in it
+  let doseMg = num(C.doseMg,0);
+  if(C.mode==='blend' && C.doseRef>=0 && blend[C.doseRef]) doseMg = doseMg * totalMg / num(blend[C.doseRef].mg,1);
+  const rawUnits = conc ? doseMg/conc*100 : 0;
+  const step = {off:0, even:2, '5':5, '10':10}[C.rounding] || 0;
+  const units = step && C.device==='syringe' ? Math.max(step, Math.round(rawUnits/step)*step) : Math.round(rawUnits*10)/10;
+  const doseMl = units/100;
+  const actualMg = doseMl*conc;
+  const doses = doseMl>0 ? Math.floor(usableMl/doseMl + 1e-9) : 0;
+  const leftMl = Math.max(0, usableMl - doseMl);
+  return {blend, totalMg, water, loss, extra, waterAdd, conc, usableMl, usableMg, doseMg, rawUnits, units, doseMl, actualMg, doses, leftMl, step};
 }
+/* Kept for the endotoxin check: the vial, water and dose the calculator is set to. */
+function calcState(){
+  const m = calcMath();
+  return {vialMg:m.totalMg, bacMl:m.waterAdd, doseMg:m.actualMg||m.doseMg, doseUnit:C.doseUnit, doseVal: C.doseUnit==='mcg' ? (m.actualMg||m.doseMg)*1000 : (m.actualMg||m.doseMg)};
+}
+
+/* A clear U-100 insulin syringe drawn to scale: orange cap and hub, printed scale, black rubber stopper and a plunger
+   that pulls out as the dose grows. */
+let _csSeq = 0;
+function calcSyringeSVG(units, cap){
+  const id = 'cs'+(_csSeq++), over = units > cap, u = Math.max(0, Math.min(units, cap));
+  const W = 600, H = 132, bx = 92, bw = 360, by = 52, bh = 34, my = by+bh/2;
+  const fx = bx + bw*u/cap;                                   // stopper's front face
+  const rodOut = 22 + (fx-bx)*0.28;                           // plunger shown slightly foreshortened so it fits
+  const thumb = bx + bw + rodOut;
+  const major = cap<=30 ? 5 : 10, mid = cap<=30 ? 1 : 5;
+  let ticks = '';
+  for(let k=0;k<=cap;k++){
+    if(cap>50 && k%2) continue;
+    const x = bx + bw*k/cap, isMaj = k%major===0, isMid = !isMaj && k%mid===0;
+    const h = isMaj ? 14 : isMid ? 10 : 6;
+    ticks += `<line x1="${x.toFixed(1)}" y1="${by+1}" x2="${x.toFixed(1)}" y2="${by+1+h}" stroke="#1d1d22" stroke-width="${isMaj?1.3:.8}" stroke-opacity="${isMaj?.85:.55}"/>`;
+    if(isMaj) ticks += `<text x="${x.toFixed(1)}" y="${by-6}" font-size="11" font-weight="600" font-family="Inter,system-ui,sans-serif" text-anchor="${k===cap?'end':'middle'}" fill="#3a3a40">${k}</text>`;
+  }
+  const liq = over ? 'var(--warn)' : 'var(--accent-pep)';
+  return `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Syringe drawn to ${cfmt(units,1)} of ${cap} units">
+  <defs>
+    <linearGradient id="${id}g" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff" stop-opacity=".95"/><stop offset=".18" stop-color="#eef3f7" stop-opacity=".55"/><stop offset=".55" stop-color="#fff" stop-opacity=".25"/><stop offset=".85" stop-color="#dfe7ee" stop-opacity=".55"/><stop offset="1" stop-color="#b9c6d1" stop-opacity=".8"/></linearGradient>
+    <linearGradient id="${id}l" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${liq}" stop-opacity=".28"/><stop offset=".5" stop-color="${liq}" stop-opacity=".5"/><stop offset="1" stop-color="${liq}" stop-opacity=".7"/></linearGradient>
+    <linearGradient id="${id}r" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#55575e"/><stop offset=".35" stop-color="#1f2024"/><stop offset=".7" stop-color="#2c2d32"/><stop offset="1" stop-color="#101114"/></linearGradient>
+    <linearGradient id="${id}p" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset=".5" stop-color="#e9edf1"/><stop offset="1" stop-color="#c9d0d7"/></linearGradient>
+    <linearGradient id="${id}o" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#ffb062"/><stop offset=".5" stop-color="#ff8a1e"/><stop offset="1" stop-color="#d9670a"/></linearGradient>
+  </defs>
+  <ellipse cx="${(bx+thumb)/2}" cy="${by+bh+22}" rx="${(thumb-24)/2}" ry="5" fill="#1c2533" fill-opacity=".1"/>
+  <line x1="10" y1="${my}" x2="${bx-24}" y2="${my}" stroke="#9aa1a9" stroke-width="1.6"/><line x1="10" y1="${my-.5}" x2="${bx-24}" y2="${my-.5}" stroke="#fff" stroke-width=".5"/>
+  <path d="M${bx-26} ${my-6} H${bx-2} V${my+6} H${bx-26} Z" fill="url(#${id}o)"/><rect x="${bx-26}" y="${my-6}" width="24" height="2.5" fill="#fff" fill-opacity=".35"/>
+  <path d="M${bx} ${by+3} L${bx-4} ${by+7} V${by+bh-7} L${bx} ${by+bh-3}Z" fill="#cfd8df"/>
+  <rect x="${bx}" y="${by}" width="${bw}" height="${bh}" rx="5" fill="url(#${id}g)" stroke="#7d8b97" stroke-opacity=".55" stroke-width="1"/>
+  <rect x="${bx+1}" y="${by+2}" width="${Math.max(0,fx-bx-1).toFixed(1)}" height="${bh-4}" rx="3" fill="url(#${id}l)"/>
+  <rect x="${fx.toFixed(1)}" y="${my-3}" width="${(thumb-fx).toFixed(1)}" height="6" fill="url(#${id}p)" stroke="#a9b2bb" stroke-width=".6"/>
+  <rect x="${fx.toFixed(1)}" y="${by+2}" width="12" height="${bh-4}" rx="2.5" fill="url(#${id}r)"/>
+  <rect x="${(fx+3).toFixed(1)}" y="${by+2}" width="1.2" height="${bh-4}" fill="#000" fill-opacity=".5"/><rect x="${(fx+7.5).toFixed(1)}" y="${by+2}" width="1.2" height="${bh-4}" fill="#000" fill-opacity=".5"/>
+  ${ticks}
+  <rect x="${bx+4}" y="${by+bh-9}" width="${bw-8}" height="2" rx="1" fill="#fff" fill-opacity=".7"/>
+  <rect x="${bx+bw-3}" y="${by-12}" width="9" height="${bh+24}" rx="3" fill="url(#${id}p)" stroke="#a9b2bb" stroke-width=".8"/>
+  <rect x="${thumb.toFixed(1)}" y="${by-4}" width="8" height="${bh+8}" rx="3" fill="url(#${id}p)" stroke="#a9b2bb" stroke-width=".8"/>
+  <line x1="${fx.toFixed(1)}" y1="${by+bh+3}" x2="${fx.toFixed(1)}" y2="${by+bh+12}" stroke="${liq}" stroke-width="2" stroke-linecap="round"/>
+  <text x="${Math.max(bx+14, fx).toFixed(1)}" y="${by+bh+28}" font-size="14" font-weight="700" font-family="Inter,system-ui,sans-serif" text-anchor="middle" fill="${over?'var(--warn)':'var(--accent-pep-strong)'}">${cfmt(units,1)}u</text>
+</svg>`;
+}
+
+/* ---- UI ---- */
+const chipRow = (vals, cur, attr, fmt, extra='')=> vals.map(v=> `<button type="button" class="chip-btn ${String(v)===String(cur)?'on':''}" data-${attr}="${v}" ${extra}>${fmt(v)}</button>`).join('');
+const seg = (opts, cur, attr)=> `<div class="pc-seg" role="group">${opts.map(([k,l])=> `<button type="button" class="${k===cur?'on':''}" data-${attr}="${k}" aria-pressed="${k===cur}">${l}</button>`).join('')}</div>`;
+function calcLoadOptions(){
+  const ps = state.protocols.filter(p=> p.status!=='archived').sort((a,b)=> (a.compound||'').localeCompare(b.compound||''));
+  const vs = state.vials.filter(v=> !isDepleted(v)).sort((a,b)=> (a.compound||'').localeCompare(b.compound||''));
+  return `<option value="">Fill from my protocols or vials…</option>`
+    + (ps.length ? `<optgroup label="Protocols">${ps.map(p=>`<option value="p:${p.id}">${esc(p.compound||'Untitled')}</option>`).join('')}</optgroup>` : '')
+    + (vs.length ? `<optgroup label="Vials">${vs.map(v=>`<option value="v:${v.id}">${esc(vialLabel(v))}</option>`).join('')}</optgroup>` : '');
+}
+function renderCalc(){
+  const root = $('#pcSetup'); if(!root) return;
+  const m = calcMath(), spray = C.device==='spray', rev = C.mode==='reverse';
+  const blendRows = C.blend.map((c,i)=> `<div class="pc-blend-row" data-bi="${i}">
+      <input type="text" list="pcNames" data-bf="name" value="${esc(c.name)}" placeholder="Compound ${i+1}" aria-label="Compound ${i+1} name">
+      <div class="pc-num sm"><input type="number" inputmode="decimal" min="0" step="any" data-bf="mg" value="${esc(c.mg)}" placeholder="0" aria-label="Compound ${i+1} mg"><span>mg</span></div>
+      <button type="button" class="pc-x" data-brm="${i}" aria-label="Remove compound ${i+1}" ${C.blend.length<2?'disabled':''}>✕</button></div>`).join('');
+  root.innerHTML = `
+    <div class="pc-load"><select id="pcLoad" aria-label="Fill from a protocol or vial">${calcLoadOptions()}</select></div>
+    ${seg([['standard','Standard'],['reverse','Reverse'],['blend','Blend']], C.mode, 'pc-mode')}
+    <div class="pc-sec">
+      <div class="pc-sec-h"><h4>${C.mode==='blend' ? 'Compounds in the vial' : 'Peptide in the vial'}</h4><span class="pc-badge">3 mL vial</span></div>
+      ${C.mode==='blend' ? `
+        <div class="chip-row pc-chips">${Object.keys(BLEND_PRESETS).map(k=>`<button type="button" class="chip-btn" data-pc-blend="${esc(k)}">${esc(k)}</button>`).join('')}</div>
+        <div id="pcBlend">${blendRows}</div>
+        <button type="button" class="btn btn-sm" id="pcBlendAdd" ${C.blend.length>=8?'disabled':''}>+ Compound (${C.blend.length}/8)</button>
+        <div class="pc-total">Total <strong class="mono" id="pcBlendTotal">${cfmt(m.totalMg,3)} mg</strong></div>` : `
+        <input type="text" id="pcName" list="pcNames" class="pc-name" value="${esc(C.name)}" placeholder="Peptide name (optional)" aria-label="Peptide name">
+        <div class="chip-row pc-chips">${chipRow(CALC_MG_CHIPS, C.vialMg, 'pc-mg', v=>`${v} mg`)}</div>
+        <div class="pc-stepper"><button type="button" data-step="vialMg" data-d="-1" aria-label="Less peptide">−</button><div class="pc-num"><input type="number" id="pcMg" inputmode="decimal" min="0" step="any" value="${esc(C.vialMg)}" aria-label="Peptide in vial (mg)"><span>mg</span></div><button type="button" data-step="vialMg" data-d="1" aria-label="More peptide">+</button></div>`}
+    </div>
+    <div class="pc-sec">
+      <div class="pc-sec-h"><h4>${spray ? 'Sterile water or saline to add' : 'Bacteriostatic water to add'}</h4></div>
+      ${spray ? `<p class="footnote pc-note">BAC water isn't recommended for nasal use.</p>` : ''}
+      <div class="chip-row pc-chips">${chipRow(CALC_WATER_CHIPS, C.waterMl, 'pc-water', v=>`${v} mL`)}</div>
+      <div class="pc-stepper"><button type="button" data-step="waterMl" data-d="-1" aria-label="Less water">−</button><div class="pc-num"><input type="number" id="pcWater" inputmode="decimal" min="0" max="3" step="any" value="${esc(C.waterMl)}" aria-label="Water (mL)"><span>mL</span></div><button type="button" data-step="waterMl" data-d="1" aria-label="More water">+</button></div>
+      <label class="pc-toggle"><input type="checkbox" id="pcFilterOn" ${C.filter.on?'checked':''}><span>Filtering through a PES syringe filter?</span></label>
+      ${C.filter.on ? `<div class="pc-filter">
+        <div class="footnote">Filter size (some solution stays in the filter)</div>
+        <div class="chip-row pc-chips">${CALC_FILTERS.map(f=>`<button type="button" class="chip-btn ${C.filter.mm===f.mm?'on':''}" data-pc-filter="${f.mm}" title="${esc(f.note)}">${f.mm} mm · ${f.ml} mL</button>`).join('')}</div>
+        <div class="pc-inline"><span class="footnote">Loss</span><div class="pc-num sm"><input type="number" id="pcLoss" inputmode="decimal" min="0" step="any" value="${esc(C.filter.lossMl)}" aria-label="Filter loss (mL)"><span>mL</span></div></div>
+        <label class="pc-radio"><input type="radio" name="pcLossMode" value="reduce" ${C.filter.mode!=='extra'?'checked':''}><span><strong>Accept the loss</strong> · same water, a little less solution and fewer doses</span></label>
+        <label class="pc-radio"><input type="radio" name="pcLossMode" value="extra" ${C.filter.mode==='extra'?'checked':''}><span><strong>Add extra water</strong> · add ${cfmt(num(C.filter.lossMl,0),2)} mL more so you still end with ${cfmt(m.water,2)} mL</span></label>
+      </div>` : ''}
+    </div>
+    ${rev ? `<div class="pc-sec">
+      <div class="pc-sec-h"><h4>Work backwards</h4></div>
+      ${seg([['units','Units → mg'],['split','Split vial'],['water','Draw → water']], C.revTab, 'pc-rev')}
+      ${C.revTab==='units' ? `<div class="pc-inline pc-big"><span>I'm drawing</span><div class="pc-num"><input type="number" id="pcRevUnits" inputmode="decimal" min="0" step="any" value="${esc(C.revUnits)}" placeholder="10"><span>units</span></div></div>`
+      : C.revTab==='split' ? `<div class="pc-inline pc-big"><span>Split into</span><div class="pc-num"><input type="number" id="pcRevDoses" inputmode="numeric" min="1" step="1" value="${esc(C.revDoses)}" placeholder="20"><span>doses</span></div></div>`
+      : `<div class="pc-inline pc-big"><span>I want to draw</span><div class="pc-num"><input type="number" id="pcRevDrawUnits" inputmode="decimal" min="0" step="any" value="${esc(C.revDrawUnits)}" placeholder="10"><span>units</span></div></div>
+         <div class="pc-inline pc-big"><span>for a dose of</span><div class="pc-num"><input type="number" id="pcRevDrawMg" inputmode="decimal" min="0" step="any" value="${esc(C.revDrawMg)}" placeholder="0.5"><span>mg</span></div></div>`}
+    </div>` : `<div class="pc-sec">
+      <div class="pc-sec-h"><h4>Dose &amp; device</h4></div>
+      ${seg([['syringe','Syringe'],['pen','Pen'],['spray','Spray']], C.device, 'pc-dev')}
+      ${C.device==='syringe' ? `
+        <div class="footnote pc-lbl">Syringe size</div><div class="chip-row pc-chips">${chipRow([30,50,100], C.syrCap, 'pc-syr', v=>`${v/100} mL · ${v}u`)}</div>
+        <div class="footnote pc-lbl">Round the draw to</div><div class="chip-row pc-chips">${[['off','Off'],['even','Even'],['5','5u'],['10','10u']].map(([k,l])=>`<button type="button" class="chip-btn ${C.rounding===k?'on':''}" data-pc-round="${k}">${l}</button>`).join('')}</div>`
+      : C.device==='pen' ? `
+        <div class="footnote pc-lbl">3 mL cartridge · most a pen can give in one go</div><div class="chip-row pc-chips">${chipRow([60,80], C.penMax, 'pc-penmax', v=>`${v}u max`)}<div class="pc-num sm pc-chipnum"><input type="number" id="pcPenMax" inputmode="numeric" min="1" step="1" value="${esc(C.penMax)}" aria-label="Pen max units"><span>u</span></div></div>`
+      : `<div class="footnote pc-lbl">Amount per spray or pump</div><div class="chip-row pc-chips">${[[0.05,'0.05 mL nasal'],[0.1,'0.1 mL pump'],[0.2,'0.2 mL pump']].map(([v,l])=>`<button type="button" class="chip-btn ${num(C.sprayMl)===v?'on':''}" data-pc-spray="${v}">${l}</button>`).join('')}<div class="pc-num sm pc-chipnum"><input type="number" id="pcSprayMl" inputmode="decimal" min="0" step="any" value="${esc(C.sprayMl)}" aria-label="mL per spray"><span>mL</span></div></div>`}
+      ${C.mode==='blend' && m.blend.length ? `<div class="footnote pc-lbl">Dose is measured as</div><div class="chip-row pc-chips"><button type="button" class="chip-btn ${C.doseRef<0?'on':''}" data-pc-ref="-1">Whole blend</button>${m.blend.map((c,i)=>`<button type="button" class="chip-btn ${C.doseRef===i?'on':''}" data-pc-ref="${i}">${esc(c.name||`Compound ${i+1}`)}</button>`).join('')}</div>` : ''}
+      <div class="footnote pc-lbl">Dose <span class="pc-of">of ${cfmt(m.totalMg,2)} mg in the vial</span></div>
+      <div class="chip-row pc-chips" id="pcDoseChips">${CALC_DOSE_CHIPS.filter(v=> !m.totalMg || v<=m.totalMg).slice(0,12).map(v=>`<button type="button" class="chip-btn ${Math.abs(num(C.doseMg)-v)<1e-9?'on':''}" data-pc-dose="${v}">${cmg(v)}</button>`).join('')}</div>
+      <div class="pc-stepper"><button type="button" data-step="doseMg" data-d="-1" aria-label="Smaller dose">−</button><div class="pc-num"><input type="number" id="pcDose" inputmode="decimal" min="0" step="any" value="${esc(trimNum(calcDoseInput(), C.doseUnit==='mcg'?1:4))}" aria-label="Dose"><select id="pcDoseUnit" aria-label="Dose unit"><option value="mg" ${C.doseUnit==='mg'?'selected':''}>mg</option><option value="mcg" ${C.doseUnit==='mcg'?'selected':''}>mcg</option></select></div><button type="button" data-step="doseMg" data-d="1" aria-label="Bigger dose">+</button></div>
+    </div>`}
+    <datalist id="pcNames">${PEPTIDE_PRESETS.map(p=>`<option value="${esc(p.name)}"></option>`).join('')}</datalist>`;
+  renderCalcResult();
+}
+function renderCalcResult(){
+  const el = $('#pcResult'); if(!el) return;
+  const m = calcMath();
+  const name = C.mode==='blend' ? (m.blend.map(c=>c.name).filter(Boolean).join(' + ') || 'Blend') : (C.name || 'Peptide');
+  const warn = [];
+  if(m.water > CALC_VIAL_ML) warn.push(`That's more water than a 3 mL vial holds.`);
+  if(m.extra && m.waterAdd > CALC_VIAL_ML) warn.push(`With the extra ${cfmt(m.loss,2)} mL for the filter that's ${cfmt(m.waterAdd,2)} mL, more than a 3 mL vial holds.`);
+  if(!(m.totalMg>0) || !(m.water>0)){ el.innerHTML = `<div class="pc-empty">Enter how much peptide is in the vial and how much water you're adding.</div>`; renderCalcNext(m); return; }
+  const formula = (rows)=> `<div class="pc-formula">${rows.map(([l,v,hl])=>`<div class="${hl?'hl':''}"><span>${l}</span><strong class="mono">${v}</strong></div>`).join('')}</div>`;
+  const vialPair = (afterMl, doseLbl)=> {
+    const color = '#ff9f43', tag = `${cfmt(m.totalMg,2)} mg`;
+    return `<div class="pc-vials">
+      <figure>${vialSVG({color, pct: Math.min(1, m.usableMl/CALC_VIAL_ML), mgTag:tag, name, brand:'', lot:''}, 'pcb')}<figcaption><strong>${cfmt(m.usableMl,2)} mL</strong> before<span>${m.doses} dose${m.doses===1?'':'s'}${doseLbl}</span></figcaption></figure>
+      <div class="pc-arrow">→</div>
+      <figure>${vialSVG({color, pct: Math.min(1, afterMl/CALC_VIAL_ML), mgTag:tag, name, brand:'', lot:''}, 'pca')}<figcaption><strong>${cfmt(afterMl,2)} mL</strong> after one dose<span>${Math.max(0,m.doses-1)} left</span></figcaption></figure>
+    </div>`;
+  };
+  const blendBreak = (doseMl)=> C.mode==='blend' && m.blend.length ? `<div class="pc-blendout"><div class="footnote">Each dose contains</div>${m.blend.map(c=>`<div><span>${esc(c.name||'Compound')}</span><strong class="mono">${cmg(num(c.mg,0)/m.waterAdd*doseMl)}</strong></div>`).join('')}</div>` : '';
+  const filterLine = m.loss ? [['Filter loss', `${cfmt(m.loss,2)} mL`]] : [];
+  let html = '';
+  if(C.mode==='reverse'){
+    const base = [['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['1 unit', cmg(m.conc/100)]];
+    if(C.revTab==='units'){
+      const u = num(C.revUnits,0), mg = u/100*m.conc;
+      html = u>0 ? `<div class="pc-hero"><div class="pc-hero-big">${cmg(mg)}</div><div class="pc-hero-sub">in ${cfmt(u,1)} units (${cfmt(u/100,3)} mL)</div><div class="pc-hero-meta">${Math.floor(m.usableMl/(u/100)+1e-9)} draws of ${cfmt(u,1)}u in the vial</div></div>` : `<div class="pc-empty">Enter the units you're drawing.</div>`;
+      html += formula(base) + (u>0 ? `<div class="pc-syr">${calcSyringeSVG(u, u<=30?30:u<=50?50:100)}</div>` + blendBreak(u/100) : '');
+    } else if(C.revTab==='split'){
+      const n = Math.floor(num(C.revDoses,0));
+      const ml = n>0 ? m.usableMl/n : 0, u = ml*100;
+      html = n>0 ? `<div class="pc-hero"><div class="pc-hero-big">${cfmt(u,1)}u</div><div class="pc-hero-sub">each dose is ${cmg(m.usableMg/n)} (${cfmt(ml,3)} mL)</div><div class="pc-hero-meta">${n} equal doses from this vial</div></div>` : `<div class="pc-empty">Enter how many doses you want from the vial.</div>`;
+      html += formula(base) + (n>0 ? `<div class="pc-syr">${calcSyringeSVG(u, u<=30?30:u<=50?50:100)}</div>` + blendBreak(ml) : '');
+    } else {
+      const u = num(C.revDrawUnits,0), d = num(C.revDrawMg,0);
+      const need = u>0 && d>0 ? m.totalMg*(u/100)/d : 0, add = need + (m.loss && m.extra ? m.loss : 0);
+      html = need>0 ? `<div class="pc-hero"><div class="pc-hero-big">${cfmt(add,2)} mL</div><div class="pc-hero-sub">of water so ${cfmt(u,1)} units = ${cmg(d)}</div><div class="pc-hero-meta">Concentration ${cfmt(d/(u/100),3)} mg/mL${m.loss && m.extra ? ` · includes ${cfmt(m.loss,2)} mL for the filter` : ''}</div>
+        ${add>CALC_VIAL_ML ? `<div class="pc-warn">That's more than a 3 mL vial holds. Use a smaller dose per draw or draw more units.</div>` : `<button type="button" class="btn btn-sm btn-accent-pep" id="pcUseWater">Use ${cfmt(need,2)} mL in the calculator</button>`}</div>`
+        : `<div class="pc-empty">Enter the units you'd like to draw and the dose they should equal.</div>`;
+      html += need>0 ? formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Draw', `${cfmt(u,1)} u = ${cfmt(u/100,3)} mL`], ['Dose', cmg(d)], ['Water', `${cfmt(need,3)} mL`, true]]) : '';
+    }
+  } else if(C.device==='syringe'){
+    const over = m.units > C.syrCap, rounded = m.step && Math.abs(m.units - m.rawUnits) > 0.05;
+    html = `<div class="pc-hero">
+        <div class="pc-hero-big">${cfmt(m.units,1)}<small>u</small></div>
+        <div class="pc-hero-sub">Pull the plunger to the <strong>${cfmt(m.units,1)} unit</strong> mark</div>
+        <div class="pc-hero-meta">That's ${cmg(m.actualMg)}${rounded ? ` (rounded from ${cfmt(m.rawUnits,1)}u = ${cmg(m.doseMg)})` : ''}</div>
+      </div>
+      ${over ? `<div class="pc-warn">${cfmt(m.units,1)} units won't fit a ${C.syrCap}u syringe. Pick a bigger syringe or add less water.</div>` : ''}
+      <div class="pc-syr">${calcSyringeSVG(m.units, C.syrCap)}</div>
+      <div class="pc-stats"><div><strong>${m.doses}</strong><span>doses in the vial</span></div><div><strong>${m.usableMl ? Math.round(m.leftMl/m.usableMl*100) : 0}%</strong><span>left after one dose</span></div><div><strong>${cfmt(m.leftMl,2)}</strong><span>mL left</span></div></div>
+      ${blendBreak(m.doseMl)}
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Dose', cmg(m.actualMg)], ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}
+      ${vialPair(m.leftMl, ` @ ${cmg(m.actualMg)}`)}`;
+  } else if(C.device==='pen'){
+    const max = Math.max(1, num(C.penMax,60)), shots = Math.ceil(m.units/max - 1e-9);
+    const carts = Math.max(1, Math.floor(num(C.penCarts,1)));
+    const needCarts = Math.max(1, Math.ceil(m.usableMl/CALC_VIAL_ML - 1e-9));
+    const per = m.usableMl / carts;
+    html = `<div class="pc-hero">
+        <div class="pc-hero-big">${cfmt(m.units,1)}<small>u</small></div>
+        <div class="pc-hero-sub">Dial <strong>${cfmt(m.units,1)} units</strong> on the pen</div>
+        <div class="pc-hero-meta">That's ${cmg(m.actualMg)} · ${cfmt(m.doseMl,3)} mL</div>
+      </div>
+      ${shots>1 ? `<div class="pc-warn">That's more than the pen's ${max}u maximum. Split it into ${shots} injections of about ${cfmt(m.units/shots,1)}u.</div>` : ''}
+      <div class="pc-sec-h" style="margin-top:14px;"><h4>Plan your cartridges</h4></div>
+      <div class="pc-inline"><span class="footnote">Cartridges to fill</span><div class="pc-stepper sm"><button type="button" data-cart="-1" aria-label="Fewer cartridges">−</button><strong class="mono">${carts}</strong><button type="button" data-cart="1" aria-label="More cartridges">+</button></div></div>
+      ${per > CALC_VIAL_ML ? `<div class="pc-warn">${cfmt(m.usableMl,2)} mL won't fit in ${carts} cartridge${carts>1?'s':''}. You need at least ${needCarts}.</div>` : ''}
+      <div class="pc-carts">${Array.from({length:carts}, (_,i)=>{ const ml = Math.min(per, CALC_VIAL_ML); return `<div class="pc-cart"><div class="pc-cart-bar"><i style="width:${Math.round(ml/CALC_VIAL_ML*100)}%"></i></div><div class="pc-cart-h">Cartridge ${i+1}<span>${Math.round(ml/CALC_VIAL_ML*100)}% full</span></div><div class="pc-cart-n"><span><strong class="mono">${cfmt(ml,2)}</strong> mL</span><span><strong class="mono">${cfmt(ml*m.conc,2)}</strong> mg</span><span><strong class="mono">${m.doseMl?Math.floor(ml/m.doseMl+1e-9):0}</strong> doses</span></div></div>`; }).join('')}</div>
+      ${blendBreak(m.doseMl)}
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}`;
+  } else {
+    const per = num(C.sprayMl,0), mgPer = per*m.conc, sprays = mgPer ? m.doseMg/mgPer : 0, whole = Math.ceil(sprays - 1e-9);
+    html = per>0 ? `<div class="pc-hero">
+        <div class="pc-hero-big">${cfmt(sprays,1)}<small> spray${Math.abs(sprays-1)<0.05?'':'s'}</small></div>
+        <div class="pc-hero-sub">for ${cmg(m.doseMg)}${Math.abs(sprays-whole)>0.05 ? ` · ${whole} sprays gives ${cmg(whole*mgPer)}` : ''}</div>
+        <div class="pc-hero-meta">Each ${cfmt(per,3)} mL spray holds ${cmg(mgPer)}</div>
+      </div>
+      <div class="pc-stats"><div><strong>${Math.floor(m.usableMl/per+1e-9)}</strong><span>sprays in the bottle</span></div><div><strong>${whole ? Math.floor(m.usableMl/(whole*per)+1e-9) : 0}</strong><span>doses of ${whole}</span></div><div><strong>${cfmt(m.conc,2)}</strong><span>mg/mL</span></div></div>
+      ${blendBreak(per)}
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water/saline', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per spray', cmg(mgPer)]])}` : `<div class="pc-empty">Enter how much one spray or pump delivers.</div>`;
+  }
+  el.innerHTML = (warn.length ? `<div class="pc-warn">${warn.join(' ')}</div>` : '') + html;
+  const use = $('#pcUseWater', el);
+  if(use) use.addEventListener('click', ()=>{ const u = num(C.revDrawUnits,0), d = num(C.revDrawMg,0); C.waterMl = +trimNum(m.totalMg*(u/100)/d, 3); C.doseMg = d; C.doseUnit = 'mg'; C.mode = C.mode==='reverse' ? 'standard' : C.mode; C.device = 'syringe'; saveCalc(); renderCalc(); });
+  renderCalcNext(m);
+  if(typeof runEndo==='function') runEndo();
+}
+/* Doses per vial for the optimizer: syringe and pen use the dose volume, spray uses whole sprays per dose. */
+function calcDosesPerVial(m){
+  if(C.mode==='reverse') return 0;
+  if(C.device==='spray'){ const per = num(C.sprayMl,0), mgPer = per*m.conc, whole = mgPer ? Math.ceil(m.doseMg/mgPer - 1e-9) : 0; return whole ? Math.floor(m.usableMl/(whole*per)+1e-9) : 0; }
+  return m.doses;
+}
+function calcScheduleDays(n, s){
+  if(!(n>0)) return 0;
+  let left = n, d = 0;
+  for(; d<3650; d++){ left -= s.perDay(d); if(left<=0) return d+1; }
+  return d;
+}
+let calcOpen = (()=>{ try{ return JSON.parse(lsGet('ledger.calcOpen','{}'))||{}; }catch(e){ return {}; } })();
+function renderCalcNext(m){
+  const el = $('#pcNext'); if(!el) return;
+  const n = calcDosesPerVial(m), bud = C.budDays;
+  const fits = CALC_SCHEDULES.map(s=> calcScheduleDays(n, s));
+  const fitCount = fits.filter(d=> d>0 && d<=bud).length;
+  const saved = calcSavedList();
+  const today = todayISO(), mix = C.mixDate || today;
+  const budDate = addDays(mix, bud);
+  const optBody = !n ? `<p class="footnote">Set a dose above to see how long the vial lasts on each schedule.</p>` : `
+      <div class="footnote pc-lbl">Beyond-use date (how long a mixed vial is good for)</div>
+      <div class="chip-row pc-chips">${chipRow(CALC_BUDS, bud, 'pc-bud', v=> v%7===0 && v>28 ? `${v/7} weeks` : `${v} days`)}</div>
+      <div class="pc-opt-sum"><span><strong>${n}</strong> doses</span><span><strong>${cmg(C.device==='spray' ? m.doseMg : m.actualMg)}</strong> each</span><span><strong>${fitCount}</strong> of ${CALC_SCHEDULES.length} schedules finish within ${bud} days</span></div>
+      <div class="pc-opt-list">${CALC_SCHEDULES.map((s,i)=>{ const d = fits[i], ok = d<=bud, w = Math.min(100, d/Math.max(bud, ...fits)*100); return `<div class="pc-opt ${ok?'ok':'over'}">
+        <div class="pc-opt-h"><strong>${s.name}</strong><span class="mono">${d} day${d===1?'':'s'}</span></div>
+        <div class="pc-opt-bar"><i style="width:${w.toFixed(1)}%"></i><b style="left:${Math.min(100, bud/Math.max(bud, ...fits)*100).toFixed(1)}%"></b></div>
+        <div class="footnote">${s.sub}${ok ? ' · finishes in time' : ` · ${d-bud} day${d-bud===1?'':'s'} past the ${bud}-day limit`}</div></div>`; }).join('')}</div>`;
+  el.innerHTML = `
+    <details class="pc-more" data-more="opt" ${calcOpen.opt?'open':''}><summary>Protocol optimizer</summary><div class="pc-more-b">${optBody}</div></details>
+    <details class="pc-more" data-more="labels" ${calcOpen.labels?'open':''}><summary>Print labels</summary><div class="pc-more-b">
+      <div class="field"><label for="pcLabelName">Peptide name</label><input type="text" id="pcLabelName" list="pcNames" value="${esc(C.mode==='blend' ? (m.blend.map(c=>c.name).filter(Boolean).join(' + ')) : C.name)}" placeholder="e.g. Retatrutide"></div>
+      <div class="field"><label for="pcLabelSource">Source, vendor or batch (optional, up to 4 lines)</label><textarea id="pcLabelSource" rows="3" maxlength="160">${esc(C.labelSource)}</textarea></div>
+      <div class="pc-two"><div class="field"><label for="pcMixDate">Mixed on</label><input type="date" id="pcMixDate" value="${esc(mix)}"></div>
+      <div class="field"><label>Beyond-use date</label><div class="pc-budout mono">${esc(fmtDateShort(budDate))}</div></div></div>
+      <p class="footnote">Uses the ${bud}-day limit picked in the optimizer.</p>
+      <button type="button" class="btn btn-sm btn-accent-pep" id="pcMakeLabels">Make labels</button>
+      <div id="pcLabelPreview"></div>
+    </div></details>
+    <details class="pc-more" data-more="save" ${calcOpen.save?'open':''}><summary>Save &amp; load calculations${saved.length?` <span class="pc-count">${saved.length}</span>`:''}</summary><div class="pc-more-b">
+      <div class="pc-inline"><input type="text" id="pcSaveName" placeholder="Name, e.g. Reta 10 mg / 2 mL" value="${esc(C.mode==='blend' ? '' : C.name)}"><button type="button" class="btn btn-sm btn-accent-pep" id="pcSave">Save</button></div>
+      ${saved.length ? `<div class="pc-saved">${saved.map(s=>`<div class="pc-saved-row"><button type="button" class="pc-saved-load" data-load="${s.id}"><strong>${esc(s.name)}</strong><span class="footnote">${esc(s.summary||'')}</span></button><button type="button" class="pc-x" data-del="${s.id}" aria-label="Delete ${esc(s.name)}">✕</button></div>`).join('')}</div>` : `<p class="footnote" style="margin-top:8px;">Nothing saved yet.</p>`}
+      <p class="footnote" style="margin-top:8px;">Saved on this phone only. They aren't part of backups.</p>
+    </div></details>`;
+}
+function calcSavedList(){ try{ const a = JSON.parse(lsGet('ledger.calcSaved','[]')); return Array.isArray(a) ? a : []; }catch(e){ return []; } }
+function calcSummary(m){
+  const what = C.mode==='blend' ? `${cfmt(m.totalMg,2)} mg blend` : `${cfmt(m.totalMg,2)} mg`;
+  return `${what} · ${cfmt(m.water,2)} mL · ${C.mode==='reverse' ? 'reverse' : `${cmg(C.device==='syringe' ? m.actualMg : m.doseMg)} ${C.device}`}`;
+}
+function calcLabelsHTML(){
+  const m = calcMath(), name = ($('#pcLabelName')||{}).value || C.name || 'Peptide';
+  const src = String(C.labelSource||'').split('\n').slice(0,4).map(l=>esc(l)).join('<br>');
+  const mix = C.mixDate || todayISO(), bud = addDays(mix, C.budDays);
+  const dose = C.mode!=='reverse' && m.units ? `${cmg(C.device==='syringe'?m.actualMg:m.doseMg)} = ${cfmt(m.units,1)}u` : '';
+  return `<div class="pl-sheet">
+    <div class="pl-label"><div class="pl-band">BEFORE MIXING</div><div class="pl-name">${esc(name)}</div><div class="pl-mg">${cfmt(m.totalMg,2)} mg</div>${src?`<div class="pl-src">${src}</div>`:''}<div class="pl-foot">Lyophilized · store cold, dark</div></div>
+    <div class="pl-label"><div class="pl-band pl-band2">RECONSTITUTED</div><div class="pl-name">${esc(name)}</div><div class="pl-mg">${cfmt(m.totalMg,2)} mg / ${cfmt(m.waterAdd,2)} mL · <strong>${cfmt(m.conc,2)} mg/mL</strong></div>${dose?`<div class="pl-dose">${dose}</div>`:''}<div class="pl-foot">Mixed ${esc(fmtDateShort(mix))} · <strong>Use by ${esc(fmtDateShort(bud))}</strong></div></div>
+  </div>`;
+}
+function calcFillFrom(val){
+  const [kind, id] = String(val).split(':');
+  if(kind==='p'){
+    const p = state.protocols.find(x=>x.id===id); if(!p) return;
+    const d = doseAt(p, doseDayISO()), mg = doseToMg(d.dose, d.doseUnit);
+    const vial = state.vials.find(v=> v.id===p.activeVialId) || state.vials.find(v=> !isDepleted(v) && (v.compound||'').toLowerCase()===(p.compound||'').toLowerCase());
+    const parts = Array.isArray(p.blend) ? p.blend.filter(c=> (c.name||'').trim() && num(c.mg,0)>0) : [];
+    if(parts.length){ C.mode = 'blend'; C.blend = parts.map(c=>({name:c.name, mg:String(c.mg)})); C.doseRef = -1; }
+    else { if(C.mode==='blend') C.mode = 'standard'; C.name = p.compound||''; if(vial && num(vial.mgPerVial,0)) C.vialMg = num(vial.mgPerVial,0); }
+    if(vial && num(vial.bacMl,0)) C.waterMl = num(vial.bacMl,0);
+    if(mg) { C.doseMg = mg/splitCount(p); C.doseUnit = d.doseUnit==='mcg' ? 'mcg' : 'mg'; }
+  } else if(kind==='v'){
+    const v = state.vials.find(x=>x.id===id); if(!v) return;
+    if(C.mode==='blend') C.mode = 'standard';
+    C.name = v.compound||''; if(num(v.mgPerVial,0)) C.vialMg = num(v.mgPerVial,0);
+    if(num(v.bacMl,0)) C.waterMl = num(v.bacMl,0);
+  }
+  saveCalc(); renderCalc();
+}
+/* One set of listeners on the card; the contents are redrawn freely. */
+(function bindCalc(){
+  const card = $('#pcCard'); if(!card) return;
+  const redraw = ()=>{ saveCalc(); renderCalc(); };
+  const refresh = ()=>{ saveCalc(); renderCalcResult(); };
+  card.addEventListener('click', e=>{
+    const t = e.target.closest('button'); if(!t) return;
+    const d = t.dataset;
+    if(d.pcMode){ C.mode = d.pcMode; if(C.mode==='reverse') C.device = 'syringe'; return redraw(); }
+    if(d.pcDev){ C.device = d.pcDev; return redraw(); }
+    if(d.pcRev){ C.revTab = d.pcRev; return redraw(); }
+    if(d.pcMg){ C.vialMg = +d.pcMg; return redraw(); }
+    if(d.pcWater){ C.waterMl = +d.pcWater; return redraw(); }
+    if(d.pcFilter){ const f = CALC_FILTERS.find(x=>x.mm===+d.pcFilter); C.filter.mm = f.mm; C.filter.lossMl = f.ml; return redraw(); }
+    if(d.pcSyr){ C.syrCap = +d.pcSyr; return redraw(); }
+    if(d.pcRound){ C.rounding = d.pcRound; return redraw(); }
+    if(d.pcPenmax){ C.penMax = +d.pcPenmax; return redraw(); }
+    if(d.pcSpray){ C.sprayMl = +d.pcSpray; return redraw(); }
+    if(d.pcRef){ C.doseRef = +d.pcRef; return redraw(); }
+    if(d.pcDose){ C.doseMg = +d.pcDose; if(C.doseUnit==='mcg' && C.doseMg>=1) C.doseUnit = 'mg'; return redraw(); }
+    if(d.pcBud){ C.budDays = +d.pcBud; return refresh(); }
+    if(d.cart){ C.penCarts = Math.max(1, Math.min(12, num(C.penCarts,1) + +d.cart)); return refresh(); }
+    if(d.step){
+      const k = d.step, dir = +d.d, v = num(C[k],0);
+      const inc = k==='waterMl' ? 0.1 : k==='vialMg' ? (v<10 ? 0.5 : 1) : C.doseUnit==='mcg' ? 0.025 : (v<1 ? 0.05 : v<5 ? 0.25 : 0.5);
+      C[k] = Math.max(0, +trimNum(v + dir*inc, 4));
+      if(k==='waterMl') C.waterMl = Math.min(CALC_VIAL_ML, C.waterMl);
+      return redraw();
+    }
+    if(d.pcBlend){ C.blend = BLEND_PRESETS[d.pcBlend].map(c=>({name:c.name, mg:String(c.mg)})); C.doseRef = -1; return redraw(); }
+    if(t.id==='pcBlendAdd'){ if(C.blend.length<8) C.blend.push({name:'',mg:''}); return redraw(); }
+    if(d.brm!=null){ C.blend.splice(+d.brm,1); C.doseRef = -1; return redraw(); }
+    if(t.id==='pcMakeLabels'){ $('#pcLabelPreview').innerHTML = calcLabelsHTML() + `<button type="button" class="btn btn-sm" id="pcPrint" style="margin-top:10px;">Print</button>`; return; }
+    if(t.id==='pcPrint'){
+      let area = $('#printArea'); if(!area){ area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
+      area.innerHTML = calcLabelsHTML(); document.body.classList.add('printing-labels');
+      setTimeout(()=>{ window.print(); setTimeout(()=> document.body.classList.remove('printing-labels'), 500); }, 50);
+      return;
+    }
+    if(t.id==='pcSave'){
+      const m = calcMath(), nm = ($('#pcSaveName').value||'').trim() || calcSummary(m);
+      const list = calcSavedList(); const snap = JSON.parse(JSON.stringify(C));
+      list.unshift({id: uid(), name: nm, summary: calcSummary(m), at: Date.now(), calc: snap});
+      lsSet('ledger.calcSaved', JSON.stringify(list.slice(0,50))); calcOpen.save = true; return renderCalcResult();
+    }
+    if(d.load){ const s = calcSavedList().find(x=>x.id===d.load); if(s){ C = {...CALC_DEFAULTS, ...s.calc, filter:{...CALC_DEFAULTS.filter, ...(s.calc.filter||{})}}; redraw(); } return; }
+    if(d.del){ lsSet('ledger.calcSaved', JSON.stringify(calcSavedList().filter(x=>x.id!==d.del))); return renderCalcResult(); }
+  });
+  card.addEventListener('input', e=>{
+    const t = e.target;
+    const numIds = {pcMg:'vialMg', pcWater:'waterMl', pcRevUnits:'revUnits', pcRevDoses:'revDoses', pcRevDrawUnits:'revDrawUnits', pcRevDrawMg:'revDrawMg', pcPenMax:'penMax', pcSprayMl:'sprayMl'};
+    if(numIds[t.id]){
+      C[numIds[t.id]] = t.value===''? '' : num(t.value,0);
+      // keep the matching chip lit
+      const attr = {pcMg:'pc-mg', pcWater:'pc-water', pcPenMax:'pc-penmax', pcSprayMl:'pc-spray'}[t.id];
+      if(attr) $$(`[data-${attr}]`, card).forEach(b=> b.classList.toggle('on', num(b.getAttribute(`data-${attr}`))===num(t.value)));
+      return refresh();
+    }
+    if(t.id==='pcDose'){ const v = num(t.value,0); C.doseMg = C.doseUnit==='mcg' ? v/1000 : v; $$('[data-pc-dose]',card).forEach(b=> b.classList.toggle('on', Math.abs(num(b.dataset.pcDose)-C.doseMg)<1e-9)); return refresh(); }
+    if(t.id==='pcLoss'){ C.filter.lossMl = num(t.value,0); C.filter.mm = (CALC_FILTERS.find(f=> f.ml===C.filter.lossMl)||{}).mm || 0; $$('[data-pc-filter]',card).forEach(b=> b.classList.toggle('on', +b.dataset.pcFilter===C.filter.mm)); return refresh(); }
+    if(t.id==='pcName'){ C.name = t.value; return refresh(); }
+    if(t.dataset.bf){ const i = +t.closest('[data-bi]').dataset.bi; C.blend[i][t.dataset.bf] = t.value; const m = calcMath(); const tot = $('#pcBlendTotal',card); if(tot) tot.textContent = `${cfmt(m.totalMg,3)} mg`; return refresh(); }
+    if(t.id==='pcLabelSource'){ C.labelSource = t.value; return saveCalc(); }
+    if(t.id==='pcMixDate'){ C.mixDate = t.value; saveCalc(); return renderCalcResult(); }
+  });
+  card.addEventListener('change', e=>{
+    const t = e.target;
+    if(t.id==='pcLoad'){ if(t.value) calcFillFrom(t.value); return; }
+    if(t.id==='pcDoseUnit'){ C.doseUnit = t.value; return redraw(); }
+    if(t.id==='pcFilterOn'){ C.filter.on = t.checked; return redraw(); }
+    if(t.name==='pcLossMode'){ C.filter.mode = t.value; return redraw(); }
+    if(t.id==='pcName'){ const p = PEPTIDE_PRESETS.find(x=> x.name.toLowerCase()===t.value.trim().toLowerCase()); if(p){ C.vialMg = p.vial; C.doseMg = p.doseUnit==='mcg' ? p.doseLow/1000 : p.doseLow; C.doseUnit = p.doseUnit; redraw(); } return; }
+    if(t.dataset.bf==='name' || t.dataset.bf==='mg'){ return redraw(); }
+  });
+  card.addEventListener('toggle', e=>{ const d = e.target.closest && e.target.closest('details[data-more]'); if(!d) return; calcOpen[d.dataset.more] = d.open; lsSet('ledger.calcOpen', JSON.stringify(calcOpen)); }, true);
+  $('#calcReset').addEventListener('click', ()=>{ const keep = {budDays:C.budDays, labelSource:C.labelSource}; C = {...CALC_DEFAULTS, ...keep, filter:{...CALC_DEFAULTS.filter}, blend: CALC_DEFAULTS.blend.map(x=>({...x}))}; redraw(); });
+})();
+function runCalc(){ renderCalc(); }
+
 /* ===================== Syringe graphic ===================== */
 // Standard U-100 insulin syringe barrel sizes and the unit scale each one is
 // printed with. Modeled on the three sizes PeptideDeck's calculator offers.
@@ -364,119 +780,6 @@ function renderSyringeInto(el, doseUnits, capacityUnits, opts){
   el.innerHTML = syringeSVG(doseUnits, capacityUnits, opts);
 }
 
-let calcSyringeCap = null; // user-picked override; null = auto
-function bestSyringeCap(units){
-  const fit = SYRINGE_SIZES.find(s=> units<=s.cap);
-  return fit ? fit.cap : SYRINGE_SIZES[SYRINGE_SIZES.length-1].cap;
-}
-function renderCalcSyringeButtons(activeCap){
-  const row = $('#calcSyringeSizeRow');
-  if(!row) return;
-  row.innerHTML = SYRINGE_SIZES.map(s=> `
-    <button type="button" class="syr-size-btn ${s.cap===activeCap?'active':''}" data-cap="${s.cap}">
-      <strong>${s.ml} mL <span class="syr-tag">U-100</span></strong>
-      <span>${esc(s.tag)}</span>
-    </button>`).join('');
-  $$('.syr-size-btn', row).forEach(b=> b.addEventListener('click', ()=>{
-    calcSyringeCap = +b.dataset.cap;
-    runCalc();
-  }));
-}
-function updateCalcSyringe(units){
-  const auto = bestSyringeCap(units || 0);
-  const activeCap = calcSyringeCap || auto;
-  const sizeInfo = SYRINGE_SIZES.find(s=> s.cap===activeCap) || SYRINGE_SIZES[1];
-  renderCalcSyringeButtons(activeCap);
-  renderSyringeInto($('#calcSyringeGraphic'), units || 0, sizeInfo.cap);
-  $('#calcSyringeCaption').textContent = `U-100 · ${sizeInfo.ml} mL barrel`;
-  $('#calcSyringeUnitsLabel').textContent = units? `${units.toFixed(1)} of ${sizeInfo.cap} units` : '—';
-  const warn = $('#calcSyringeWarn');
-  if(units > sizeInfo.cap){
-    warn.hidden = false;
-    warn.textContent = `This dose exceeds the ${sizeInfo.ml} mL barrel (${sizeInfo.cap} units) — pick a larger syringe.`;
-  } else {
-    warn.hidden = true;
-  }
-}
-
-/* Four linked fields: vial mg, BAC water, dose, syringe draw (units). units = dose / (vial / water) × 100.
-   One field is calculated from the other three; see calcEdited for which. */
-let calcBacUnit = 'ml';
-let calcOrder = ['draw','vial','bac','dose'];   // [0] is the calculated field
-const CALC_IDS = {vial:'#calcVial', bac:'#calcBac', dose:'#calcDose', draw:'#calcDraw'};
-const trimNum = (n, dp)=> String(Math.round(n*Math.pow(10,dp))/Math.pow(10,dp));
-function calcBacMl(){ const v = num($('#calcBac').value,0); return calcBacUnit==='units' ? v/100 : v; }
-function calcDoseMg(){ const v = num($('#calcDose').value,0); return $('#calcDoseUnit').value==='mcg' ? v/1000 : v; }
-// Typing a draw recalculates the BAC water (how much to add for that draw); typing a dose recalculates the draw.
-// Editing vial or water keeps whichever field is currently calculated (a cleared field becomes calculated).
-function calcEdited(f){
-  let t = calcOrder[0];
-  if(f==='draw') t = 'bac';
-  else if(f==='dose') t = 'draw';
-  else if(f===t) t = 'draw';
-  calcOrder = [t].concat(['vial','bac','dose','draw'].filter(x=>x!==t));
-}
-function calcSolve(){
-  const target = calcOrder[0];
-  const vial = num($('#calcVial').value,0), bac = calcBacMl(), dose = calcDoseMg(), draw = num($('#calcDraw').value,0);
-  let out = null;
-  if(target==='draw' && vial>0 && bac>0 && dose>0) out = trimNum(dose*bac*100/vial, 2);
-  if(target==='dose' && vial>0 && bac>0 && draw>0){ const mg = draw*vial/(bac*100); out = trimNum($('#calcDoseUnit').value==='mcg' ? mg*1000 : mg, $('#calcDoseUnit').value==='mcg' ? 1 : 4); }
-  if(target==='bac' && vial>0 && dose>0 && draw>0){ const ml = draw*vial/(dose*100); out = trimNum(calcBacUnit==='units' ? ml*100 : ml, calcBacUnit==='units' ? 1 : 3); }
-  if(target==='vial' && bac>0 && dose>0 && draw>0) out = trimNum(dose*bac*100/draw, 3);
-  $(CALC_IDS[target]).value = out==null ? '' : out;
-  $$('.cf').forEach(c=>{ const on = c.dataset.cf===target; c.classList.toggle('calc', on); $('.cf-badge',c).hidden = !on; });
-}
-function runCalc(){
-  calcSolve();
-  const vial = num($('#calcVial').value,0), bac = calcBacMl(), dose = calcDoseMg(), draw = num($('#calcDraw').value,0);
-  const conc = vial>0 && bac>0 ? vial/bac : 0;
-  const volMl = draw>0 ? draw/100 : 0;
-  const f = (n,dp)=> trimNum(n, dp===undefined?2:dp);
-  const mgTxt = mg=> mg>=1 ? `${f(mg,3)} mg` : `${f(mg*1000,1)} mcg (${f(mg,4)} mg)`;
-  $('#calcVialConv').textContent = vial>0 && bac>0 ? `≈ ${f(bac,3)} mL · ${f(bac*100,1)} units (full vial)` : '';
-  $('#calcBacConv').textContent = bac>0 ? `≈ ${calcBacUnit==='units' ? f(bac,3)+' mL' : f(bac*100,1)+' units'}${vial>0 ? ` · holds ${f(vial,3)} mg peptide` : ''}` : '';
-  $('#calcDoseConv').textContent = dose>0 && conc>0 ? `≈ ${f(dose/conc,3)} mL · ${f(dose/conc*100,2)} units` : '';
-  $('#calcDrawConv').textContent = draw>0 && conc>0 ? `≈ ${mgTxt(draw/100*conc)} · ${f(volMl,3)} mL` : '';
-  $('#calcConc').textContent = conc ? f(conc,2) : '—';
-  $('#calcMl').textContent = volMl ? f(volMl,3) : '—';
-  $('#calcDosesPerVial').textContent = dose>0 && vial>0 ? f(vial/dose,1) : '—';
-  $('#calcPerUnit').textContent = conc ? `1 unit = ${f(conc*10,2)} mcg (${f(conc/100,4)} mg)` : '';
-  updateCalcSyringe(draw);
-  if(typeof runEndo==='function') runEndo();
-}
-Object.entries(CALC_IDS).forEach(([k,sel])=> $(sel).addEventListener('input', ()=>{ calcEdited(k); runCalc(); }));
-$('#calcDoseUnit').addEventListener('change', ()=>{
-  // keep the same amount, just shown in the other unit
-  const v = num($('#calcDose').value,null);
-  if(v!=null && calcOrder[0]!=='dose') $('#calcDose').value = trimNum($('#calcDoseUnit').value==='mcg' ? v*1000 : v/1000, 4);
-  runCalc();
-});
-$$('[data-bac-unit]').forEach(b=> b.addEventListener('click', ()=>{
-  const u = b.dataset.bacUnit; if(u===calcBacUnit) return;
-  const v = num($('#calcBac').value,null);
-  calcBacUnit = u;
-  if(v!=null) $('#calcBac').value = trimNum(u==='units' ? v*100 : v/100, u==='units' ? 1 : 3);
-  $$('[data-bac-unit]').forEach(x=> x.classList.toggle('on', x.dataset.bacUnit===u));
-  runCalc();
-}));
-$$('[data-clear]').forEach(b=> b.addEventListener('click', ()=>{
-  const k = b.dataset.clear;
-  $(CALC_IDS[k]).value = '';
-  calcOrder = [k].concat(calcOrder.filter(x=>x!==k));   // a cleared field becomes the calculated one
-  runCalc();
-  $(CALC_IDS[k]).focus();
-}));
-$('#calcReset').addEventListener('click', ()=>{
-  $('#calcVial').value = 5; $('#calcDose').value = 0.25; $('#calcDoseUnit').value = 'mg';
-  calcBacUnit = 'ml'; $('#calcBac').value = 2; $$('[data-bac-unit]').forEach(x=> x.classList.toggle('on', x.dataset.bacUnit==='ml'));
-  $('#calcPreset').value = ''; $('#calcPresetNote').textContent = '';
-  calcOrder = ['draw','vial','bac','dose']; calcSyringeCap = null;
-  runCalc();
-});
-
-
-
 /* Endotoxin check — modeled on PeptideSafe: 5 EU/kg per dose (IV/IM/SubQ), 0.2 EU/kg intrathecal. */
 const ENDO_DATA = {"T":[["Semaglutide",0.25,"mg"],["Tirzepatide",2.5,"mg"],["Retatrutide",1,"mg"],["Liraglutide",0.6,"mg"],["Dulaglutide",0.75,"mg"],["Cagrilintide",0.3,"mg"],["Orforglipron",3,"mg"],["Eloralintide",1,"mg"],["Mazdutide",3,"mg"],["Cotadutide",0.6,"mg"],["Exenatide",2,"mg"],["Lixisenatide",0.02,"mg"],["Efinopegdutide",6,"mg"],["Ipamorelin",200,"mcg"],["CJC-1295 (no DAC)",100,"mcg"],["CJC-1295 (DAC)",1,"mg"],["GHRP-2",100,"mcg"],["GHRP-6",100,"mcg"],["Hexarelin",100,"mcg"],["Sermorelin",300,"mcg"],["Tesamorelin",1,"mg"],["MK-677 (Ibutamoren)",25,"mg"],["BPC-157",250,"mcg"],["TB-500 (Thymosin Beta-4)",2,"mg"],["KPV",500,"mcg"],["AOD-9604",300,"mcg"],["GHK-Cu",1,"mg"],["Thymosin Alpha-1",1.6,"mg"],["Thymosin Beta-4 (full length)",2,"mg"],["AHK-Cu",1,"mg"],["PNC-27",5,"mg"],["PNC-28",5,"mg"],["FGL Peptide",200,"mcg"],["PGP Peptide",100,"mcg"],["PT-141 (Bremelanotide)",1,"mg"],["Melanotan II",500,"mcg"],["Melanotan I (Afamelanotide)",16,"mg"],["Setmelanotide",3,"mg"],["Selank",250,"mcg"],["Semax",300,"mcg"],["Dihexa",100,"mcg"],["Cerebrolysin",5,"mg"],["NA-Selank (N-Acetyl Selank)",300,"mcg"],["NA-Semax (N-Acetyl Semax)",300,"mcg"],["Noopept",20,"mg"],["Epithalon",5,"mg"],["MOTS-c",5,"mg"],["SS-31 (Elamipretide)",1,"mg"],["Humanin",100,"mcg"],["SHLP-2",100,"mcg"],["SHLP-3",100,"mcg"],["SHLP-6",100,"mcg"],["MTP-131",1,"mg"],["Thymulin",200,"mcg"],["Tuftsin",100,"mcg"],["RP-182",500,"mcg"],["Gepon",200,"mcg"],["Adrenomedullin",50,"mcg"],["ANP (Atrial Natriuretic Peptide)",50,"mcg"],["BNP (B-type Natriuretic Peptide)",50,"mcg"],["CNP (C-type Natriuretic Peptide)",50,"mcg"],["NAD+",50,"mg"],["NMN",100,"mg"],["IGF-1 LR3",50,"mcg"],["MGF (Mechano Growth Factor)",200,"mcg"],["PEG-MGF",200,"mcg"],["Follistatin-344",100,"mcg"],["IGF-1 DES",50,"mcg"],["ACE-031",1,"mg"],["Myostatin Propeptide",1,"mg"],["Gonadorelin",100,"mcg"],["Kisspeptin-10",100,"mcg"],["Oxytocin",10,"mcg"],["Kisspeptin-54",1,"mg"],["5-Amino-1MQ",50,"mg"],["LL-37",100,"mcg"],["VIP (Vasoactive Intestinal Peptide)",50,"mcg"],["Delta Sleep-Inducing Peptide (DSIP)",200,"mcg"],["Pinealon",100,"mcg"],["Vilon",100,"mcg"],["KLOW Blend 80mg",500,"mcg"],["GLOW Blend 70mg",500,"mcg"]],"F":{"Semaglutide":[7.2,"mg"],"Tirzepatide":[15,"mg"],"Retatrutide":[12,"mg"],"Liraglutide":[3,"mg"],"Dulaglutide":[4.5,"mg"],"Cagrilintide":[2.4,"mg"],"Cagrisema (Cagrilintide + Semaglutide blend)":[2.4,"mg"],"Mezdutide (GLP-1/glucagon)":[3,"mg"],"Survodutide (GLP-1/glucagon dual agonist)":[6,"mg"],"Orforglipron":[36,"mg"],"GLP-2 (Glepaglutide)":[10,"mg"],"Ipamorelin":[500,"mcg"],"CJC-1295 (no DAC) / ModGRF 1-29":[300,"mcg"],"CJC-1295 (DAC)":[2,"mg"],"GHRH (Growth Hormone-Releasing Hormone)":[100,"mcg"],"GHRP-2":[300,"mcg"],"GHRP-6":[300,"mcg"],"Hexarelin":[200,"mcg"],"Sermorelin":[500,"mcg"],"Tesamorelin":[2,"mg"],"MK-677 (Ibutamoren)":[25,"mg"],"hGH Fragment 176-191 / AOD-9604":[500,"mcg"],"BPC-157":[1000,"mcg"],"TB-500 (Thymosin Beta-4)":[5,"mg"],"KPV (alpha-MSH fragment)":[1000,"mcg"],"GHK-Cu (Copper Peptide)":[10,"mg"],"GHK Basic (without copper)":[3,"mg"],"Thymosin Alpha-1":[3.2,"mg"],"ARA-290 (Cibinetide)":[4,"mg"],"B7-33 (relaxin fragment)":[500,"mcg"],"FOXO4-DRI (senolytic)":[10,"mg"],"Adipotide (FTPP)":[1,"mg"],"LL-37 (CAP-18)":[500,"mcg"],"Thymagen (dipeptide)":[200,"mcg"],"PT-141 (Bremelanotide)":[1.75,"mg"],"Melanotan II":[1000,"mcg"],"Kisspeptin-10":[300,"mcg"],"Triptorelin (GnRH analogue)":[3.75,"mg"],"Gonadorelin (GnRH)":[500,"mcg"],"Selank":[500,"mcg"],"N-Acetyl Selank Amidate":[300,"mcg"],"Semax":[600,"mcg"],"N-Acetyl Semax Amidate":[300,"mcg"],"Dihexa":[200,"mcg"],"Cerebrolysin":[50,"mg"],"SNAP-8 (cosmetic anti-wrinkle peptide)":[500,"mcg"],"VIP (Vasoactive Intestinal Peptide)":[200,"mcg"],"Epithalon (Epitalon)":[10,"mg"],"N-Acetyl Epithalon Amidate":[10,"mg"],"MOTS-c":[10,"mg"],"SS-31 (Elamipretide)":[40,"mg"],"Humanin":[500,"mcg"],"Pinealon":[200,"mcg"],"Vilon (dipeptide)":[400,"mcg"],"Follistatin-315":[100,"mcg"],"Follistatin-344":[100,"mcg"],"IGF-1 LR3":[100,"mcg"],"MGF (C-terminal / Mechano Growth Factor)":[300,"mcg"],"PEG-MGF (Pegylated MGF)":[400,"mcg"],"AICAR (AMPK activator)":[50,"mg"],"Oxytocin":[20,"mcg"],"NAD+":[100,"mg"],"NMN":[500,"mg"],"Glutathione":[600,"mg"],"Delta Sleep-Inducing Peptide (DSIP)":[500,"mcg"],"5-Amino-1MQ":[100,"mg"],"KLOW Blend 80mg":[500,"mcg"],"KLOW8 Blend":[500,"mcg"],"GLOW Blend 70mg":[500,"mcg"],"Tesa-Ipa Blend (Tesamorelin + Ipamorelin)":[1300,"mcg"]}};
 const ENDO_LIMITS = {SubQ:5, IM:5, IV:5, IT:0.2};
@@ -508,10 +811,8 @@ function renderEndoStack(){
 function runEndo(){
   const el = $('#endoResult'); if(!el) return;
   const kg = num($('#endoWeight').value,0), totalEU = num($('#endoEU').value,0), route = $('#endoRoute').value;
-  const vialMg = num($('#calcVial').value,0), bac = calcBacMl();
-  const unit = $('#calcDoseUnit').value;
-  const doseVal = num($('#calcDose').value,0);
-  const doseMg = unit==='mg' ? doseVal : doseVal/1000;
+  const cs = calcState(), vialMg = cs.vialMg, bac = cs.bacMl;
+  const unit = cs.doseUnit, doseVal = +trimNum(cs.doseVal, 4), doseMg = cs.doseMg;
   const perKg = ENDO_LIMITS[route];
   try{ if(kg>0) localStorage.setItem('ledger.endoWeight', String(kg)); }catch(e){}
   $$('#endoTable tr[data-kg]').forEach(r=> r.classList.toggle('me', kg>0 && Math.abs(num(r.dataset.kg)-kg)<0.01));
@@ -577,7 +878,7 @@ function runEndo(){
     kgs.map(k=>`<tr data-kg="${k}"><td>${k} kg</td><td>${(k*5).toFixed(1)} EU</td><td>${(k*0.2).toFixed(1)} EU</td><td>${k} × 5 EU/kg</td></tr>`).join('')+`</tbody>`;
   $('#endoCompounds').innerHTML = ENDO_DATA.T.map(r=>`<option value="${esc(r[0])}"></option>`).join('');
   try{ const w = localStorage.getItem('ledger.endoWeight'); if(w) $('#endoWeight').value = w; }catch(e){}
-  ['endoWeight','endoRoute','endoEU','endoCompound','endoClick','endoPerDay','endoDays','endoWeeks','calcVial','calcBac','calcDose','calcDoseUnit'].forEach(id=>{
+  ['endoWeight','endoRoute','endoEU','endoCompound','endoClick','endoPerDay','endoDays','endoWeeks'].forEach(id=>{
     $('#'+id).addEventListener('input', runEndo); $('#'+id).addEventListener('change', runEndo); });
   $('#endoPen').addEventListener('change', ()=>{ $('#endoPenBox').hidden = !$('#endoPen').checked; runEndo(); });
   $('#endoCycle').addEventListener('change', ()=>{ $('#endoCycleBox').hidden = !$('#endoCycle').checked; runEndo(); });
@@ -596,7 +897,7 @@ function runEndo(){
   $('#endoCompoundNote').addEventListener('click', e=>{
     if(e.target.id!=='endoUseTypical') return; e.preventDefault();
     const row = endoFind($('#endoCompound').value); if(!row) return;
-    $('#calcDose').value = row[1]; $('#calcDoseUnit').value = row[2]; calcEdited('dose'); runCalc();
+    C.doseUnit = row[2]==='mcg' ? 'mcg' : 'mg'; C.doseMg = row[2]==='mcg' ? row[1]/1000 : row[1]; saveCalc(); renderCalc();
   });
   runEndo();
 })();
@@ -4816,7 +5117,6 @@ function renderAll(){
 
 /* ===================== Boot ===================== */
 async function boot(){
-  populatePresetSelect();
   runCalc();
   initTabs();
   initAsk();

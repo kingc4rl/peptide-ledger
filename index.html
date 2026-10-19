@@ -1090,6 +1090,125 @@ body{ overscroll-behavior:none; }
 #serumCard .serum-nav{ margin:6px 0 4px; }
 #serumCard .nav-arrow{ min-width:32px; height:32px; padding:0; border-radius:50%; font-size:16px; }
 #serumCard .serum-nav .footnote{ font-size:12px; font-weight:600; color:var(--ink); opacity:.7; }
+
+/* Peptide calculator (Tools) */
+.pc-card + .pc-card{ margin-top:12px; }
+.pc-load select{ width:100%; margin-bottom:12px; }
+.pc-seg{ display:flex; gap:4px; padding:3px; border-radius:12px; background:rgba(30,25,15,.06); margin-bottom:4px; }
+.pc-seg button{ flex:1; border:none; background:none; border-radius:9px; padding:8px 4px; font:600 13px Inter,system-ui,sans-serif; color:var(--muted); cursor:pointer; }
+.pc-seg button.on{ background:#fff; color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.12); }
+.pc-sec{ padding-top:14px; margin-top:14px; border-top:1px solid var(--line-soft); }
+.pc-sec-h{ display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:8px; }
+.pc-sec-h h4{ font-size:14.5px; margin:0; }
+.pc-badge{ font-size:11px; font-weight:700; color:var(--accent-pep-strong); background:var(--accent-pep-soft); border-radius:99px; padding:3px 9px; }
+.pc-chips{ flex-wrap:wrap; gap:6px; margin-bottom:8px; }
+.pc-chips .chip-btn{ padding:7px 11px; }
+.pc-lbl{ margin:12px 0 6px; font-weight:600; }
+.pc-of{ font-weight:400; }
+.pc-note{ margin:-2px 0 8px; }
+.pc-name{ width:100%; margin-bottom:10px; }
+.pc-stepper{ display:flex; align-items:center; gap:8px; }
+.pc-stepper > button{ flex:none; width:42px; height:42px; border-radius:12px; border:1px solid var(--line); background:var(--surface); font-size:20px; color:var(--ink); cursor:pointer; }
+.pc-stepper.sm > button{ width:32px; height:32px; border-radius:10px; font-size:16px; }
+.pc-stepper.sm strong{ min-width:24px; text-align:center; }
+.pc-num{ flex:1; min-width:0; display:flex; align-items:center; gap:6px; border:1px solid var(--line); border-radius:12px; background:var(--surface-2); padding:0 10px; }
+.pc-num input{ flex:1; min-width:0; border:none; background:none; font:600 19px "IBM Plex Mono",monospace; padding:9px 0; text-align:center; box-shadow:none; }
+.pc-num span{ flex:none; font-weight:700; color:var(--muted); font-size:13px; }
+.pc-num select{ flex:none; width:auto; border:none; background:none; font-weight:700; padding:6px 2px; box-shadow:none; }
+.pc-num.sm{ flex:0 1 120px; }
+.pc-num.sm input{ font-size:15px; padding:6px 0; }
+.pc-chipnum{ flex:0 0 96px; border-radius:99px; }
+.pc-inline{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin:8px 0; }
+.pc-inline > input[type=text]{ flex:1; min-width:0; }
+.pc-big > span{ font-weight:600; font-size:14px; flex:none; }
+.pc-big .pc-num{ flex:0 1 170px; }
+.pc-toggle{ display:flex; align-items:center; gap:8px; margin-top:12px; font-size:13.5px; font-weight:600; cursor:pointer; }
+.pc-filter{ margin-top:10px; padding:12px; border-radius:12px; background:rgba(30,25,15,.035); }
+.pc-radio{ display:flex; gap:8px; align-items:flex-start; font-size:13px; margin-top:8px; cursor:pointer; }
+.pc-radio input{ margin-top:3px; }
+.pc-total{ display:flex; justify-content:space-between; margin-top:10px; font-size:14px; }
+.pc-blend-row{ display:flex; gap:6px; align-items:center; margin-bottom:6px; }
+.pc-blend-row input[type=text]{ flex:1; min-width:0; }
+.pc-x{ flex:none; border:none; background:none; color:var(--muted); font-size:14px; padding:6px; cursor:pointer; }
+.pc-x:disabled{ opacity:.3; }
+.pc-empty{ color:var(--muted); font-size:13.5px; text-align:center; padding:14px 6px; }
+.pc-warn{ background:var(--warn-soft); color:var(--warn); border-radius:10px; padding:9px 11px; font-size:13px; margin:8px 0; }
+.pc-hero{ text-align:center; padding:6px 4px 4px; }
+.pc-hero-big{ font:700 46px/1 "Space Grotesk",Inter,system-ui,sans-serif; color:var(--accent-pep-strong); letter-spacing:-.02em; }
+.pc-hero-big small{ font-size:22px; margin-left:2px; }
+.pc-hero-sub{ margin-top:6px; font-size:14.5px; }
+.pc-hero-meta{ margin-top:3px; font-size:12.5px; color:var(--muted); }
+.pc-hero .btn{ margin-top:10px; }
+.pc-syr{ margin:12px -4px 4px; }
+.pc-syr svg{ width:100%; height:auto; display:block; }
+.pc-stats{ display:grid; grid-template-columns:repeat(3,1fr); gap:8px; margin-top:10px; }
+.pc-stats > div{ text-align:center; padding:10px 4px; border-radius:12px; background:rgba(30,25,15,.04); display:flex; flex-direction:column; gap:2px; }
+.pc-stats strong{ font:700 19px "Space Grotesk",Inter,sans-serif; }
+.pc-stats span{ font-size:11px; color:var(--muted); line-height:1.25; }
+.pc-formula{ display:grid; grid-template-columns:repeat(auto-fill,minmax(96px,1fr)); gap:6px; margin-top:12px; }
+.pc-formula > div{ border:1px solid var(--line-soft); border-radius:10px; padding:7px 9px; display:flex; flex-direction:column; gap:1px; }
+.pc-formula span{ font-size:9.5px; text-transform:uppercase; letter-spacing:.02em; color:var(--muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pc-formula strong{ font-size:13.5px; }
+.pc-formula .hl{ background:var(--accent-pep-soft); border-color:transparent; }
+.pc-formula .hl strong{ color:var(--accent-pep-strong); }
+.pc-vials{ display:flex; align-items:center; justify-content:center; gap:6px; margin-top:14px; }
+.pc-vials figure{ margin:0; flex:1; max-width:150px; text-align:center; }
+.pc-vials .vial-svg{ width:96px; height:auto; display:block; margin:0 auto; }
+.pc-vials figcaption{ font-size:13px; margin-top:4px; }
+.pc-vials figcaption span{ display:block; font-size:11.5px; color:var(--muted); }
+.pc-arrow{ color:var(--muted); font-size:20px; }
+.pc-blendout{ margin-top:10px; border-radius:12px; padding:10px 12px; background:rgba(30,25,15,.035); }
+.pc-blendout > div:not(.footnote){ display:flex; justify-content:space-between; font-size:13.5px; padding:3px 0; }
+.pc-carts{ display:grid; gap:8px; }
+.pc-cart{ border:1px solid var(--line-soft); border-radius:12px; padding:10px 12px; }
+.pc-cart-bar{ height:6px; border-radius:99px; background:rgba(30,25,15,.08); overflow:hidden; margin-bottom:8px; }
+.pc-cart-bar i{ display:block; height:100%; background:var(--accent-pep); border-radius:99px; }
+.pc-cart-h{ display:flex; justify-content:space-between; font-weight:700; font-size:13.5px; }
+.pc-cart-h span{ font-weight:500; color:var(--muted); font-size:12px; }
+.pc-cart-n{ display:flex; gap:14px; font-size:12.5px; color:var(--muted); margin-top:4px; }
+.pc-cart-n strong{ color:var(--ink); font-size:14px; }
+.pc-more{ border-top:1px solid var(--line-soft); }
+.pc-more:first-child{ border-top:none; }
+.pc-more summary{ list-style:none; cursor:pointer; padding:12px 0; font-weight:700; font-size:14.5px; display:flex; align-items:center; gap:8px; }
+.pc-more summary::-webkit-details-marker{ display:none; }
+.pc-more summary::after{ content:'›'; margin-left:auto; color:var(--muted); font-size:20px; transition:transform .2s; }
+.pc-more[open] summary::after{ transform:rotate(90deg); }
+.pc-more-b{ padding-bottom:12px; }
+.pc-count{ font-size:11px; background:var(--accent-pep-soft); color:var(--accent-pep-strong); border-radius:99px; padding:1px 8px; }
+.pc-opt-sum{ display:flex; flex-wrap:wrap; gap:6px 14px; font-size:12.5px; color:var(--muted); margin:4px 0 10px; }
+.pc-opt-sum strong{ color:var(--ink); }
+.pc-opt-list{ display:grid; gap:8px; }
+.pc-opt{ border:1px solid var(--line-soft); border-radius:12px; padding:9px 11px; }
+.pc-opt-h{ display:flex; justify-content:space-between; font-size:13.5px; }
+.pc-opt.ok .pc-opt-h .mono{ color:var(--good); font-weight:700; }
+.pc-opt.over .pc-opt-h .mono{ color:var(--warn); font-weight:700; }
+.pc-opt-bar{ position:relative; height:5px; border-radius:99px; background:rgba(30,25,15,.07); margin:6px 0 4px; }
+.pc-opt-bar i{ position:absolute; left:0; top:0; bottom:0; border-radius:99px; background:var(--good); }
+.pc-opt.over .pc-opt-bar i{ background:var(--warn); opacity:.7; }
+.pc-opt-bar b{ position:absolute; top:-3px; width:2px; height:11px; background:var(--ink); opacity:.45; border-radius:1px; }
+.pc-two{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.pc-budout{ padding:10px 0; font-weight:700; }
+.pc-saved{ margin-top:10px; display:grid; gap:6px; }
+.pc-saved-row{ display:flex; align-items:center; gap:6px; border:1px solid var(--line-soft); border-radius:12px; padding:4px 4px 4px 10px; }
+.pc-saved-load{ flex:1; min-width:0; text-align:left; background:none; border:none; padding:6px 0; cursor:pointer; color:var(--ink); display:flex; flex-direction:column; gap:1px; font:inherit; }
+.pc-fine{ margin-top:10px; }
+.pl-sheet{ display:flex; flex-wrap:wrap; gap:10px; margin-top:12px; }
+.pl-label{ width:2.25in; max-width:100%; min-height:1.25in; box-sizing:border-box; border:1px solid #1d1d22; border-radius:6px; padding:5px 8px 6px; background:#fff; color:#111; font-family:Inter,system-ui,sans-serif; display:flex; flex-direction:column; gap:1px; }
+.pl-band{ font-size:7.5px; font-weight:800; letter-spacing:.12em; color:#fff; background:#ff8a1e; margin:-5px -8px 3px; padding:2px 8px; border-radius:5px 5px 0 0; }
+.pl-band2{ background:#1d1d22; }
+.pl-name{ font-size:14px; font-weight:800; line-height:1.1; }
+.pl-mg{ font-size:10.5px; }
+.pl-dose{ font-size:10px; font-weight:700; }
+.pl-src{ font-size:8.5px; color:#444; line-height:1.25; }
+.pl-foot{ margin-top:auto; font-size:8.5px; color:#333; }
+#printArea{ display:none; }
+@media print{
+  body.printing-labels > *:not(#printArea){ display:none !important; }
+  body.printing-labels #printArea{ display:block; }
+  body.printing-labels{ background:#fff !important; }
+  body.printing-labels::before, body.printing-labels::after{ display:none !important; }
+  .pl-label{ break-inside:avoid; }
+}
 </style>
 </head>
 <body>
@@ -1258,52 +1377,14 @@ body{ overscroll-behavior:none; }
 
       <section id="pepCalcView" class="view" hidden>
 
-      <div class="card calc-card">
-        <h3>Dose calculator</h3>
-        <div class="calc-top">
-          <select id="calcPreset" aria-label="Peptide preset (fills typical values)"></select>
-          <button type="button" class="btn btn-sm" id="calcReset">Reset</button>
+      <div id="pcCard">
+        <div class="card pc-card">
+          <div class="card-h"><h3>Peptide calculator</h3><button type="button" class="btn btn-sm" id="calcReset">Reset</button></div>
+          <div id="pcSetup"></div>
         </div>
-        <div class="footnote" id="calcPresetNote"></div>
-        <div class="cf-list">
-          <div class="cf" data-cf="vial">
-            <div class="cf-h"><label for="calcVial">Peptide in vial</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="vial" aria-label="Clear peptide in vial">✕</button></div>
-            <div class="cf-row"><input type="number" id="calcVial" inputmode="decimal" value="5" min="0" step="any"><span class="cf-unit">mg</span></div>
-            <div class="cf-conv" id="calcVialConv"></div>
-          </div>
-          <div class="cf" data-cf="bac">
-            <div class="cf-h"><label for="calcBac">BAC water</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="bac" aria-label="Clear BAC water">✕</button></div>
-            <div class="cf-row"><input type="number" id="calcBac" inputmode="decimal" value="2" min="0" step="any">
-              <div class="seg" role="group" aria-label="BAC water unit"><button type="button" class="on" data-bac-unit="ml">mL</button><button type="button" data-bac-unit="units">u</button></div></div>
-            <div class="cf-conv" id="calcBacConv"></div>
-          </div>
-          <div class="cf" data-cf="dose">
-            <div class="cf-h"><label for="calcDose">Dose</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="dose" aria-label="Clear dose">✕</button></div>
-            <div class="cf-row"><input type="number" id="calcDose" inputmode="decimal" value="0.25" min="0" step="any">
-              <select id="calcDoseUnit" aria-label="Dose unit"><option value="mg" selected>mg</option><option value="mcg">mcg</option></select></div>
-            <div class="cf-conv" id="calcDoseConv"></div>
-          </div>
-          <div class="cf" data-cf="draw">
-            <div class="cf-h"><label for="calcDraw">Syringe draw</label><span class="cf-badge" hidden>auto</span><button type="button" class="cf-clear" data-clear="draw" aria-label="Clear syringe draw">✕</button></div>
-            <div class="cf-row"><input type="number" id="calcDraw" inputmode="decimal" min="0" step="any"><span class="cf-unit">units</span></div>
-            <div class="cf-conv" id="calcDrawConv"></div>
-          </div>
-        </div>
-        <div class="cf-hint">Fill any three and the fourth is calculated. U-100 syringe: 100 units = 1 mL.</div>
-        <div class="cf-stats">
-          <div><strong class="mono" id="calcConc">—</strong><span>mg/mL</span></div>
-          <div><strong class="mono" id="calcMl">—</strong><span>mL / dose</span></div>
-          <div><strong class="mono" id="calcDosesPerVial">—</strong><span>doses / vial</span></div>
-        </div>
-        <div class="footnote cf-perunit" id="calcPerUnit"></div>
-
-        <div class="calc-syr">
-          <div class="calc-syr-h"><span>Syringe</span><div class="syr-size-row" id="calcSyringeSizeRow"></div></div>
-          <div class="syringe-caption"><span id="calcSyringeCaption">—</span><span id="calcSyringeUnitsLabel">—</span></div>
-          <div class="syringe-wrap" id="calcSyringeGraphic"></div>
-          <div class="syringe-cap-warn" id="calcSyringeWarn" hidden></div>
-        </div>
-        <div class="calc-fine">Research use only. This tool does arithmetic; it doesn't evaluate dosing decisions.</div>
+        <div class="card pc-card pc-result" id="pcResult"></div>
+        <div class="card pc-card" id="pcNext"></div>
+        <div class="calc-fine pc-fine">Research use only. This tool does arithmetic; it doesn't evaluate dosing decisions.</div>
       </div>
 
       <div class="card calc-card" id="endoCard">
