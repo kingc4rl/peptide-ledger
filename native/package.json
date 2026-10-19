@@ -1,0 +1,19 @@
+{
+  "name": "pep-prep-native",
+  "private": true,
+  "description": "Wraps the Pep Prep web app as an iPhone app with Capacitor. Built in GitHub Actions; see README.md here.",
+  "scripts": {
+    "copy-web": "node copy-web.js"
+  },
+  "dependencies": {
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "@capacitor/local-notifications": "^8.3.1",
+    "@capacitor/filesystem": "^8.1.5",
+    "@capacitor/share": "^8.0.3"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.5.3",
+    "@capacitor/assets": "^3.0.5"
+  }
+}

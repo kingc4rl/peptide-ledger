@@ -1,0 +1,15 @@
+{
+  "appId": "com.kingc4rl.pepprep",
+  "appName": "Pep Prep",
+  "webDir": "www",
+  "ios": {
+    "contentInset": "never",
+    "scheme": "Pep Prep",
+    "backgroundColor": "#f4f5f7"
+  },
+  "plugins": {
+    "LocalNotifications": {
+      "presentationOptions": ["badge", "sound", "alert"]
+    }
+  }
+}

@@ -15,6 +15,7 @@ Do not stop at "branch pushed" or open a PR unless the owner asks for one. After
 - `app.js`: all logic, one IIFE. Sections are marked with `/* ===== ... ===== */` banners.
 - `sw.js`: offline cache. **Bump `VERSION` on every change**, or installed phones keep the old files.
 - `manifest.webmanifest`, `icons/`: install metadata.
+- `native/`: the same app wrapped as an iPhone app (Capacitor, Swift Package Manager). `.github/workflows/ios-testflight.yml` builds it on macOS and uploads to TestFlight on every push to `main` that touches the app (skips itself until the Apple secrets exist). Setup steps are in `native/README.md`. Code that only matters in the iPhone app checks `IS_NATIVE` in `app.js` (dose reminders via local notifications, share-sheet backups, no service worker).
 
 ## Data (never break it)
 - The owner's real data lives only in IndexedDB on his phone (db `peptide-ledger`, stores `collections` and `blobs`). It is never in this repo.

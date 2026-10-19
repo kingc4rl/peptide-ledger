@@ -2,6 +2,7 @@
 "use strict";
 
 /* ===================== Utilities ===================== */
+const IS_NATIVE = !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform());
 const $ = (sel,root)=> (root||document).querySelector(sel);
 const $$ = (sel,root)=> Array.from((root||document).querySelectorAll(sel));
 const uid = ()=> Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
@@ -670,6 +671,11 @@ function calcFillFrom(val){
     if(t.id==='pcBlendAdd'){ if(C.blend.length<8) C.blend.push({name:'',mg:''}); return redraw(); }
     if(d.brm!=null){ C.blend.splice(+d.brm,1); C.doseRef = -1; return redraw(); }
     if(t.id==='pcMakeLabels'){ $('#pcLabelPreview').innerHTML = calcLabelsHTML() + `<button type="button" class="btn btn-sm" id="pcPrint" style="margin-top:10px;">Print</button>`; return; }
+    if(t.id==='pcPrint' && IS_NATIVE){
+      const css = [...document.styleSheets].flatMap(sh=>{ try{ return [...sh.cssRules].map(r=>r.cssText).filter(x=> /\.pl-/.test(x)); }catch(e){ return []; } }).join('\n');
+      nativeShareFile('pep-prep-labels.html', `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width"><style>body{margin:16px;font-family:-apple-system,sans-serif}${css}</style>${calcLabelsHTML()}`, 'Pep Prep labels').catch(e=> console.warn(e));
+      return;
+    }
     if(t.id==='pcPrint'){
       let area = $('#printArea'); if(!area){ area = document.createElement('div'); area.id = 'printArea'; document.body.appendChild(area); }
       area.innerHTML = calcLabelsHTML(); document.body.classList.add('printing-labels');
@@ -4974,7 +4980,12 @@ async function exportBackup(){
   const file = new File([JSON.stringify(payload)], name, {type:'application/json'});
   const touch = matchMedia('(pointer: coarse)').matches;
   let done = false;
-  if(touch && navigator.canShare && navigator.canShare({files:[file]})){
+  if(IS_NATIVE){
+    const r = await nativeShareFile(name, JSON.stringify(payload), 'Pep Prep backup');
+    if(r==='cancel') return false;
+    done = !!r;
+  }
+  if(!done && touch && navigator.canShare && navigator.canShare({files:[file]})){
     try{ await navigator.share({files:[file], title:'Pep Prep backup'}); done = true; }
     catch(e){ if(e && e.name==='AbortError') return false; }
   }
@@ -5071,6 +5082,12 @@ function isStandalone(){ return matchMedia('(display-mode: standalone)').matches
 function renderInstallCard(){
   const el = $('#installInfo'); if(!el) return;
   const ios = /iphone|ipad|ipod/i.test(navigator.userAgent) || (navigator.platform==='MacIntel' && navigator.maxTouchPoints>1);
+  if(IS_NATIVE){
+    el.innerHTML = `<p class="footnote">You're using the Pep Prep iPhone app.</p>
+      <label class="pc-toggle"><input type="checkbox" id="remindToggle" ${remindersOn()?'checked':''}><span>Dose reminders at each dose time</span></label>`;
+    $('#remindToggle').addEventListener('change', e=> setRemindersOn(e.target.checked));
+    return;
+  }
   if(isStandalone()){ el.innerHTML = `<p class="footnote">Installed. You're running Pep Prep as an app.</p>`; return; }
   if(deferredInstall){ el.innerHTML = `<button class="btn btn-accent-pep btn-sm" id="installBtn">Install app</button>`; $('#installBtn').addEventListener('click', async ()=>{ deferredInstall.prompt(); await deferredInstall.userChoice.catch(()=>{}); deferredInstall = null; renderInstallCard(); }); return; }
   el.innerHTML = ios
@@ -5078,14 +5095,16 @@ function renderInstallCard(){
     : `<p class="footnote">In Chrome, open the ⋮ menu and choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</p>`;
 }
 function showAppVersion(){
-  const el = $('#appVersion'); if(!el || !('caches' in window)) return;
+  const el = $('#appVersion'); if(!el) return;
+  if(IS_NATIVE){ el.textContent = `App version ${window.PEP_NATIVE_VERSION||''} · iPhone app`; return; }
+  if(!('caches' in window)) return;
   caches.keys().then(keys=>{
     const k = keys.filter(x=> x.startsWith('ledger-shell-')).sort().pop();
     el.textContent = k ? `App version ${k.replace('ledger-shell-','')}` : '';
   }).catch(()=>{});
 }
 function registerServiceWorker(){
-  if(!('serviceWorker' in navigator) || location.protocol==='file:') return;
+  if(IS_NATIVE || !('serviceWorker' in navigator) || location.protocol==='file:') return;
   navigator.serviceWorker.register('./sw.js').then(reg=>{
     const show = ()=>{ $('#updateBanner').hidden = false; };
     if(reg.waiting && navigator.serviceWorker.controller) show();
@@ -5098,6 +5117,53 @@ function registerServiceWorker(){
   }).catch(e=> console.warn('Service worker registration failed', e));
   let reloading = false;
   navigator.serviceWorker.addEventListener('controllerchange', ()=>{ if(reloading) return; reloading = true; location.reload(); });
+}
+
+/* ===================== iPhone app (Capacitor build in native/) =====================
+   The same code runs as the web app and inside the native shell. Inside the shell there is no service worker,
+   backups go out through the share sheet, and upcoming doses are scheduled as local notifications. */
+const capPlugin = name=> (IS_NATIVE && window.Capacitor.Plugins) ? window.Capacitor.Plugins[name] : null;
+const remindersOn = ()=> lsGet('ledger.reminders','1')!=='0';
+let reminderTimer = null;
+function scheduleDoseReminders(){
+  const LN = capPlugin('LocalNotifications'); if(!LN) return;
+  clearTimeout(reminderTimer);
+  reminderTimer = setTimeout(async ()=>{
+    try{
+      const pending = await LN.getPending();
+      if(pending && pending.notifications && pending.notifications.length) await LN.cancel({notifications: pending.notifications.map(n=>({id:n.id}))});
+      if(!remindersOn()) return;
+      const perm = await LN.checkPermissions();
+      if(perm.display!=='granted') return;
+      const now = Date.now(), until = now + 14*24*HOUR, list = [];
+      state.protocols.filter(isActiveP).forEach(p=>{
+        scheduledEvents(p, now, until).forEach(e=>{
+          const iso = isoFromDate(new Date(e.t - 2*HOUR));
+          if(injectionsOn(p, iso) >= splitCount(p)) return;      // already logged for that dose day
+          const d = doseAt(p, iso), u = unitsPerInjection(p, iso);
+          list.push({t:e.t, title:`${p.compound||'Dose'} is due`, body:`${fmtDose(num(d.dose)/splitCount(p), d.doseUnit)}${u!=null?` · ${u} units`:''}. Tap to log it.`});
+        });
+      });
+      list.sort((a,b)=> a.t-b.t);
+      // iOS keeps at most 64 pending notifications per app
+      const notifications = list.slice(0, 60).map((x,i)=>({id: 1000+i, title:x.title, body:x.body, schedule:{at:new Date(x.t), allowWhileIdle:true}}));
+      if(notifications.length) await LN.schedule({notifications});
+    }catch(e){ console.warn('Reminder scheduling failed', e); }
+  }, 800);
+}
+async function setRemindersOn(on){
+  lsSet('ledger.reminders', on ? '1' : '0');
+  const LN = capPlugin('LocalNotifications');
+  if(on && LN){ try{ const r = await LN.requestPermissions(); if(r.display!=='granted') lsSet('ledger.reminders','0'); }catch(e){} }
+  renderInstallCard(); scheduleDoseReminders();
+}
+/* Native: write a file to the app's cache and open the share sheet (Save to Files, AirDrop, Print...). */
+async function nativeShareFile(name, text, title){
+  const FS = capPlugin('Filesystem'), SH = capPlugin('Share');
+  if(!FS || !SH) return false;
+  const w = await FS.writeFile({path:name, data:text, directory:'CACHE', encoding:'utf8'});
+  try{ await SH.share({title, url:w.uri, dialogTitle:title}); }catch(e){ if(!/cancel/i.test(String(e && e.message))) throw e; return 'cancel'; }
+  return true;
 }
 
 /* ===================== Render all ===================== */
@@ -5113,6 +5179,7 @@ function renderAll(){
   renderResearch();
   if(currentTab==='progress') renderProgress();
   renderBackupNudge();
+  scheduleDoseReminders();
 }
 
 /* ===================== Boot ===================== */
@@ -5133,6 +5200,7 @@ async function boot(){
   loadCheckinForm($('#ciDate').value || todayISO());   // the form was filled before records loaded
   renderStoragePill();
   setTab('dose', {keepScroll:true});   // the app always opens on Dose
+  if(IS_NATIVE && lsGet('ledger.remindAsked','')!=='1'){ lsSet('ledger.remindAsked','1'); setRemindersOn(true); }
   renderAll();
   registerServiceWorker();
   showAppVersion();
