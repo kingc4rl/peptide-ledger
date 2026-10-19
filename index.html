@@ -2,10 +2,10 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Pep Prep</title>
 <meta name="description" content="Private peptide tracker: dosing, protocols, inventory and progress. Data stays on your device.">
-<meta name="theme-color" content="#f1f3f6">
+<meta name="theme-color" content="#f4f4f7">
 <meta name="color-scheme" content="light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1398,6 +1398,20 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .pc-stepper > button{ border:none; border-radius:50%; background:var(--fill); color:#1c1c1e; font-size:22px; font-weight:500; }
 .pc-num{ border:none; background:var(--fill); }
 .pc-num input{ font-weight:600; }
+
+/* status-bar seam: the top of the backdrop is the same flat colour iOS paints behind the status bar */
+html, body{ background:#f4f4f7; }
+body::before{ background:
+  linear-gradient(180deg, #f4f4f7 0, rgba(244,244,247,.85) 40px, rgba(244,244,247,0) 160px),
+  radial-gradient(110% 55% at 10% 8%, rgba(255,240,224,.9), transparent 62%),
+  radial-gradient(80% 45% at 100% 26%, rgba(232,240,255,.9), transparent 62%),
+  radial-gradient(70% 40% at 0% 80%, rgba(240,236,255,.55), transparent 70%),
+  linear-gradient(180deg, #f4f4f7 0%, #f3f3f6 100%); }
+/* no zooming: no double-tap zoom anywhere */
+html, body{ touch-action:manipulation; -webkit-text-size-adjust:100%; text-size-adjust:100%; }
+/* iOS switches keep their size inside form fields too */
+input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height:28px !important; min-width:47px; accent-color:auto; }
+.endo-check{ gap:12px; }
 </style>
 </head>
 <body>

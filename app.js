@@ -1683,7 +1683,7 @@ function openProtocolModal(existing){
         <div class="footnote" id="pHalfLifeHint" style="margin-top:4px;"></div>
       </div>
       <div class="field span2 module-box">
-        <label class="endo-check" style="margin:0;color:var(--ink);"><input type="checkbox" id="pIsBlend" ${blendOf(p)?'checked':''}> 🧬 This is a blend of several peptides</label>
+        <label class="endo-check" style="margin:0;color:var(--ink);"><input type="checkbox" id="pIsBlend" ${blendOf(p)?'checked':''}> This is a blend of several peptides</label>
         <div id="pBlendBox" ${blendOf(p)?'':'hidden'} style="margin-top:10px;">
           <div class="footnote" style="margin-bottom:8px;">Enter each peptide's amount per vial (from the label) and its half-life. Each dose is split by those amounts, and every peptide gets its own line on the serum chart. The dose above is the whole blend.</div>
           <div class="chip-row" style="margin-bottom:8px;">${Object.keys(BLEND_PRESETS).map(k=>`<button type="button" class="chip-btn" data-blend-preset="${esc(k)}">Fill ${esc(k)}</button>`).join('')}</div>
@@ -5471,6 +5471,14 @@ function renderAll(){
   scheduleDoseReminders();
   updateNav();
 }
+
+/* No pinch or double-tap zoom: iOS Safari ignores user-scalable=no, so cancel the gestures directly. */
+(function blockZoom(){
+  const stop = e=> e.preventDefault();
+  ['gesturestart','gesturechange','gestureend'].forEach(ev=> document.addEventListener(ev, stop, {passive:false}));
+  document.addEventListener('touchmove', e=>{ if(e.touches.length > 1) e.preventDefault(); }, {passive:false});
+  // double-tap zoom is off through touch-action: manipulation in the CSS, which keeps quick repeated taps working
+})();
 
 /* ===================== Boot ===================== */
 async function boot(){
