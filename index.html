@@ -1162,29 +1162,6 @@ body{ overscroll-behavior:none; }
         </div>
 
         <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
-            <h3 style="font-size:16px;">Supply inventory</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addSupplyBtn">+ Add supply</button>
-          </div>
-          <p class="footnote" style="margin-bottom:12px;">Counts by category, tagged by what they're used for (reconstitution, dosage, or general prep). Days-left estimates appear once a supply is assigned to a protocol below.</p>
-          <div id="supplyGroups"></div>
-        </div>
-
-        <div class="card">
-          <h3 style="font-size:16px;margin-bottom:4px;">Protocol supply usage</h3>
-          <p class="footnote" style="margin-bottom:12px;">Assign which supplies each protocol draws on, and how often (every dose, or every N doses for a reconstitution cycle), to project depletion.</p>
-          <div id="protocolSupplyList"></div>
-        </div>
-
-        <div class="card">
-          <h3 style="font-size:16px;margin-bottom:4px;">Depletion &amp; reorder</h3>
-          <p class="footnote" style="margin-bottom:10px;">Ranked by soonest to run out, based on the usage rules above.</p>
-          <div id="supplyDepletion"></div>
-        </div>
-
-        <div class="disclaimer">Estimates assume steady, on-schedule use per your logged protocols — actual consumption (skipped doses, waste, extra draws) will vary.</div>
-
-        <div class="card">
           <h3 style="font-size:16px;margin-bottom:4px;">Cost tracking</h3>
           <p class="footnote" style="margin-bottom:10px;">Pulled from prices you log on each vial. Add a price next time you log a vial to fill this in.</p>
           <div id="costSummary"></div>
@@ -1402,13 +1379,6 @@ body{ overscroll-behavior:none; }
           <div id="vendorList"></div>
         </div>
 
-        <div class="card">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-            <h3 style="font-size:16px;">Supply vendors</h3>
-            <button class="btn btn-accent-pep btn-sm" id="addSupplyVendorBtn">+ Add vendor</button>
-          </div>
-          <div id="supplyVendorList"></div>
-        </div>
 
       </section>
 

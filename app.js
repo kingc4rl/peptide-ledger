@@ -1110,7 +1110,7 @@ function markDoseTaken(p){
   return logInjection(p, day, injectionsOn(p, day) >= splitCount(p) ? -1 : 1);
 }
 /* Add (+1) or remove (-1) one injection on a given dose day. Keeps the dose counter, next-dose date,
-   active vial and linked supplies in step. Works for today and for backfilled days. */
+   active vial in step. Works for today and for backfilled days. */
 function momentOn(day, hhmm){
   const m = /^(\d{1,2}):(\d{2})$/.exec(hhmm||''); if(!m) return null;
   const d = new Date(day+'T00:00:00'); d.setHours(+m[1], +m[2], 0, 0);
@@ -1143,18 +1143,6 @@ async function logInjection(p, day, delta, hhmm){
     if(day===doseDayISO() && (!weekdaysOf(p) || weekdaysOf(p).includes(new Date(day+'T00:00:00').getDay()))) nextDose = day;   // today's dose is due again
   }
   await dbSet('protocols', p.id, {...stripId(p), doseLog:log, doseTimes:times, doseNumber, nextDose});
-  // Linked supplies are consumed per injection: consume on log, restock on removal.
-  const rules = Array.isArray(p.supplyUsage) ? p.supplyUsage : [];
-  for(const r of rules){
-    if(!r.supplyId) continue;
-    const supply = state.supplies.find(s=>s.id===r.supplyId);
-    if(!supply) continue;
-    const perDoses = num(r.perDoses,1) || 1;
-    const qty = num(r.qty,1) || 1;
-    const change = -(qty/perDoses) * (delta>0 ? 1 : -1);
-    const newCount = Math.max(0, round2(num(supply.count,0) + change));
-    await dbSet('supplies', supply.id, {...stripId(supply), count:newCount});
-  }
   // Active vial: each injection draws its share of that day's dose.
   if(p.activeVialId){
     const vial = state.vials.find(v=>v.id===p.activeVialId);
@@ -1202,7 +1190,7 @@ function openDoseHistoryModal(p){
     return out;
   };
   openModal(`Dose history: ${p.compound||'protocol'}`, `
-    <p class="footnote" style="margin-bottom:10px;">Log a missed injection, or remove one logged by mistake. Each change also adjusts the active vial and linked supplies. The time below is used for doses you add here, so the serum chart is accurate.</p>
+    <p class="footnote" style="margin-bottom:10px;">Log a missed injection, or remove one logged by mistake. Each change also adjusts the active vial. The time below is used for doses you add here, so the serum chart is accurate.</p>
     <div class="module-box" style="margin-bottom:12px;">
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
         <div><label for="hTime" class="footnote" style="display:block;margin-bottom:3px;">Time for added doses</label><input id="hTime" type="time" value="${esc(p.doseTime||'22:00')}"></div>
@@ -1409,7 +1397,7 @@ function openProtocolModal(existing){
     <div class="form-actions wrap">
       ${existing? `<button class="btn btn-danger" id="pDelete" style="margin-right:auto;">Delete</button>` : ''}
       ${existing && p.status==='paused'? `<button class="btn" id="pResume">▶ Resume</button>` : ''}
-      ${existing && isActiveP(p) && !notStarted? `<button class="btn" id="pPause" title="Pause: stops scheduling but keeps vial and supply links">⏸ Pause</button>` : ''}
+      ${existing && isActiveP(p) && !notStarted? `<button class="btn" id="pPause" title="Pause: stops scheduling but keeps the vial link">⏸ Pause</button>` : ''}
       ${existing && p.status!=='archived' && !notStarted? `<button class="btn" id="pArchive" title="Archive: ends it but keeps the record">Archive</button>` : ''}
       <button class="btn" id="pCancel">Cancel</button>
       <button class="btn btn-accent-pep" id="pSave">Save</button>
@@ -2757,7 +2745,6 @@ function openSupplyModal(existing){
     });
   });
 }
-$('#addSupplyBtn').addEventListener('click', ()=> openSupplyModal(null));
 
 function renderProtocolSupplyList(){
   const el = $('#protocolSupplyList');
@@ -3172,8 +3159,7 @@ function renderSupplyVendors(){
   const clr = $('#vfClear',el); if(clr) clr.addEventListener('click', ()=>{ vendorFilter = new Set(); renderSupplyVendors(); });
   $$('[data-vf]',el).forEach(cb=> cb.addEventListener('change', ()=>{
     if(cb.checked) vendorFilter.add(cb.dataset.vf); else vendorFilter.delete(cb.dataset.vf);
-    renderSupplyVendors();
-  }));
+    }));
   $$('[data-open-supply-vendor]',el).forEach(row=> row.addEventListener('click', ()=> openSupplyVendorModal(state.supplyVendors.find(v=>v.id===row.dataset.openSupplyVendor))));
 }
 function openSupplyVendorModal(existing){
@@ -3206,7 +3192,6 @@ function openSupplyVendorModal(existing){
     });
   });
 }
-$('#addSupplyVendorBtn').addEventListener('click', ()=> openSupplyVendorModal(null));
 
 /* ===================== Peptides: Equipment ===================== */
 function renderPepEquipment(){
@@ -4822,11 +4807,7 @@ function renderAll(){
   renderSerum();
   renderArchivedProtocols();
   renderVials();
-  renderSupplyGroups();
-  renderProtocolSupplyList();
-  renderSupplyDepletion();
   renderVendors();
-  renderSupplyVendors();
   renderCostTracking();
   renderResearch();
   if(currentTab==='progress') renderProgress();
