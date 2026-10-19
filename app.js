@@ -164,17 +164,52 @@ async function dbDelete(path,id){
 }
 
 /* ===================== Modal helper ===================== */
+/* Pop-ups are iOS-style sheets: they slide up from the bottom, have a grab handle, and close with a swipe down
+   (on the handle or title bar, or anywhere once the sheet is scrolled to the top), a tap outside, or ✕. */
 function openModal(title, bodyHTML, onMount){
   const root = $('#modalRoot');
-  root.innerHTML = `<div class="modal-backdrop" id="mb"><div class="modal">
-    <div class="modal-head"><h3>${esc(title)}</h3><button class="icon-btn" id="mbClose" aria-label="Close">✕</button></div>
+  root.innerHTML = `<div class="modal-backdrop" id="mb"><div class="modal sheet" role="dialog" aria-modal="true" aria-label="${esc(title)}">
+    <div class="sheet-grab" aria-hidden="true"></div>
+    <div class="modal-head"><button type="button" class="icon-btn glass-btn" id="mbClose" aria-label="Close"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg></button><h3>${esc(title)}</h3><span class="mh-spacer"></span></div>
     <div id="mbBody">${bodyHTML}</div>
   </div></div>`;
+  document.documentElement.classList.add('sheet-open');
   $('#mb').addEventListener('click', e=>{ if(e.target.id==='mb') closeModal(); });
   $('#mbClose').addEventListener('click', closeModal);
+  bindSheetSwipe($('#mb .modal'));
   if(onMount) onMount($('#mbBody'));
 }
-function closeModal(){ $('#modalRoot').innerHTML = ''; }
+function closeModal(){
+  const mb = $('#mb');
+  document.documentElement.classList.remove('sheet-open');
+  if(!mb){ $('#modalRoot').innerHTML = ''; return; }
+  mb.id = ''; mb.classList.add('closing');                 // a new sheet opened meanwhile replaces this one cleanly
+  setTimeout(()=> mb.remove(), 230);
+}
+function bindSheetSwipe(sheet){
+  if(!sheet) return;
+  let y0 = null, dy = 0, t0 = 0;
+  sheet.addEventListener('touchstart', e=>{
+    const fromTop = e.target.closest('.sheet-grab, .modal-head');
+    if(!fromTop && sheet.scrollTop > 0) return;
+    if(e.target.closest('input, textarea, select, .lot-row, .week-strip, .serum-pan, .chart, .coa-viewer')) return;
+    y0 = e.touches[0].clientY; dy = 0; t0 = Date.now();
+  }, {passive:true});
+  sheet.addEventListener('touchmove', e=>{
+    if(y0==null) return;
+    dy = e.touches[0].clientY - y0;
+    if(dy <= 0 || sheet.scrollTop > 0){ sheet.style.transform = ''; return; }
+    sheet.style.transition = 'none'; sheet.style.transform = `translateY(${dy}px)`;
+    if(e.cancelable) e.preventDefault();
+  }, {passive:false});
+  sheet.addEventListener('touchend', ()=>{
+    if(y0==null) return;
+    const fast = dy > 60 && Date.now() - t0 < 250;
+    sheet.style.transition = '';
+    if(dy > 140 || fast) closeModal(); else sheet.style.transform = '';
+    y0 = null;
+  });
+}
 function confirmAction(message, onConfirm, okLabel){
   openModal('Are you sure?', `
     <p style="font-size:13.5px;margin-bottom:16px;">${esc(message)}</p>
@@ -1126,8 +1161,22 @@ function renderProtocols(){
   const colorMap = protocolColorMap();
   const day = doseDayISO();
   const serum = serumSeries().series;
-  el.innerHTML = `<div class="pen-list">${ordered.map((p,i)=> penRowHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, i)).join('')}</div>`;
+  // each pen gets a round button: orange ✓ logs today's dose in one tap, green ✓ means it's done
+  const quick = p=>{
+    if(p.startDate && p.startDate > day) return `<span class="pen-quick none"></span>`;
+    const done = injectionsOn(p, day) >= splitCount(p), due = doseDatesInRange(p, day, day).length>0;
+    if(done && injectionsOn(p, day)>0) return `<button type="button" class="pen-quick done" data-pen="${p.id}" aria-label="${esc(p.compound||'Dose')} logged today. Open details."><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`;
+    if(!due) return `<span class="pen-quick none"></span>`;
+    return `<button type="button" class="pen-quick" data-quick-log="${p.id}" aria-label="Log ${esc(p.compound||'dose')} now"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg></button>`;
+  };
+  el.innerHTML = `<div class="pen-list">${ordered.map((p,i)=> `<div class="pen-row">${penRowHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, i)}${quick(p)}</div>`).join('')}</div>`;
   $$('[data-pen]',el).forEach(b=> b.addEventListener('click', ()=> openDoseModal(state.protocols.find(x=>x.id===b.dataset.pen))));
+  $$('[data-quick-log]',el).forEach(b=> b.addEventListener('click', async ()=>{
+    const p = state.protocols.find(x=>x.id===b.dataset.quickLog); if(!p) return;
+    b.disabled = true; b.classList.add('pop');
+    await logInjection(p, day, 1, nowHHMM());
+    showToast(`Logged ${p.compound||'dose'}`);
+  }));
 }
 /* Buttons and widgets inside a protocol's dose details (now shown in the review screen). */
 function bindDoseDetail(root, serum){
@@ -1573,7 +1622,7 @@ function renderProtocolManager(){
         </div>
         <div class="footnote" style="margin-top:4px;">${esc(sched)}${splitCount(p)>1?` · split ×${splitCount(p)}`:''}${parts ? ` · blend: ${esc(parts.map(c=>c.name).join(', '))}` : hl?` · t½ ${esc(fmtHours(hl))}`:''}${titrationSteps(p).length?` · ${titrationSteps(p).length} titration step${titrationSteps(p).length===1?'':'s'}`:''}</div>
       </div>
-      ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : `<span class="footnote" aria-hidden="true">Edit ›</span>`}
+      ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : `<span class="footnote" aria-hidden="true" style="white-space:nowrap">Edit ›</span>`}
     </div>`;
   }).join('');
   $$('[data-open-protocol]',el).forEach(c=> c.addEventListener('click', ()=> openProtocolModal(state.protocols.find(p=>p.id===c.dataset.openProtocol))));
@@ -2277,11 +2326,13 @@ function renderVials(){
   }
   const groups = {};
   const order = [];
-  state.vials.filter(v=>!isDepleted(v)).forEach(v=>{
+  const q = (($('#stashSearch')||{}).value||'').trim().toLowerCase();
+  state.vials.filter(v=>!isDepleted(v)).filter(v=> !q || [v.compound, v.pharmacy, v.lot].some(x=> (x||'').toLowerCase().includes(q))).forEach(v=>{
     const key = v.compound || 'Vial';
     if(!groups[key]){ groups[key] = []; order.push(key); }
     groups[key].push(v);
   });
+  if(!order.length){ el.innerHTML = `<p class="footnote stash-none">No vials match “${esc(q)}”.</p>`; return; }
   const BUD_MAX = 8640000000000000;
   order.sort((a,b)=> a.localeCompare(b, undefined, {sensitivity:'base'}));
   const shelf = order.map((compound, gi)=>{
@@ -2296,6 +2347,8 @@ function renderVials(){
     const totalDays = calcs.reduce((s,c)=> s + (c && c.daysRemaining!=null ? Math.max(c.daysRemaining,0) : 0), 0);
     const totalLow = anyCalc && totalDays<=7;
     const color = colorFor(compound, gi);
+    const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
+    const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
     const rows = lots.map((v,i)=>{
       const calc = calcs[i];
       const low = calc && calc.daysRemaining!=null && calc.daysRemaining<=7;
@@ -2330,9 +2383,9 @@ function renderVials(){
       </div>`;
       return {id: v.id, tile, card};
     });
-    const fill = lots.find(v=> v.remainingMg!=null && num(v.mgPerVial,0)>0);
-    const pct = fill ? Math.max(0, Math.min(1, fill.remainingMg/num(fill.mgPerVial,1))) : null;
-    const meta = `${totalQty} vial${totalQty===1?'':'s'}${anyCalc ? ` · ${totalDays<=0?'out':'~'+totalDays+'d'}` : ''}`;
+    const sealed = lots.reduce((s,v)=> s+num(v.qty,1), 0);   // qty counts sealed vials; the open one is separate
+    const meta = fill ? `${Math.round(fill.remainingMg*10)/10} of ${num(fill.mgPerVial,0)} mg${sealed>0?` · +${sealed} sealed`:''}`
+      : `${totalQty} sealed${num(lots[0].mgPerVial,0)?` · ${num(lots[0].mgPerVial,0)} mg`:''}`;
     const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
     const vendors = [...new Set(lots.map(v=> (v.pharmacy||'').trim()).filter(Boolean))];
     return {compound, name: compound, brand: vendors.length===1 ? vendors[0] : '', color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
@@ -2344,6 +2397,7 @@ function renderVials(){
       ${vialSVG(g, i)}
       <span class="vial-label">${esc(g.compound)}</span>
       <span class="vial-meta">${esc(g.meta)}</span>
+      ${g.pct!=null ? `<span class="vial-lvl"><i style="width:${Math.round(g.pct*100)}%"></i></span>` : ''}
     </button>`).join('')}</div>`;
   const grid = $('.vial-shelf', el);
   const selIdx = shelf.findIndex(g=> g.compound===stashSel);
@@ -4946,21 +5000,64 @@ function initAskChat(){
 }
 
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView'};
+const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView', more:'#moreView'};
+/* iOS-style navigation: each screen has a large title, an optional subtitle and round glass buttons in the top corner.
+   Tools and Resources live under More, so they show a back button and keep More highlighted. */
+const NAV_ICONS = {
+  plus:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  scan:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></svg>',
+  reset:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>',
+};
+const TAB_META = {
+  dose:{title:'Today', sub:()=>{ const d = new Date().toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'}); const l = ($('#doseTodayLabel')||{}).textContent||''; return l ? `${d} · ${l}` : d; }},
+  protocols:{title:'Protocols', sub:()=>{ const n = state.protocols.filter(isActiveP).length; return n ? `${n} active` : ''; }, actions:[['plus','#addProtocolBtn','Add protocol']]},
+  inventory:{title:'Stash', sub:()=>{ const live = state.vials.filter(v=>!isDepleted(v)); const kinds = new Set(live.map(v=> (v.compound||'').trim().toLowerCase())).size;
+    const n = live.reduce((t,v)=> t + num(v.qty,1) + (v.remainingMg!=null?1:0), 0); return live.length ? `${kinds} peptide${kinds===1?'':'s'} · ${n} vial${n===1?'':'s'}` : ''; },
+    actions:[['scan','#scanVialBtn','Scan a vial'],['plus','#addVialBtn','Add vial']]},
+  ask:{title:'Claude', sub:()=> 'Ask about your protocols and data'},
+  progress:{title:'Progress'},
+  more:{title:'More'},
+  tools:{title:'Tools', back:'more', actions:[['reset','#calcReset','Reset calculator']]},
+  resources:{title:'Resources', back:'more'},
+};
+function updateNav(){
+  const m = TAB_META[currentTab] || {title:''};
+  $('#iosTitle').textContent = m.title; $('#iosBarTitle').textContent = m.title;
+  const sub = m.sub ? m.sub() : ''; $('#iosSub').textContent = sub; $('#iosSub').hidden = !sub;
+  $('#navBack').hidden = !m.back;
+  // proxy buttons: the real buttons stay in the page (hidden), so their existing handlers keep working
+  $('#navActions').innerHTML = (m.actions||[]).filter(([,sel])=>{ const b = $(sel); return b && !(sel==='#scanVialBtn' && b.hidden); })
+    .map(([ic,sel,label])=> `<button type="button" class="glass-btn" data-proxy="${sel}" aria-label="${esc(label)}">${NAV_ICONS[ic]}</button>`).join('');
+  const sb = $('#moreBackupSub'); if(sb){ const last = lsGet('ledger.lastBackup',''); sb.textContent = last ? `Last backup ${fmtDateShort(last)}` : 'No backup yet'; }
+}
+let iosBarOn = false;
+function updateIosBar(){
+  const on = window.scrollY > 52;
+  if(on!==iosBarOn){ iosBarOn = on; $('#iosBar').classList.toggle('on', on); }
+}
 let currentTab = 'dose';
 function setTab(name, opts){
   if(!TABS[name]) name = 'dose';
   currentTab = name;
   Object.entries(TABS).forEach(([k,sel])=>{ $(sel).hidden = k!==name; });
-  $$('.tabbar [data-tab]').forEach(b=>{ const on = b.dataset.tab===name; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  const hl = TAB_META[name] && TAB_META[name].back || name;
+  $$('.tabbar [data-tab], .claude-orb').forEach(b=>{ const on = b.dataset.tab===hl; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
+  updateNav();
   lsSet('ledger.tab', name);
   if(name==='tools'){ runCalc(); showAppVersion(); }          // redraw the syringe now that it has a width
   if(name==='progress') renderProgress();
   if(name==='ask') renderAsk();
   if(!(opts && opts.keepScroll)) window.scrollTo(0,0);
+  updateIosBar();
 }
 function initTabs(){
-  $$('.tabbar [data-tab]').forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.tab)));
+  $$('.tabbar [data-tab], .claude-orb').forEach(b=> b.addEventListener('click', ()=>{ haptic('select'); setTab(b.dataset.tab); }));
+  $$('#moreView [data-goto]').forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.goto)));
+  $('#moreBackup').addEventListener('click', ()=> openBackupModal());
+  $('#navBack').addEventListener('click', ()=> setTab(TAB_META[currentTab].back || 'dose'));
+  $('#navActions').addEventListener('click', e=>{ const b = e.target.closest('[data-proxy]'); if(b){ const real = $(b.dataset.proxy); if(real) real.click(); } });
+  window.addEventListener('scroll', updateIosBar, {passive:true});
+  $('#iosBar').addEventListener('click', ()=> window.scrollTo({top:0, behavior:'smooth'}));
 }
 
 /* ===================== Backup, restore, install ===================== */
@@ -5372,6 +5469,7 @@ function renderAll(){
   if(currentTab==='progress') renderProgress();
   renderBackupNudge();
   scheduleDoseReminders();
+  updateNav();
 }
 
 /* ===================== Boot ===================== */
@@ -5396,7 +5494,8 @@ async function boot(){
   resolveDataReady();
   if(IS_NATIVE && lsGet('ledger.remindAsked','')!=='1' && capPlugin('LocalNotifications')){ lsSet('ledger.remindAsked','1'); setRemindersOn(true); }
   nativeOnForeground();
-  const scanBtn = $('#scanVialBtn'); if(scanBtn && capPlugin('CapacitorBarcodeScanner')){ scanBtn.hidden = false; scanBtn.addEventListener('click', scanFindVial); }
+  const scanBtn = $('#scanVialBtn'); if(scanBtn && capPlugin('CapacitorBarcodeScanner')){ scanBtn.hidden = false; scanBtn.addEventListener('click', scanFindVial); updateNav(); }
+  const ss = $('#stashSearch'); if(ss) ss.addEventListener('input', ()=>{ stashSel = null; lotSel = null; renderVials(); });
   renderAll();
   registerServiceWorker();
   showAppVersion();

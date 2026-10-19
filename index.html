@@ -15,9 +15,6 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
 #page-peptides{
   --ink:#1d1d20; --paper:#f6f5f2; --surface:#ffffff; --surface-2:#f1efea;
@@ -1221,18 +1218,201 @@ body{ overscroll-behavior:none; }
 .nat-sub{ margin:-2px 0 6px 26px; }
 .nat-row{ margin-top:10px; }
 .nat-set .pc-toggle span{ color:var(--ink); }
+
+/* ===================== iOS 26 Liquid Glass =====================
+   Apple's system font, large titles, a floating glass tab bar with Claude as its own round button,
+   glass circle buttons, slide-up sheets and iOS controls. This block is last so it wins over the older layers. */
+:root{
+  --sf: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", Inter, system-ui, sans-serif;
+  --sf-display: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter Display", Inter, system-ui, sans-serif;
+  --label2: #86868b;
+  --fill: rgba(118,118,128,.12);
+  --gl: rgba(255,255,255,.58);
+  --gl-blur: blur(20px) saturate(180%);
+  --gl-edge: inset 0 1px 0 rgba(255,255,255,.95), inset 0 -1px 0 rgba(255,255,255,.35), 0 0 0 .5px rgba(0,0,0,.07);
+  --gl-shadow: 0 8px 24px rgba(0,0,0,.08);
+  --ios-green: #34c759;
+}
+html, body{ font-family:var(--sf); -webkit-font-smoothing:antialiased; }
+body *:not(svg):not(svg *){ font-family:var(--sf) !important; }
+.research-md code, .research-md pre, code, pre, kbd{ font-family:ui-monospace, "SF Mono", Menlo, monospace !important; }
+h1, h2, h3, h4, .ios-title, .pc-hero-big, .pc-stats strong{ font-family:var(--sf-display) !important; }
+.mono{ font-variant-numeric:tabular-nums; letter-spacing:0; }
+body::before{ background:
+  radial-gradient(110% 55% at 10% 0%, rgba(255,240,224,.9), transparent 62%),
+  radial-gradient(80% 45% at 100% 22%, rgba(232,240,255,.9), transparent 62%),
+  radial-gradient(70% 40% at 0% 80%, rgba(240,236,255,.55), transparent 70%),
+  linear-gradient(180deg, #f6f6f8 0%, #f3f3f6 100%); }
+
+/* web giveaways off */
+button, .tabbar, .claude-orb, .ios-hero, .vial-tile, .dose-pen, .lot-tile, .chip-btn, .glass-btn, .ios-row, .day-chip, label, summary{ -webkit-user-select:none; user-select:none; -webkit-touch-callout:none; }
+*{ -webkit-tap-highlight-color:transparent; }
+*:focus:not(:focus-visible){ outline:none; }
+input, select, textarea{ font-size:17px !important; }
+.sr-only{ position:absolute !important; width:1px; height:1px; overflow:hidden; clip:rect(0 0 0 0); white-space:nowrap; }
+.ios-hide{ display:none !important; }
+.app-head{ display:none; }
+
+/* large title header and the compact bar that fades in on scroll */
+.ios-hero{ position:relative; z-index:2; max-width:1080px; margin:0 auto; padding:calc(env(safe-area-inset-top,0px) + 6px) var(--gutter-r) 2px var(--gutter-l); }
+.ios-nav{ display:flex; justify-content:space-between; align-items:center; min-height:44px; }
+.ios-nav-l, .ios-nav-r, #navActions{ display:flex; align-items:center; gap:10px; }
+.ios-title{ font-size:34px; font-weight:700; line-height:1.12; letter-spacing:-.022em; margin:6px 0 0; color:#000; }
+.ios-sub{ color:var(--label2); font-size:15px; margin-top:3px; }
+.ios-bar{ position:fixed; top:0; left:0; right:0; z-index:35; height:calc(env(safe-area-inset-top,0px) + 44px); padding-top:env(safe-area-inset-top,0px);
+  display:flex; align-items:center; justify-content:center; font-weight:600; font-size:17px; color:#000;
+  background:rgba(247,247,249,.72); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); border-bottom:.5px solid rgba(0,0,0,.1);
+  opacity:0; transform:translateY(-4px); transition:opacity .2s, transform .2s; pointer-events:none; }
+.ios-bar.on{ opacity:1; transform:none; pointer-events:auto; }
+.page{ padding-top:10px; }
+.banner-wrap{ max-width:1080px; margin:0 auto; }
+
+/* glass circle buttons */
+.glass-btn, .sync-pill{ width:44px; height:44px; padding:0; max-width:none; border-radius:50%; border:none; display:flex; align-items:center; justify-content:center; position:relative; cursor:pointer; color:#1c1c1e;
+  background:var(--gl); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow); transition:transform .15s; }
+.glass-btn svg{ width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.sync-pill .sync-dot{ position:absolute; top:9px; right:9px; width:9px; height:9px; border:2px solid #fff; display:none; }
+.sync-pill .sync-dot.bad{ display:block; background:#ff3b30; }
+.glass-btn:active, .btn:active, .chip-btn:active, .ios-row:active, .pen-quick:active, .claude-orb:active{ transform:scale(.94); }
+
+/* floating glass tab bar + Claude button */
+.tabbar{ left:16px; right:90px; bottom:max(8px, calc(env(safe-area-inset-bottom,0px) - 12px)); height:62px; padding:0 5px; display:flex; justify-content:space-around; align-items:center; gap:0;
+  border:none; border-radius:999px; background:rgba(255,255,255,.6); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), 0 10px 30px rgba(0,0,0,.14); grid-template-columns:none; }
+.tabbar button{ flex:1; height:52px; padding:0; border-radius:999px; gap:2px; color:#1c1c1e; background:none; box-shadow:none; font-size:10px; font-weight:600; }
+.tabbar button > span:last-child{ font-size:10px; letter-spacing:0; }
+.tabbar button svg{ width:24px; height:24px; stroke-width:1.9; }
+.tabbar button.active{ color:var(--accent-pep-strong); background:rgba(0,0,0,.055); box-shadow:none; }
+.claude-orb{ position:fixed; right:16px; bottom:max(8px, calc(env(safe-area-inset-bottom,0px) - 12px)); z-index:40; width:62px; height:62px; border-radius:50%; border:none; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; color:#ff8a1e;
+  background:rgba(255,255,255,.6); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), 0 10px 30px rgba(0,0,0,.14); transition:transform .15s, background .2s, color .2s; }
+.claude-orb svg{ width:28px; height:28px; fill:currentColor; stroke:none; }
+.claude-orb.active{ color:#fff; background:linear-gradient(180deg,#ffab55,#ff8a1e); box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 8px 22px rgba(255,138,30,.4); }
+@media (min-width:900px){
+  .tabbar{ left:50%; right:auto; width:520px; transform:translateX(calc(-50% - 40px)); }
+  .claude-orb{ right:auto; left:calc(50% + 230px); }
+}
+.ask-composer{ bottom:calc(62px + max(8px, calc(env(safe-area-inset-bottom,0px) - 12px)) + 12px); }
+
+/* cards and section titles */
+.card, .link-fold-body{ border-radius:26px; }
+.card-h h3{ font-size:19px; font-weight:700; letter-spacing:-.015em; }
+.card-block-head h3, .serum-head h3{ font-size:21px; font-weight:700; letter-spacing:-.02em; }
+.footnote{ color:var(--label2); }
+
+/* buttons and chips */
+.btn{ border:none; border-radius:999px; font-weight:600; color:#1c1c1e; background:rgba(255,255,255,.66); box-shadow:var(--gl-edge), 0 2px 8px rgba(0,0,0,.06); transition:transform .12s; }
+.btn-accent-pep, .dc-log{ color:#fff; border:none; background:linear-gradient(180deg,#ffab55 0%,#ff8a1e 100%); box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 6px 16px rgba(255,138,30,.32); }
+.btn-danger{ color:#ff3b30; background:rgba(255,59,48,.1); box-shadow:none; }
+.chip-btn{ border:none; background:var(--fill); color:#1c1c1e; box-shadow:none; font-weight:600; }
+.chip-btn.on{ background:rgba(255,138,30,.16); color:var(--accent-pep-strong); box-shadow:inset 0 0 0 1px rgba(255,138,30,.45); }
+/* serum time range as an iOS segmented control */
+#serumControls .chip-row{ display:flex; gap:0; padding:3px; border-radius:999px; background:var(--fill); }
+#serumControls .chip-btn{ background:none; box-shadow:none; border-radius:999px; padding:6px 11px; color:#3a3a3c; }
+#serumControls .chip-btn.on{ background:#fff; color:#000; box-shadow:0 2px 8px rgba(0,0,0,.12); }
+.pc-seg{ background:var(--fill); border-radius:999px; }
+.pc-seg button{ border-radius:999px; }
+
+/* fields and switches */
+input, select, textarea{ border:1px solid transparent !important; background:var(--fill) !important; border-radius:12px; box-shadow:none !important; color:#000; }
+input:focus, select:focus, textarea:focus{ border-color:var(--accent-pep) !important; background:rgba(255,255,255,.85) !important; }
+.pc-num input, .glass-search input, .pc-num select{ background:none !important; border:none !important; }
+input[type=checkbox]{ -webkit-appearance:none; appearance:none; width:47px; height:28px; flex:none; margin:0; padding:0; border-radius:999px !important; border:none !important;
+  background:rgba(120,120,128,.22) !important; position:relative; cursor:pointer; transition:background .2s; vertical-align:middle; }
+input[type=checkbox]::before{ content:''; position:absolute; top:2px; left:2px; width:24px; height:24px; border-radius:50%; background:#fff; box-shadow:0 3px 8px rgba(0,0,0,.15), 0 1px 1px rgba(0,0,0,.16); transition:transform .22s cubic-bezier(.3,.7,.3,1.2); }
+input[type=checkbox]:checked{ background:var(--ios-green) !important; }
+input[type=checkbox]:checked::before{ transform:translateX(19px); }
+.pc-toggle{ justify-content:space-between; flex-direction:row-reverse; font-weight:500; padding:4px 0; }
+.pc-toggle span{ color:#000; }
+
+/* slide-up sheets */
+html.sheet-open, html.sheet-open body{ overflow:hidden; }
+.modal-backdrop{ align-items:flex-end; padding:0 !important; overflow:hidden; background:rgba(0,0,0,.28); -webkit-backdrop-filter:none; backdrop-filter:none; animation:pp-fade .25s ease; }
+.modal.sheet{ width:100%; max-width:none; max-height:calc(100dvh - env(safe-area-inset-top,0px) - 10px); overflow-y:auto; overscroll-behavior:contain; -webkit-overflow-scrolling:touch;
+  border:none; border-radius:34px 34px 0 0; padding:6px 18px calc(env(safe-area-inset-bottom,0px) + 24px);
+  background:rgba(248,248,250,.9); -webkit-backdrop-filter:blur(30px) saturate(180%); backdrop-filter:blur(30px) saturate(180%);
+  box-shadow:0 -12px 40px rgba(0,0,0,.18), inset 0 1px 0 #fff; animation:pp-sheet-up .36s cubic-bezier(.2,.9,.25,1); transition:transform .25s cubic-bezier(.2,.9,.25,1); }
+.sheet-grab{ width:36px; height:5px; border-radius:3px; background:rgba(60,60,67,.3); margin:2px auto 8px; }
+.modal.sheet .modal-head{ display:grid; grid-template-columns:44px 1fr 44px; align-items:center; gap:6px; margin:0 0 12px; }
+.modal.sheet .modal-head h3{ text-align:center; font-size:17px; font-weight:700; letter-spacing:-.01em; }
+.modal.sheet #mbClose{ width:36px; height:36px; font-size:0; color:#3a3a3c; }
+.modal.sheet #mbClose svg{ width:16px; height:16px; stroke-width:2.6; }
+.modal-backdrop.closing{ animation:pp-fade-out .23s ease forwards; }
+.modal-backdrop.closing .modal{ animation:pp-sheet-down .23s ease forwards; }
+@keyframes pp-fade{ from{ background:rgba(0,0,0,0); } }
+@keyframes pp-fade-out{ to{ background:rgba(0,0,0,0); } }
+@keyframes pp-sheet-up{ from{ transform:translateY(100%); } }
+@keyframes pp-sheet-down{ to{ transform:translateY(100%); } }
+@media (min-width:700px){
+  .modal-backdrop{ align-items:center; padding:24px !important; }
+  .modal.sheet{ max-width:560px; border-radius:28px; max-height:calc(100dvh - 48px); }
+}
+
+/* Today: pens with a one-tap log button */
+.pen-row{ display:flex; align-items:center; gap:8px; }
+.pen-row .dose-pen{ flex:1; min-width:0; }
+.pen-quick{ flex:none; width:50px; height:50px; border-radius:50%; border:none; padding:0; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#fff;
+  background:linear-gradient(180deg,#ffab55,#ff8a1e); box-shadow:inset 0 1px 0 rgba(255,255,255,.6), 0 6px 16px rgba(255,138,30,.35); transition:transform .15s; }
+.pen-quick svg{ width:24px; height:24px; fill:none; stroke:currentColor; stroke-width:2.8; stroke-linecap:round; stroke-linejoin:round; }
+.pen-quick.done{ background:linear-gradient(180deg,#5ad97a,#28b04f); box-shadow:inset 0 1px 0 rgba(255,255,255,.55), 0 6px 16px rgba(40,176,79,.3); }
+.pen-quick.none{ visibility:hidden; }
+.pen-quick.pop{ animation:pp-pop .35s ease; }
+@keyframes pp-pop{ 40%{ transform:scale(1.15); } }
+
+/* Stash: search, then glass tiles in two columns */
+.glass-search{ display:flex; align-items:center; gap:8px; height:44px; border-radius:999px; padding:0 16px; margin:0 0 14px; color:var(--label2);
+  background:var(--gl); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow); }
+.glass-search svg{ width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; }
+.glass-search input{ flex:1; min-width:0; padding:0; height:42px; }
+.glass-search input::-webkit-search-cancel-button{ -webkit-appearance:none; }
+.vial-shelf{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
+.vial-tile{ padding:14px 10px 14px; border-radius:24px; gap:3px;
+  background:linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5)) !important; -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow) !important; }
+.vial-tile .vial-svg{ width:78px; height:auto; }
+.vial-tile .vial-label, .vial-tile.on .vial-label{ font-size:16px; font-weight:600; margin-top:6px; }
+.vial-tile .vial-meta{ font-size:13px; color:var(--label2); white-space:normal; text-align:center; }
+.vial-lvl{ display:block; width:calc(100% - 28px); height:5px; border-radius:3px; background:rgba(0,0,0,.07); overflow:hidden; margin-top:7px; }
+.vial-lvl i{ display:block; height:100%; border-radius:3px; background:var(--vc); }
+.vial-tile.on{ box-shadow:var(--gl-edge), 0 0 0 2px var(--vc), 0 10px 26px rgba(0,0,0,.12) !important; }
+.vial-shelf.has-sel .vial-tile:not(.on){ opacity:.55; }
+.vial-detail{ grid-column:1 / -1; }
+.stash-none{ text-align:center; padding:20px 0; }
+@media (min-width:700px){ .vial-shelf{ grid-template-columns:repeat(4, minmax(0,1fr)); } }
+
+/* More: a grouped glass list */
+.ios-list{ border-radius:26px; overflow:hidden; background:var(--gl); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow); }
+.ios-row{ display:flex; align-items:center; gap:13px; width:100%; padding:12px 16px; min-height:58px; background:none; border:none; text-align:left; font-size:17px; color:#000; position:relative; cursor:pointer; }
+.ios-row + .ios-row::before{ content:''; position:absolute; top:0; left:59px; right:0; height:.5px; background:rgba(60,60,67,.22); }
+.ios-row:active{ background:rgba(0,0,0,.05); transform:none; }
+.ios-ic{ width:30px; height:30px; border-radius:8px; background:var(--ic); display:flex; align-items:center; justify-content:center; flex:none; }
+.ios-ic svg{ width:18px; height:18px; fill:none; stroke:#fff; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.ios-row-t{ flex:1; min-width:0; }
+.ios-row-t small{ display:block; color:var(--label2); font-size:13px; margin-top:1px; }
+.ios-chev{ width:8px; height:8px; border:solid #c4c4c7; border-width:2.2px 2.2px 0 0; transform:rotate(45deg); margin-right:4px; flex:none; }
+
+/* banners and toast */
+.banner{ border-radius:20px; border:none; box-shadow:var(--gl-edge), var(--gl-shadow); }
+.toast{ bottom:calc(62px + max(8px, calc(env(safe-area-inset-bottom,0px) - 12px)) + 16px); }
+
+/* charts and calculator controls in the iOS style */
+.chart text, .chart .ch-ylab, .chart .ch-xlab, .chart .ch-mlab, .chart .ch-now-lab{ font-family:var(--sf) !important; font-variant-numeric:tabular-nums; }
+.pc-stepper > button{ border:none; border-radius:50%; background:var(--fill); color:#1c1c1e; font-size:22px; font-weight:500; }
+.pc-num{ border:none; background:var(--fill); }
+.pc-num input{ font-weight:600; }
 </style>
 </head>
 <body>
 <div id="page-peptides">
-  <header class="app-head">
-    <div class="head-row">
-      <div class="brand">
-        <img src="icons/icon-192.png" alt="" width="30" height="30">
-        <div><div class="section-eyebrow">Peptides &amp; Stacks</div><h1>Pep Prep</h1></div>
+  <!-- iOS-style navigation: a compact glass bar that appears on scroll, and a large title at the top of each screen -->
+  <div class="ios-bar" id="iosBar" aria-hidden="true"><span id="iosBarTitle"></span></div>
+  <header class="ios-hero" id="iosHero">
+    <div class="ios-nav">
+      <div class="ios-nav-l"><button type="button" class="glass-btn nav-back" id="navBack" hidden aria-label="Back to More"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button></div>
+      <div class="ios-nav-r"><span id="navActions"></span>
+        <button type="button" class="glass-btn sync-pill" id="syncPill" title="Backup and storage" aria-label="Backup and storage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5h10.2a4.3 4.3 0 0 0 .6-8.56A6 6 0 0 0 6.3 9.1 4.7 4.7 0 0 0 7 18.5z"/><path d="M9.5 13.5l2 2 3.5-3.8"/></svg><span class="sync-dot off" id="syncDot"></span><span class="sr-only" id="syncLabel">Loading…</span></button>
       </div>
-      <button type="button" class="sync-pill" id="syncPill" title="Backup and storage"><span class="sync-dot off" id="syncDot"></span><span class="footnote" id="syncLabel">Loading…</span></button>
     </div>
+    <h1 class="ios-title" id="iosTitle">Today</h1>
+    <div class="ios-sub" id="iosSub"></div>
   </header>
 
   <div class="banner-wrap">
@@ -1246,7 +1426,7 @@ body{ overscroll-behavior:none; }
       <section id="doseView" class="view">
 
         <div class="card bare">
-          <div class="card-h"><h3>Log a dose</h3><span class="footnote" id="doseTodayLabel"></span></div>
+          <div class="card-h ios-hide"><h3>Log a dose</h3><span class="footnote" id="doseTodayLabel"></span></div>
           <div id="protocolList"></div>
         </div>
 
@@ -1273,7 +1453,7 @@ body{ overscroll-behavior:none; }
       <section id="protocolsView" class="view" hidden>
 
         <div class="card">
-          <div class="card-h"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div>
+          <div class="card-h ios-hide"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div>
           <p class="footnote" style="margin-bottom:10px;">Tap a protocol to edit its dose, schedule, vial, half-life and titration.</p>
           <div id="protocolManager"></div>
         </div>
@@ -1288,7 +1468,8 @@ body{ overscroll-behavior:none; }
       <section id="inventoryView" class="view" hidden>
 
         <div class="card bare">
-          <div class="card-h"><h3>Stash</h3><div class="card-actions"><button class="btn btn-sm" id="scanVialBtn" hidden>Scan</button><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div></div>
+          <div class="card-h ios-hide"><h3>Stash</h3><div class="card-actions"><button class="btn btn-sm" id="scanVialBtn" hidden>Scan</button><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div></div>
+          <label class="glass-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg><input type="search" id="stashSearch" placeholder="Search" autocomplete="off" aria-label="Search your stash"></label>
           <div id="vialList"></div>
         </div>
 
@@ -1391,7 +1572,7 @@ body{ overscroll-behavior:none; }
 
       <div id="pcCard">
         <div class="card pc-card">
-          <div class="card-h"><h3>Peptide calculator</h3><button type="button" class="btn btn-sm" id="calcReset">Reset</button></div>
+          <div class="card-h"><h3>Peptide calculator</h3><button type="button" class="btn btn-sm ios-hide" id="calcReset">Reset</button></div>
           <div id="pcSetup"></div>
         </div>
         <div class="card pc-card pc-result" id="pcResult"></div>
@@ -1453,10 +1634,18 @@ body{ overscroll-behavior:none; }
         </div>
       </section>
 
+      <section id="moreView" class="view" hidden>
+        <div class="ios-list">
+          <button type="button" class="ios-row" data-goto="tools"><span class="ios-ic" style="--ic:#ff8a1e"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span class="ios-row-t">Tools<small>Peptide calculator, endotoxin check</small></span><span class="ios-chev"></span></button>
+          <button type="button" class="ios-row" data-goto="resources"><span class="ios-ic" style="--ic:#5aa9ff"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><span class="ios-row-t">Resources<small>Links, guides and vendors</small></span><span class="ios-chev"></span></button>
+          <button type="button" class="ios-row" id="moreBackup"><span class="ios-ic" style="--ic:#34c759"><svg viewBox="0 0 24 24"><path d="M7 18.5h10.2a4.3 4.3 0 0 0 .6-8.56A6 6 0 0 0 6.3 9.1 4.7 4.7 0 0 0 7 18.5z"/><path d="M12 15.5v-6M9.5 12l2.5-2.5 2.5 2.5"/></svg></span><span class="ios-row-t">Backup &amp; restore<small id="moreBackupSub">Export or restore your data</small></span><span class="ios-chev"></span></button>
+        </div>
+      </section>
+
       <section id="resourcesView" class="view" hidden>
 
         <div class="card">
-          <h3 style="font-size:16px;margin-bottom:10px;">Resources</h3>
+          <h3 class="ios-hide" style="font-size:16px;margin-bottom:10px;">Resources</h3>
           <div class="link-bank" id="resourceLinks"></div>
           <details class="link-fold" id="howtoRef">
             <summary class="link-chip">📖 How-to &amp; testing links</summary>
@@ -1480,14 +1669,13 @@ body{ overscroll-behavior:none; }
   </main>
 
   <nav class="tabbar" aria-label="Sections">
-    <button type="button" data-tab="dose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Dose</span></button>
-    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/></svg><span>Protocols</span></button>
-    <button type="button" data-tab="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 7.5L12 3l9 4.5v9L12 21l-9-4.5z"/><path d="M3 7.5l9 4.5 9-4.5"/><path d="M12 12v9"/></svg><span>Inventory</span></button>
-    <button type="button" data-tab="ask" class="tab-orb" aria-label="Ask Claude"><span class="orb"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></span><span>Claude</span></button>
-    <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 6-7"/></svg><span>Progress</span></button>
-    <button type="button" data-tab="tools"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7"/><path d="M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg><span>Tools</span></button>
-    <button type="button" data-tab="resources"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/><path d="M9 8h7"/></svg><span>Resources</span></button>
+    <button type="button" data-tab="dose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Today</span></button>
+    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/></svg><span>Protocols</span></button>
+    <button type="button" data-tab="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="3.5" rx="1"/><path d="M9 6v2c-1.6.6-2.5 1.6-2.5 3.2V19a2.5 2.5 0 002.5 2.5h6a2.5 2.5 0 002.5-2.5v-7.8C17.5 9.6 16.6 8.6 15 8V6"/><path d="M6.5 14.5h11"/></svg><span>Stash</span></button>
+    <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l4.5-5 3.5 3 6-7"/></svg><span>Progress</span></button>
+    <button type="button" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg><span>More</span></button>
   </nav>
+  <button type="button" class="claude-orb" data-tab="ask" aria-label="Ask Claude"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></button>
 </div>
 <div id="modalRoot"></div>
 <script src="app.js"></script>
