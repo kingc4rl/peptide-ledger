@@ -1767,7 +1767,8 @@ function serumAxisLabel(t){
   if(win <= 24*HOUR) return d.toLocaleTimeString(undefined,{hour:'numeric', minute: win<=HOUR ? '2-digit' : undefined});
   return d.toLocaleDateString(undefined,{month:'short', day:'numeric'});
 }
-const SV = {W:360, H:220, padL:46, padR:12, padT:14, padB:28};
+const SV = {W:400, H:236, padL:2, padR:2, padT:20, padB:24};
+let serumGid = 0;   // unique ids for the chart's gradient defs (main chart and the mini charts share this drawer)
 /* Draws the visible slice [t1 - window, t1]. ctx holds per-series event lists computed once per render. */
 function serumSvgInner(ctx, t1, winMs){
   const {W,H,padL,padR,padT,padB} = SV;
@@ -1789,40 +1790,49 @@ function serumSvgInner(ctx, t1, winMs){
   const X = t=> padL + (W-padL-padR)*(t-t0)/(t1-t0);
   const Y = v=> padT + (H-padT-padB)*(1 - v/yMax);
   const fmtY = ctx.pct ? (v=> `${Math.round(v)}%`) : (v=> v>0 ? fmtAmount(v).replace(' mg','mg').replace(' mcg','mcg') : '0');
-  let g = `<rect x="0" y="0" width="${W}" height="${H}" fill="transparent"/>`;
-  niceTicks(0, yMax, 4).ticks.filter(v=> v<=yMax*1.001).forEach(v=>{
-    const y = Y(v).toFixed(1);
-    g += `<line x1="${padL}" x2="${W-padR}" y1="${y}" y2="${y}" class="ch-grid"/><text x="${padL-6}" y="${(+y+4).toFixed(1)}" class="ch-ylab">${esc(fmtY(v))}</text>`;
+  const gid = 'sg'+(++serumGid), base = (H-padB).toFixed(1);
+  let defs = '';
+  lines.forEach((l,i)=>{
+    const c = l.c.s.color;
+    defs += `<linearGradient id="${gid}p${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".34"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`
+         +  `<linearGradient id="${gid}f${i}" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${c}" stop-opacity=".13"/><stop offset="1" stop-color="${c}" stop-opacity="0"/></linearGradient>`;
   });
-  [[t0,'start'],[(t0+t1)/2,'middle'],[t1,'end']].forEach(([t,anchor])=>{
-    g += `<text x="${X(t).toFixed(1)}" y="${H-8}" class="ch-xlab" text-anchor="${anchor}">${esc(serumAxisLabel(t))}</text>`;
+  let g = `<defs>${defs}</defs><rect x="0" y="0" width="${W}" height="${H}" fill="transparent"/>`;
+  // light dashed gridlines, values tucked inside the plot just above each line
+  niceTicks(0, yMax, 4).ticks.filter(v=> v>0 && v<=yMax*1.001).forEach(v=>{
+    const y = Y(v);
+    g += `<line x1="${padL}" x2="${W-padR}" y1="${y.toFixed(1)}" y2="${y.toFixed(1)}" class="ch-grid ch-grid-soft"/><text x="${padL+4}" y="${(y-4).toFixed(1)}" class="ch-ylab ch-ylab-in">${esc(fmtY(v))}</text>`;
+  });
+  g += `<line x1="${padL}" x2="${W-padR}" y1="${base}" y2="${base}" class="ch-base"/>`;
+  [[t0,'start',4],[(t0+t1)/2,'middle',0],[t1,'end',-4]].forEach(([t,anchor,dx])=>{
+    g += `<text x="${(X(t)+dx).toFixed(1)}" y="${H-6}" class="ch-xlab" text-anchor="${anchor}">${esc(serumAxisLabel(t))}</text>`;
+  });
+  const toPath = (l,pts)=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
+  lines.forEach((l,i)=>{
+    if(l.past.length>1) g += `<polygon points="${X(l.past[0].t).toFixed(1)},${base} ${toPath(l,l.past)} ${X(l.past[l.past.length-1].t).toFixed(1)},${base}" fill="url(#${gid}p${i})"/>`;
+    if(l.fut.length>1) g += `<polygon points="${X(l.fut[0].t).toFixed(1)},${base} ${toPath(l,l.fut)} ${X(l.fut[l.fut.length-1].t).toFixed(1)},${base}" fill="url(#${gid}f${i})"/>`;
   });
   if(now>=t0 && now<=t1){
-    g += `<line x1="${X(now).toFixed(1)}" x2="${X(now).toFixed(1)}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:var(--muted)"/>`;
-    g += `<text x="${(X(now)+4).toFixed(1)}" y="${padT+9}" class="ch-mlab" style="fill:var(--muted)">Now</text>`;
+    const x = X(now);
+    g += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${padT}" y2="${base}" class="ch-now"/>`;
+    g += `<rect x="${(x-15).toFixed(1)}" y="${padT-16}" width="30" height="14" rx="7" class="ch-now-pill"/><text x="${x.toFixed(1)}" y="${padT-6}" text-anchor="middle" class="ch-now-lab">Now</text>`;
   }
-  const toPath = (l,pts)=> pts.map(p=>`${X(p.t).toFixed(1)},${Y(val(l,p.y)).toFixed(1)}`).join(' ');
-  const base = (H-padB).toFixed(1);
-  lines.forEach(l=>{
-    if(l.past.length>1) g += `<polygon points="${X(l.past[0].t).toFixed(1)},${base} ${toPath(l,l.past)} ${X(l.past[l.past.length-1].t).toFixed(1)},${base}" style="fill:${l.c.s.color};opacity:.13"/>`;
-    if(l.fut.length>1) g += `<polygon points="${X(l.fut[0].t).toFixed(1)},${base} ${toPath(l,l.fut)} ${X(l.fut[l.fut.length-1].t).toFixed(1)},${base}" style="fill:${l.c.s.color};opacity:.06"/>`;
-  });
-  // dose markers along the bottom: filled = logged, hollow = scheduled
+  // dose markers on the baseline: filled = logged, hollow = scheduled
   const seen = new Set();
   lines.forEach(l=>{
     if(seen.has(l.c.s.p.id)) return; seen.add(l.c.s.p.id);
     l.c.all.filter(e=> e.t>=t0 && e.t<=t1).forEach(e=>{
-      const x = X(e.t).toFixed(1), logged = e.t<=now && l.c.s.evs.some(v=>v.t===e.t);
-      g += `<path d="M${x} ${(H-padB-1).toFixed(1)} l-4 7 h8 z" style="fill:${logged?l.c.s.color:'var(--surface)'};stroke:${l.c.s.color};stroke-width:1.2"/>`;
+      const logged = e.t<=now && l.c.s.evs.some(v=>v.t===e.t);
+      g += `<circle cx="${X(e.t).toFixed(1)}" cy="${base}" r="3.2" style="fill:${logged?l.c.s.color:'var(--surface)'};stroke:${l.c.s.color};stroke-width:1.4"/>`;
     });
   });
   ctx.scale = {t0, t1, X, Y, val, yMax};
   lines.forEach(l=>{
     if(l.past.length>1) g += `<polyline points="${toPath(l,l.past)}" class="ch-line" style="stroke:${l.c.s.color}"/>`;
-    if(l.fut.length>1) g += `<polyline points="${toPath(l,l.fut)}" class="ch-line" style="stroke:${l.c.s.color};stroke-dasharray:5 4;opacity:.75"/>`;
+    if(l.fut.length>1) g += `<polyline points="${toPath(l,l.fut)}" class="ch-line ch-line-fut" style="stroke:${l.c.s.color}"/>`;
     if(now>=t0 && now<=t1){
-      const cur = levelAt(l.c.s.evs, l.c.s.hl, now);
-      g += `<circle cx="${X(now).toFixed(1)}" cy="${Y(val(l,cur)).toFixed(1)}" r="4.5" style="fill:${l.c.s.color}"><title>${esc(l.c.s.label)}: ${esc(fmtAmount(cur))} now</title></circle>`;
+      const cur = levelAt(l.c.s.evs, l.c.s.hl, now), cx = X(now).toFixed(1), cy = Y(val(l,cur)).toFixed(1);
+      g += `<circle cx="${cx}" cy="${cy}" r="9" style="fill:${l.c.s.color};opacity:.18"/><circle cx="${cx}" cy="${cy}" r="4.5" class="ch-cur" style="fill:${l.c.s.color}"><title>${esc(l.c.s.label)}: ${esc(fmtAmount(cur))} now</title></circle>`;
     }
   });
   return g;
