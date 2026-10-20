@@ -1401,8 +1401,27 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .vial-tile.on{ box-shadow:var(--gl-edge), 0 0 0 2px var(--vc), 0 10px 26px rgba(0,0,0,.12) !important; }
 .vial-shelf.has-sel .vial-tile:not(.on){ opacity:.55; }
 .vial-detail{ grid-column:1 / -1; }
+/* stash carousel: free-floating vials in one swipeable row, three at a time */
+.vial-shelf{ position:relative; display:flex; gap:0; overflow-x:auto; overflow-y:visible; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; scrollbar-width:none; overscroll-behavior-x:contain;
+  margin:0 calc(-1 * var(--gutter-r)) 0 calc(-1 * var(--gutter-l)); padding:6px var(--gutter-r) 10px var(--gutter-l); scroll-padding:0 var(--gutter-l); }
+.vial-shelf::-webkit-scrollbar{ display:none; }
+.vial-shelf .vial-tile{ flex:0 0 calc(100% / 3); min-width:0; scroll-snap-align:start; padding:8px 2px 6px; border-radius:0;
+  background:none !important; box-shadow:none !important; -webkit-backdrop-filter:none; backdrop-filter:none;
+  opacity:calc(1 - var(--edge,0) * .65); transform:scale(calc(1 - var(--edge,0) * .12)); transition:opacity .12s linear; will-change:transform, opacity; }
+.vial-shelf .vial-tile.on{ box-shadow:none !important; }
+.vial-shelf .vial-tile .vial-svg{ width:72px; filter:drop-shadow(0 10px 12px rgba(20,25,35,.14)); }
+.vial-shelf .vial-tile.on .vial-svg{ transform:scale(1.12) translateY(-3px); filter:drop-shadow(0 14px 16px rgba(20,25,35,.2)); }
+.vial-shelf .vial-tile .vial-label, .vial-shelf .vial-tile.on .vial-label{ font-size:15px; margin-top:8px; max-width:100%; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.vial-shelf .vial-tile .vial-meta{ font-size:12px; line-height:1.3; }
+.vial-shelf .vial-tile.on .vial-label{ color:var(--vc); }
+.vial-shelf .vial-lvl{ width:60%; }
+.vial-shelf.has-sel .vial-tile:not(.on){ opacity:calc((1 - var(--edge,0) * .65) * .5); }
+.shelf-dots{ display:flex; justify-content:center; gap:6px; margin:2px 0 6px; }
+.shelf-dots i{ width:6px; height:6px; border-radius:50%; background:rgba(0,0,0,.16); transition:background .25s, transform .25s; }
+.shelf-dots i.on{ background:rgba(0,0,0,.55); transform:scale(1.1); }
+.vial-shelf ~ .vial-detail::before{ display:none; }
 .stash-none{ text-align:center; padding:20px 0; }
-@media (min-width:700px){ .vial-shelf{ grid-template-columns:repeat(4, minmax(0,1fr)); } }
+@media (min-width:700px){ .vial-shelf .vial-tile{ flex-basis:20%; } }
 
 /* More: a grouped glass list */
 .ios-list{ border-radius:26px; overflow:hidden; background:var(--gl); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow); }

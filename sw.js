@@ -1,6 +1,6 @@
 /* Pep Prep service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.36.2';
+const VERSION = 'v1.37.0';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
 const SHELL_FILES = [

@@ -2320,6 +2320,35 @@ function renderSerum(){
 }
 
 /* ===================== Peptides: Stash ===================== */
+/* Stash carousel: one row of vials, three in view, swiped sideways with snapping. Vials ease smaller and fainter
+   as they slide toward the edges, and the dots show which part of the row is in view. */
+function bindShelf(row, dots, keepX){
+  if(!row) return;
+  const tiles = $$('.vial-tile', row), di = dots ? $$('i', dots) : [];
+  if(keepX!=null) row.scrollLeft = keepX;
+  const on = row.querySelector('.vial-tile.on');
+  if(on){   // bring a newly picked vial (e.g. from a scan) into view
+    const l = on.offsetLeft, r = l + on.offsetWidth;
+    if(l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollTo({left: Math.max(0, l - row.clientWidth/3), behavior: keepX==null ? 'auto' : 'smooth'});
+  }
+  let raf = 0;
+  const paint = ()=>{
+    raf = 0;
+    const w = row.clientWidth || 1, mid = row.scrollLeft + w/2;
+    tiles.forEach(t=>{
+      const c = t.offsetLeft + t.offsetWidth/2;
+      const d = Math.min(1, Math.abs(c - mid) / (w/2 + t.offsetWidth/2));   // 0 centre, 1 just off screen
+      const k = Math.max(0, d - .55) / .45;                                   // only the outer edge fades
+      t.style.setProperty('--edge', k.toFixed(3));
+    });
+    if(di.length){
+      const first = Math.round(row.scrollLeft / ((tiles[0] && tiles[0].offsetWidth) || 1));
+      di.forEach((dot,i)=> dot.classList.toggle('on', i>=first && i<first+3));
+    }
+  };
+  row.addEventListener('scroll', ()=>{ if(!raf) raf = requestAnimationFrame(paint); }, {passive:true});
+  requestAnimationFrame(paint);
+}
 function renderVials(){
   const el = $('#vialList');
   if(!state.vials.some(v=>!isDepleted(v))){
@@ -2394,25 +2423,24 @@ function renderVials(){
   });
   if(stashSel && !groups[stashSel]) stashSel = null;
   if(lotSel && !(stashSel && groups[stashSel].some(v=>v.id===lotSel))) lotSel = null;
+  const prevShelf = $('.vial-shelf', el), prevX = prevShelf ? prevShelf.scrollLeft : null;
   el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''}">${shelf.map((g,i)=>`
     <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}">
       ${vialSVG(g, i)}
       <span class="vial-label">${esc(g.compound)}</span>
       <span class="vial-meta">${esc(g.meta)}</span>
       ${g.pct!=null ? `<span class="vial-lvl"><i style="width:${Math.round(g.pct*100)}%"></i></span>` : ''}
-    </button>`).join('')}</div>`;
+    </button>`).join('')}</div>${shelf.length>3 ? `<div class="shelf-dots" aria-hidden="true">${shelf.map(()=>'<i></i>').join('')}</div>` : ''}`;
   const grid = $('.vial-shelf', el);
+  bindShelf(grid, $('.shelf-dots', el), prevX);
   const selIdx = shelf.findIndex(g=> g.compound===stashSel);
   if(selIdx>=0){
     const g = shelf[selIdx];
-    // the detail opens directly under the row holding the tapped vial, with a caret pointing at it
-    const cols = Math.max(1, getComputedStyle(grid).gridTemplateColumns.split(' ').filter(Boolean).length);
-    const tiles = $$('.vial-tile', grid);
-    const rowEnd = tiles[Math.min(tiles.length-1, Math.floor(selIdx/cols)*cols + cols-1)];
+    // the detail opens under the carousel for the tapped vial
+    const rowEnd = $('.shelf-dots', el) || grid;
     const det = document.createElement('div');
     det.className = 'vial-detail';
     det.style.setProperty('--vc', g.color);
-    det.style.setProperty('--caret', `${((selIdx%cols)+0.5)/cols*100}%`);
     const pickedLot = g.rows.find(r=> r.id===lotSel);
     det.innerHTML = `<div class="vial-detail-h"><strong>${esc(g.compound)}</strong>
         <span class="pill pill-muted">${g.totalQty} vial${g.totalQty===1?'':'s'}</span>
@@ -5745,8 +5773,11 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.36.0';
+const APP_VERSION = '1.37.0';
 const WHATS_NEW = [
+  {v:'1.37.0', title:'A swipeable stash', items:[
+    ['🧪','Your vials now float in a single row, three at a time. Swipe left or right to see the rest.'],
+  ]},
   {v:'1.36.0', title:'A real photo album', items:[
     ['🖼️','Tap a progress photo and swipe through them all, with a thumbnail strip to jump around.'],
     ['⚖️','Add your weight to a photo. Each photo shows its weight and the change since your first.'],
