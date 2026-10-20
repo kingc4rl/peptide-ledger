@@ -4388,7 +4388,7 @@ async function openCompareModal(ids){
 async function openGhostCamera(angle, onCapture){
   const ov = openOverlay('Take progress photo');
   let facing = lsGet('ledger.camFacing','user'), stream = null, timer = +lsGet('ledger.camTimer','0') || 0, ghostOpacity = +lsGet('ledger.ghostOpacity','40');
-  let counting = null;
+  let counting = null, lens = lsGet('ledger.camLens','1'), uwId = null, zoomCap = null;
   const stop = ()=>{ if(stream){ stream.getTracks().forEach(t=> t.stop()); stream = null; } if(counting){ clearInterval(counting); counting = null; } };
   const close = ()=>{ stop(); closeOverlay(ov); };
   const lastOf = a=> state.photos.filter(p=> p.angle===a).sort((x,y)=> y.date.localeCompare(x.date))[0];
@@ -4402,6 +4402,7 @@ async function openGhostCamera(angle, onCapture){
         <video id="camVideo" playsinline autoplay muted style="${mirror}"></video>
         ${gu ? `<img id="camGhost" src="${gu}" alt="" style="${mirror}opacity:${ghostOpacity/100}">` : ''}
         <div class="tune-grid"></div>
+        <div class="cam-lens" id="camLens" hidden><button type="button" data-lens="0.5">.5</button><button type="button" data-lens="1">1×</button></div>
         <div class="cam-count" id="camCount" hidden></div>
         <div class="cam-msg" id="camMsg">Starting camera…</div>
       </div></div>
@@ -4423,13 +4424,42 @@ async function openGhostCamera(angle, onCapture){
     const video = $('#camVideo',ov), msg = $('#camMsg',ov);
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.textContent = 'This browser can\'t open the camera. Use "Choose file" instead.'; return; }
     try{
-      stream = await navigator.mediaDevices.getUserMedia({video:{facingMode: facing, width:{ideal:1920}, height:{ideal:1920}}, audio:false});
+      const useUW = facing==='environment' && lens==='0.5' && uwId;
+      stream = await navigator.mediaDevices.getUserMedia({video:{...(useUW ? {deviceId:{exact:uwId}} : {facingMode: facing}), width:{ideal:1920}, height:{ideal:1920}}, audio:false});
       if(!ov.isConnected){ stop(); return; }
       video.srcObject = stream; await video.play().catch(()=>{});
       msg.hidden = true;
+      await setupLens(useUW);
     }catch(e){
       msg.textContent = e && e.name==='NotAllowedError' ? 'Camera access was blocked. Allow camera access for this app in your phone\'s settings, then try again.' : 'Couldn\'t start the camera.';
     }
+  }
+  /* .5× / 1× like the Camera app. The back ultra-wide lens is its own camera (iPhone labels it "Back Ultra Wide Camera");
+     where the browser instead exposes a zoom range that goes below 1, the same buttons set the zoom. */
+  async function setupLens(usingUW){
+    const box = $('#camLens',ov); if(!box || !stream) return;
+    const track = stream.getVideoTracks()[0];
+    try{ zoomCap = track && track.getCapabilities ? track.getCapabilities().zoom || null : null; }catch(e){ zoomCap = null; }
+    if(facing==='environment' && !uwId){
+      try{ const d = (await navigator.mediaDevices.enumerateDevices()).find(d=> d.kind==='videoinput' && /ultra ?wide/i.test(d.label)); uwId = d ? d.deviceId : null; }catch(e){}
+      if(uwId && lens==='0.5' && !usingUW && !(zoomCap && zoomCap.min < 1)){ stop(); return render(); }
+    }
+    const zoomable = zoomCap && zoomCap.min < 1;
+    if(facing!=='environment' || !(uwId || zoomable)){ box.hidden = true; return; }
+    if(zoomable && !usingUW){
+      try{ await track.applyConstraints({advanced:[{zoom: lens==='0.5' ? Math.max(zoomCap.min, .5) : 1}]}); }catch(e){}
+    }
+    box.hidden = false;
+    $$('[data-lens]',box).forEach(b=>{
+      b.classList.toggle('on', b.dataset.lens===lens);
+      b.addEventListener('click', async ()=>{
+        if(b.dataset.lens===lens) return;
+        lens = b.dataset.lens; lsSet('ledger.camLens', lens);
+        $$('[data-lens]',box).forEach(x=> x.classList.toggle('on', x.dataset.lens===lens));
+        if(uwId){ stop(); render(); }
+        else track.applyConstraints({advanced:[{zoom: lens==='0.5' ? Math.max(zoomCap.min, .5) : 1}]}).catch(()=>{});
+      });
+    });
   }
   function shoot(){
     const video = $('#camVideo',ov); if(!stream || !video || !video.videoWidth || counting) return;
