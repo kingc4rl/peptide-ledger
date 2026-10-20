@@ -2320,62 +2320,99 @@ function renderSerum(){
 }
 
 /* ===================== Peptides: Stash ===================== */
-/* Stash carousel: one row of free-floating vials, three in full view with faded previews either side.
-   It loops forever: the row holds `copies` repeats of the n vials, and once a swipe settles it jumps by whole copies
-   back to the middle one (invisible, since the copies are identical). Each vial passing the centre gives a haptic tick. */
-function bindShelf(row, dots, keepX, n, midCopy){
-  const tiles = $$('.vial-tile', row), di = dots ? $$('i', dots) : [];
-  const tw = ()=> (tiles[1] ? tiles[1].offsetLeft - tiles[0].offsetLeft : tiles[0].offsetWidth) || 1;
-  const centreOf = i=> tiles[i].offsetLeft + tiles[i].offsetWidth/2 - row.clientWidth/2;   // scrollLeft that centres tile i
-  const centreIdx = ()=> Math.round((row.scrollLeft + row.clientWidth/2 - tiles[0].offsetLeft - tiles[0].offsetWidth/2) / tw());
-  let raf = 0, lastReal = null, settle = 0, touching = false;
-  const recentre = ()=>{
-    if(touching || !row.clientWidth) return;
-    const c = centreIdx(), copy = Math.floor(c / n);
-    if(copy !== midCopy) row.scrollLeft += (midCopy - copy) * n * tw();
-  };
-  function place(keepX){
-    if(keepX) row.scrollLeft = keepX;
-    else row.scrollLeft = centreOf(midCopy*n + 1);        // start with the first three vials in full view
-    recentre();
-    const on = row.querySelector('.vial-tile.on');
-    if(on){   // bring a newly picked vial (e.g. from a scan) into view: the nearest copy of it
-      const c = centreIdx(), want = +on.dataset.i;
-      let best = null;
-      tiles.forEach((t,i)=>{ if(+t.dataset.i===want && (best==null || Math.abs(i-c) < Math.abs(best-c))) best = i; });
-      if(best!=null && Math.abs(best - c) > 1) row.scrollTo({left: centreOf(best), behavior: keepX ? 'smooth' : 'auto'});
+/* Stash carousel: free-floating vials on a ring, three in full view with faded previews either side, looping forever.
+   The swipe is driven here rather than by native scrolling, so every vial's position, size and fade are set together
+   in the same frame (no lag or shake). Release throws with momentum and a critically damped spring lands exactly on a
+   vial. A light haptic tick plays as each vial passes the centre. */
+let shelfPos = 1;   // centre of the carousel, in vials (vial 1 centred = first three in view); kept across re-renders
+function bindShelf(row, dots, n){
+  const tiles = $$('.vial-tile', row), T = tiles.length, di = dots ? $$('i', dots) : [];
+  const wrap = (a, m)=> ((a % m) + m) % m;
+  const sel = row.classList.contains('has-sel');
+  let W = 1, CW = 1, pos = shelfPos, vel = 0, target = null, raf = 0, lastT = 0, lastTick = null;
+  const measure = ()=>{ CW = row.clientWidth; W = tiles[0].offsetWidth || CW/3.5 || 1; };
+  function paint(){
+    for(let i=0;i<T;i++){
+      const t = tiles[i], u = wrap(i - pos + T/2, T) - T/2, a = Math.abs(u);   // slot relative to the centre, in vials
+      if(a > 3){ if(t.style.visibility!=='hidden') t.style.visibility = 'hidden'; continue; }
+      const e = Math.min(1, Math.max(0, a - 1));                                // the three in view stay full; previews fade
+      const x = CW/2 - W/2 + u*W - Math.sign(u)*e*W*.22;                        // previews tuck in a little
+      t.style.visibility = '';
+      t.style.transform = `translate3d(${x.toFixed(2)}px,0,0) scale(${(1 - e*.14).toFixed(4)})`;
+      t.style.opacity = ((1 - e*.6) * (sel && !t.classList.contains('on') ? .5 : 1)).toFixed(3);
     }
-    paint();
+    const c = wrap(Math.round(pos), T), real = c % n;
+    if(real !== lastTick){
+      if(lastTick!=null) haptic('select');
+      lastTick = real;
+      di.forEach((dot,i)=> dot.classList.toggle('on', [real-1, real, real+1].some(k=> wrap(k, n) === i)));
+    }
   }
-  const paint = ()=>{
+  function step(now){
     raf = 0;
-    const w = tw(), mid = row.scrollLeft + row.clientWidth/2;
-    tiles.forEach(t=>{
-      const dx = t.offsetLeft + t.offsetWidth/2 - mid, u = Math.abs(dx) / w;   // distance from centre, in vials
-      if(u > 3.2) return;
-      const e = Math.min(1, Math.max(0, u - 1));          // the three in view stay full; previews fade
-      t.style.setProperty('--edge', e.toFixed(3));
-      t.style.setProperty('--pull', (-Math.sign(dx) * e * w * .22).toFixed(1) + 'px');   // and tuck in so more of them peeks in
-    });
-    const real = ((centreIdx() % n) + n) % n;
-    if(real !== lastReal){
-      if(lastReal!=null) haptic('select');
-      lastReal = real;
-      di.forEach((dot,i)=> dot.classList.toggle('on', [real-1, real, real+1].some(k=> ((k%n)+n)%n === i)));
+    if(target==null) return;
+    const dt = Math.min(.032, Math.max(.001, (now - (lastT || now)) / 1000)); lastT = now;
+    const k = 190, d = 2*Math.sqrt(k);                                          // critically damped: no overshoot wobble
+    vel += (-k*(pos - target) - d*vel) * dt; pos += vel*dt;
+    if(Math.abs(pos - target) < .0008 && Math.abs(vel) < .02){ pos = target; vel = 0; target = null; pos = wrap(pos, T); }
+    shelfPos = pos; paint();
+    if(target!=null) raf = requestAnimationFrame(step);
+  }
+  const animateTo = (to, v0)=>{ target = to; vel = v0 || 0; lastT = 0; if(!raf) raf = requestAnimationFrame(step); };
+  const stop = ()=>{ target = null; vel = 0; if(raf){ cancelAnimationFrame(raf); raf = 0; } };
+  // drag: horizontal moves are ours (touch-action: pan-y leaves vertical page scrolling to the browser)
+  let drag = null, moved = false;
+  row.addEventListener('pointerdown', e=>{
+    if(e.pointerType==='mouse' && e.button!==0) return;
+    stop(); measure();
+    drag = {id:e.pointerId, x0:e.clientX, y0:e.clientY, p0:pos, s:[{x:e.clientX, t:e.timeStamp}], lock:false};
+    moved = false;
+  });
+  row.addEventListener('pointermove', e=>{
+    if(!drag || e.pointerId!==drag.id) return;
+    const dx = e.clientX - drag.x0;
+    if(!drag.lock){
+      if(Math.abs(dx) < 6) return;
+      if(Math.abs(e.clientY - drag.y0) > Math.abs(dx)){ drag = null; return; }
+      drag.lock = true; moved = true; drag.x0 = e.clientX; drag.p0 = pos;
+      try{ row.setPointerCapture(e.pointerId); }catch(_){}
     }
+    pos = drag.p0 - (e.clientX - drag.x0)/W; shelfPos = pos;
+    drag.s.push({x:e.clientX, t:e.timeStamp}); if(drag.s.length > 12) drag.s.shift();
+    if(!raf) raf = requestAnimationFrame(()=>{ raf = 0; paint(); });
+  });
+  const release = e=>{
+    if(!drag || e.pointerId!==drag.id) return;
+    const d = drag; drag = null;
+    if(!d.lock) return;
+    const b = d.s[d.s.length-1], a = d.s.find(q=> b.t - q.t <= 100) || b, dtm = Math.max(1, b.t - a.t);
+    const v = e.timeStamp - b.t > 90 || a===b ? 0 : -(b.x - a.x) / dtm / W;      // vials per ms over the last 0.1 s (0 if the finger paused)
+    const throwTo = Math.round(pos + Math.max(-5, Math.min(5, v*190)));           // flick distance, capped
+    if(raf){ cancelAnimationFrame(raf); raf = 0; }
+    animateTo(throwTo, v*1000);
   };
-  row.addEventListener('scroll', ()=>{
-    if(!raf) raf = requestAnimationFrame(paint);
-    clearTimeout(settle); settle = setTimeout(recentre, 160);
-  }, {passive:true});
-  row.addEventListener('touchstart', ()=>{ touching = true; }, {passive:true});
-  row.addEventListener('touchend', ()=>{ touching = false; clearTimeout(settle); settle = setTimeout(recentre, 160); }, {passive:true});
-  tiles.forEach(t=> t.style.setProperty('--edge', '1'));
-  // a stash drawn while its tab is hidden has no size yet: position it once it becomes visible
-  if(!row.clientWidth){
-    const ro = new ResizeObserver(()=>{ if(row.clientWidth){ ro.disconnect(); place(null); } });
-    ro.observe(row);
-  } else place(keepX);
+  row.addEventListener('pointerup', release);
+  row.addEventListener('pointercancel', release);
+  row.addEventListener('click', e=>{ if(moved){ e.stopPropagation(); e.preventDefault(); moved = false; } }, true);   // a swipe isn't a tap
+  // trackpad / mouse wheel
+  let wheelT = 0;
+  row.addEventListener('wheel', e=>{
+    if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+    e.preventDefault(); stop(); measure();
+    pos += e.deltaX / W; shelfPos = pos; paint();
+    clearTimeout(wheelT); wheelT = setTimeout(()=> animateTo(Math.round(pos)), 120);
+  }, {passive:false});
+  // size (a stash drawn while its tab is hidden has none until it's shown)
+  new ResizeObserver(()=>{ if(row.clientWidth){ measure(); paint(); } }).observe(row);
+  if(row.clientWidth){ measure(); paint(); }
+  // a newly picked vial (tapped preview, scan) glides to the centre if it isn't already in full view
+  const on = row.querySelector('.vial-tile.on');
+  if(on){
+    const want = +on.dataset.i;
+    let best = null;
+    for(let i=0;i<T;i++){ if(i % n !== want) continue; const u = wrap(i - pos + T/2, T) - T/2; if(best==null || Math.abs(u) < Math.abs(best)) best = u; }
+    if(best!=null && Math.abs(best) > 1.01) animateTo(Math.round(pos + best));
+  }
 }
 function renderVials(){
   const el = $('#vialList');
@@ -2451,9 +2488,8 @@ function renderVials(){
   });
   if(stashSel && !groups[stashSel]) stashSel = null;
   if(lotSel && !(stashSel && groups[stashSel].some(v=>v.id===lotSel))) lotSel = null;
-  const prevShelf = $('.vial-shelf', el), prevX = prevShelf ? prevShelf.scrollLeft : null;
-  // more than three peptides loop endlessly: the row holds several copies and quietly re-centres when it settles
-  const loop = shelf.length > 3, copies = loop ? 2*Math.ceil(21/shelf.length) + 1 : 1, midCopy = (copies-1)/2;
+  // more than three peptides loop endlessly round a ring of at least 8 tiles (copies of the vials when there are few)
+  const loop = shelf.length > 3, copies = loop ? Math.ceil(8/shelf.length) : 1, midCopy = 0;
   const tilesHTML = c=> shelf.map((g,i)=>`
     <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" data-i="${i}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}"${c!==midCopy ? ' aria-hidden="true" tabindex="-1"' : ''}>
       ${vialSVG(g, c===midCopy ? i : `${i}c${c}`)}
@@ -2463,7 +2499,7 @@ function renderVials(){
     </button>`).join('');
   el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''} ${loop?'loop':'static'}">${Array.from({length:copies},(_,c)=> tilesHTML(c)).join('')}</div>${loop ? `<div class="shelf-dots" aria-hidden="true">${shelf.map(()=>'<i></i>').join('')}</div>` : ''}`;
   const grid = $('.vial-shelf', el);
-  if(loop) bindShelf(grid, $('.shelf-dots', el), prevX, shelf.length, midCopy);
+  if(loop) bindShelf(grid, $('.shelf-dots', el), shelf.length);
   const selIdx = shelf.findIndex(g=> g.compound===stashSel);
   if(selIdx>=0){
     const g = shelf[selIdx];
@@ -5451,8 +5487,8 @@ function haptic(kind){
   const H = capPlugin('Haptics'); if(!H) return;
   try{
     if(kind==='success') H.notification({type:'SUCCESS'});
-    else if(kind==='select'){ if(!haptic.primed){ H.selectionStart(); haptic.primed = true; } H.selectionChanged(); }   // iOS ignores selectionChanged until selectionStart
-    else H.impact({style: kind==='medium' ? 'MEDIUM' : 'LIGHT'});
+    else if(kind==='buzz') H.vibrate({duration: 120});
+    else H.impact({style: kind==='medium' ? 'MEDIUM' : 'LIGHT'});   // 'select' and 'light': a light tap
   }catch(e){}
 }
 function nowHHMM(){ const d = new Date(); return `${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`; }
@@ -5663,6 +5699,8 @@ function nativeSettingsHTML(){
       ${has('ICloudBackup') ? `<label class="pc-toggle"><input type="checkbox" id="autoBackupToggle" ${nativeOn('autoBackup','1')?'checked':''}><span>Weekly automatic backup</span></label>
         <div class="footnote nat-sub">${last ? `Last: ${esc(fmtDateShort(last))} in ${esc(where)}` : 'Saved to iCloud Drive › Pep Prep (keeps the last 8).'} <button type="button" class="link-btn" id="autoBackupNow">Back up now</button></div>` : ''}
       ${has('Health') ? `<label class="pc-toggle"><input type="checkbox" id="healthToggle" ${nativeOn('health','0')?'checked':''}><span>Sync weight with Apple Health</span></label>` : ''}
+      ${has('Haptics') ? `<div class="nat-row hap-test"><span>Test vibration</span><button type="button" class="btn btn-sm" data-hap="light">Tick</button><button type="button" class="btn btn-sm" data-hap="success">Success</button><button type="button" class="btn btn-sm" data-hap="buzz">Buzz</button></div>
+        <div class="footnote nat-sub">If Tick and Success do nothing but Buzz works, turn on Settings › Sounds &amp; Haptics › System Haptics.</div>` : ''}
       ${has('CapacitorCalendar') ? `<div class="nat-row"><button type="button" class="btn btn-sm" id="calSyncBtn">Add doses to Calendar</button></div><div class="footnote nat-sub" id="calSyncStatus">${lsGet('ledger.calSyncDate','') ? `Last added ${esc(fmtDateShort(lsGet('ledger.calSyncDate','')))}.` : 'Puts the next 8 weeks of doses in your calendar.'}</div>` : ''}
     </div>`;
 }
@@ -5673,6 +5711,7 @@ function bindNativeSettings(el){
   on('autoBackupNow', async e=>{ e.target.disabled = true; const r = await autoBackup(true); showToast(r ? `Backed up to ${r.location==='icloud' ? 'iCloud Drive' : 'Files'}` : 'Backup failed'); renderInstallCard(); });
   on('healthToggle', e=> setHealthOn(e.target.checked));
   on('calSyncBtn', ()=> syncDoseCalendar());
+  $$('[data-hap]', el).forEach(b=> b.addEventListener('click', ()=> haptic(b.dataset.hap)));
 }
 /* Runs once the data is loaded, and again each time the app comes back to the front. */
 function nativeOnForeground(){
