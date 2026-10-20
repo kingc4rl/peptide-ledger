@@ -2328,7 +2328,15 @@ let shelfPos = 1;   // centre of the carousel, in vials (vial 1 centred = first 
 function bindShelf(row, n){
   const tiles = $$('.vial-tile', row), T = tiles.length;
   const wrap = (a, m)=> ((a % m) + m) % m;
-  const sel = row.classList.contains('has-sel');
+  let sel = row.classList.contains('has-sel');
+  // swiping again puts an opened vial away: drop the selection and its details without rebuilding the row mid-gesture
+  const deselect = ()=>{
+    if(!sel) return;
+    sel = false; stashSel = null; lotSel = null;
+    row.classList.remove('has-sel');
+    tiles.forEach(t=>{ t.classList.remove('on'); t.setAttribute('aria-expanded','false'); });
+    const det = row.parentElement && row.parentElement.querySelector('.vial-detail'); if(det) det.remove();
+  };
   let W = 1, CW = 1, pos = shelfPos, anim = null, raf = 0, lastTick = null;
   const measure = ()=>{ CW = row.clientWidth; W = tiles[0].offsetWidth || CW/3.5 || 1; };
   function paint(){
@@ -2336,10 +2344,12 @@ function bindShelf(row, n){
       const t = tiles[i], u = wrap(i - pos + T/2, T) - T/2, a = Math.abs(u);   // slot relative to the centre, in vials
       if(a > 3){ if(t.style.visibility!=='hidden') t.style.visibility = 'hidden'; continue; }
       const e = Math.min(1, Math.max(0, a - 1));                                // the three in view stay full; previews fade
+      const f = Math.max(0, 1 - a); const fe = f*f*(3 - 2*f);                   // centre focus, eased: 1 in the middle, 0 a vial away
       const x = CW/2 - W/2 + u*W - Math.sign(u)*e*W*.22;                        // previews tuck in a little
       if(t.style.visibility) t.style.visibility = '';
-      t.style.transform = e ? `translate3d(${x.toFixed(1)}px,0,0) scale(${(1 - e*.14).toFixed(3)})` : `translate3d(${x.toFixed(1)}px,0,0)`;
-      t.style.opacity = ((1 - e*.6) * (sel && !t.classList.contains('on') ? .5 : 1)).toFixed(3);
+      // the middle vial is magnified and lifted slightly; its neighbours sit a touch softer; previews shrink and fade
+      t.style.transform = `translate3d(${x.toFixed(1)}px,${(-6*fe).toFixed(2)}px,0) scale(${(1 + .16*fe - e*.14).toFixed(4)})`;
+      t.style.opacity = ((1 - .14*Math.min(1, a)) * (1 - e*.55) * (sel && !t.classList.contains('on') ? .5 : 1)).toFixed(3);
     }
     const real = wrap(Math.round(pos), T) % n;
     if(real !== lastTick){ if(lastTick!=null) haptic('select'); lastTick = real; }
@@ -2377,7 +2387,7 @@ function bindShelf(row, n){
       const dx = x - drag.x0, dy = y - drag.y0;
       if(Math.abs(dx) < 4 && Math.abs(dy) < 4) return false;
       if(Math.abs(dy) > Math.abs(dx)){ drag = null; if(caught) glide(Math.round(pos)); return false; }
-      drag.lock = true; moved = true;
+      drag.lock = true; moved = true; deselect();
     }
     drag.s.push({x, t}); if(drag.s.length > 12) drag.s.shift();
     pos = drag.p0 - (x - drag.x0)/W; shelfPos = pos;       // the vials stay glued to the finger
@@ -2408,7 +2418,7 @@ function bindShelf(row, n){
   let wheelT = 0;
   row.addEventListener('wheel', e=>{
     if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
-    e.preventDefault(); stop(); measure();
+    e.preventDefault(); stop(); measure(); deselect();
     pos += e.deltaX / W; shelfPos = pos; paint();
     clearTimeout(wheelT); wheelT = setTimeout(()=> glide(Math.round(pos)), 120);
   }, {passive:false});

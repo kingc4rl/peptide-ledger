@@ -1425,7 +1425,7 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 /* vial art: powder vial with a count badge on its right shoulder and a green dot above when one is open */
 .vial-art{ position:relative; display:block; width:72px; margin:0 auto; transform-origin:50% 92%; transition:transform .35s cubic-bezier(.2,.8,.2,1); }
 .vial-shelf .vial-tile .vial-art .vial-svg, .vial-shelf .vial-tile.on .vial-art .vial-svg{ transform:none; display:block; width:100%; }
-.vial-shelf .vial-tile.on .vial-art{ transform:scale(1.12) translateY(-3px); }
+.vial-shelf.static .vial-tile.on .vial-art{ transform:scale(1.12) translateY(-3px); }   /* in the carousel the centre vial is magnified instead */
 .vial-count{ position:absolute; top:19%; right:-6px; min-width:24px; height:19px; padding:0 6px; border-radius:10px; background:rgba(28,28,30,.86); color:#fff;
   font-size:11px; font-weight:700; line-height:19px; text-align:center; font-variant-numeric:tabular-nums; box-shadow:0 2px 6px rgba(0,0,0,.18); }
 .vial-open-dot{ position:absolute; top:-12px; left:50%; width:9px; height:9px; margin-left:-4.5px; border-radius:50%; background:#34c759; box-shadow:0 0 0 2.5px rgba(52,199,89,.22), 0 0 8px rgba(52,199,89,.55); }
