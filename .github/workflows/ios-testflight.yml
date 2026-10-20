@@ -40,7 +40,7 @@ jobs:
       - uses: actions/setup-node@v4
         if: steps.gate.outputs.ready == 'true'
         with:
-          node-version: 20
+          node-version: 22
 
       - name: Pick Xcode
         if: steps.gate.outputs.ready == 'true'
