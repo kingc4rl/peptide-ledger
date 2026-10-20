@@ -616,6 +616,27 @@ input[type=date]{ min-height:40px; -webkit-appearance:none; appearance:none; }
 .ph-check{ position:absolute; top:6px; right:6px; width:22px; height:22px; border-radius:50%; border:2px solid #fff; background:rgba(0,0,0,.35); color:var(--accent-pep-text); font-size:13px; font-weight:700; display:flex; align-items:center; justify-content:center; }
 .ph-tile.sel .ph-check{ background:var(--accent-pep); border-color:var(--accent-pep); }
 .ph-preview img{ display:block; max-width:100%; max-height:240px; border-radius:10px; margin:0 auto; }
+.al-count{ font-size:12.5px; color:#a1a1aa; font-variant-numeric:tabular-nums; }
+.al-track{ flex:1; min-height:0; display:flex; overflow-x:auto; overflow-y:hidden; scroll-snap-type:x mandatory; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; scrollbar-width:none; margin:10px -12px 0; touch-action:pan-x; }
+.al-track::-webkit-scrollbar{ display:none; }
+.al-slide{ flex:0 0 100%; min-width:0; scroll-snap-align:center; scroll-snap-stop:always; display:flex; align-items:center; justify-content:center; padding:0 12px; }
+.al-slide img{ max-width:100%; max-height:100%; object-fit:contain; border-radius:10px; background:#000; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.al-slide.missing::after{ content:'Image file missing'; color:#a1a1aa; font-size:13px; }
+.al-info{ padding:10px 4px 0; min-height:30px; }
+.al-line{ display:flex; flex-wrap:wrap; align-items:baseline; gap:6px 12px; font-size:15px; color:#fff; }
+.al-line strong{ font-size:18px; font-variant-numeric:tabular-nums; }
+.al-dim{ color:#a1a1aa; font-size:13px; }
+.al-delta{ font-size:13px; font-weight:600; color:#d4d4d8; }
+.al-delta.down{ color:#4ade80; } .al-delta.up{ color:#fbbf24; }
+.al-note{ margin-top:4px; font-size:13.5px; color:#d4d4d8; }
+.al-strip{ display:flex; gap:5px; overflow-x:auto; scrollbar-width:none; padding:10px 2px 2px; }
+.al-strip::-webkit-scrollbar{ display:none; }
+.al-strip button{ flex:0 0 40px; height:52px; padding:0; border:2px solid transparent; border-radius:7px; overflow:hidden; background:#222; cursor:pointer; opacity:.55; transition:opacity .15s, border-color .15s; }
+.al-strip button.on{ border-color:#fff; opacity:1; }
+.al-strip img{ width:100%; height:100%; object-fit:cover; display:block; }
+.al-actions{ display:flex; gap:8px; margin-top:10px; }
+.al-actions button{ flex:1; border:1px solid rgba(255,255,255,.2); background:rgba(255,255,255,.08); color:#fff; border-radius:12px; padding:11px 6px; font-size:13.5px; font-weight:600; cursor:pointer; }
+.al-actions button.danger{ color:#fca5a5; }
 .ph-full img{ display:block; width:100%; max-height:68vh; object-fit:contain; border-radius:10px; background:#000; }
 .ph-compare{ display:grid; grid-template-columns:1fr 1fr; gap:8px; }
 .ph-compare figure{ margin:0; min-width:0; }

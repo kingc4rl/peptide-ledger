@@ -4012,6 +4012,8 @@ function openPhotoModal(){
       <div class="field span2"><div id="phPreview" class="ph-preview" hidden></div></div>
       <div class="field"><label for="phDate">Date</label><input id="phDate" type="date" value="${todayISO()}" max="${todayISO()}"></div>
       <div class="field"><label for="phAngle">Angle</label><select id="phAngle">${PHOTO_ANGLES.map(a=>`<option>${a}</option>`).join('')}</select></div>
+      <div class="field span2"><label for="phWeight">Weight (lb, optional)</label><input id="phWeight" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 182.4">
+        <label class="endo-check" id="phLogWrap" style="margin-top:6px;font-weight:500;"><input type="checkbox" id="phLog" checked> Also save to my weight log</label></div>
       <div class="field span2"><label for="phNote">Note (optional)</label><input id="phNote" type="text" maxlength="140" placeholder="e.g. week 6, morning, fasted"></div>
     </div>
     <p class="footnote" style="margin-top:10px;">Photos are shrunk to about 1600 px and saved only on this device. They are included in backups.</p>
@@ -4019,6 +4021,7 @@ function openPhotoModal(){
     <div class="footnote" id="phStatus" style="margin-top:8px;"></div>
   `, body=>{
     let loaded = null;
+    bindPhotoWeight(body);
     const useFile = async f=>{
       if(loaded){ URL.revokeObjectURL(loaded.url); loaded = null; }
       $('#phSave',body).disabled = true;
@@ -4057,12 +4060,66 @@ function openPhotoModal(){
         await putBlob(id, full.blob);
         await putBlob(id+'_t', thumb.blob);
         URL.revokeObjectURL(loaded.url);
-        await dbSet('photos', id, {date: $('#phDate',body).value || todayISO(), angle: $('#phAngle',body).value, note: $('#phNote',body).value.trim(), w: full.w, h: full.h});
+        const date = $('#phDate',body).value || todayISO();
+        await dbSet('photos', id, {date, angle: $('#phAngle',body).value, note: $('#phNote',body).value.trim(), w: full.w, h: full.h, ...photoWeightField(body)});
+        await logPhotoWeight(body, date);
         closeModal();
       }catch(e){
         $('#phSave',body).disabled = false;
         $('#phStatus',body).textContent = (e && e.name==='QuotaExceededError') ? 'Storage is full. Delete some older photos first.' : 'Couldn\'t save that photo. Try again.';
       }
+    });
+  });
+}
+/* Weight at the time of a photo: the weight typed with the photo, else that day's weight log entry. */
+function photoWeight(p){
+  if(num(p.weightLb,null)!=null) return num(p.weightLb);
+  const c = checkinFor(p.date);
+  return c && num(c.weight,null)!=null ? Math.round(toUnit(c.weight, c.weightUnit||'lb', 'lb')*10)/10 : null;
+}
+const fmtLb = w=> `${(Math.round(w*10)/10).toLocaleString()} lb`;
+// The photo form's weight box follows the chosen date's logged weight until you type your own;
+// "Also save to my weight log" only shows when that day has no weight yet.
+function bindPhotoWeight(body, own){
+  const wi = $('#phWeight',body), di = $('#phDate',body), wrap = $('#phLogWrap',body);
+  let typed = own!=null;
+  if(own!=null) wi.value = own;
+  const sync = ()=>{
+    const c = checkinFor(di.value);
+    const lw = c && num(c.weight,null)!=null ? Math.round(toUnit(c.weight, c.weightUnit||'lb', 'lb')*10)/10 : null;
+    if(!typed) wi.value = lw!=null ? lw : '';
+    wrap.hidden = !!c || !wi.value;
+  };
+  wi.addEventListener('input', ()=>{ typed = wi.value!==''; sync(); });
+  di.addEventListener('change', sync);
+  sync();
+}
+function photoWeightField(body){ const w = num($('#phWeight',body).value, null); return {weightLb: w!=null && w>0 ? Math.round(w*10)/10 : null}; }
+async function logPhotoWeight(body, date){
+  const w = photoWeightField(body).weightLb;
+  if(w==null || $('#phLogWrap',body).hidden || !$('#phLog',body).checked || checkinFor(date)) return;
+  await dbAdd('checkins', {date, weight: w, weightUnit: 'lb'});
+  exportWeightToHealth(date, w);
+}
+function openPhotoEdit(p, onDone){
+  openModal('Edit photo details', `
+    <div class="form-grid">
+      <div class="field"><label for="phDate">Date</label><input id="phDate" type="date" value="${esc(p.date)}" max="${todayISO()}"></div>
+      <div class="field"><label for="phAngle">Angle</label><select id="phAngle">${PHOTO_ANGLES.map(a=>`<option ${a===p.angle?'selected':''}>${a}</option>`).join('')}</select></div>
+      <div class="field span2"><label for="phWeight">Weight (lb, optional)</label><input id="phWeight" type="number" inputmode="decimal" step="0.1" min="0" placeholder="e.g. 182.4">
+        <label class="endo-check" id="phLogWrap" style="margin-top:6px;font-weight:500;"><input type="checkbox" id="phLog" checked> Also save to my weight log</label></div>
+      <div class="field span2"><label for="phNote">Note (optional)</label><input id="phNote" type="text" maxlength="140" value="${esc(p.note||'')}"></div>
+    </div>
+    <div class="form-actions"><button class="btn" id="phCancel">Cancel</button><button class="btn btn-accent-pep" id="phSave">Save</button></div>
+  `, body=>{
+    bindPhotoWeight(body, num(p.weightLb,null));
+    $('#phCancel',body).addEventListener('click', ()=>{ closeModal(); onDone && onDone(); });
+    $('#phSave',body).addEventListener('click', async ()=>{
+      const cur = state.photos.find(x=>x.id===p.id); if(!cur) return closeModal();
+      const date = $('#phDate',body).value || cur.date;
+      await dbSet('photos', cur.id, {...stripId(cur), date, angle: $('#phAngle',body).value, note: $('#phNote',body).value.trim(), ...photoWeightField(body)});
+      await logPhotoWeight(body, date);
+      closeModal(); onDone && onDone();
     });
   });
 }
@@ -4083,7 +4140,7 @@ function renderPhotos(){
   grid.innerHTML = list.map(p=>`
     <button type="button" class="ph-tile ${photoSelect.has(p.id)?'sel':''}" data-photo="${p.id}" aria-label="${esc(p.angle)} photo, ${fmtDateShort(p.date)}">
       <img data-photo-thumb="${p.id}" alt="">
-      <span class="ph-cap"><span>${fmtDateShort(p.date)}</span><span>${esc(p.angle)}</span></span>
+      <span class="ph-cap"><span>${fmtDateShort(p.date)}</span><span>${photoWeight(p)!=null ? fmtLb(photoWeight(p)) : esc(p.angle)}</span></span>
       ${photoSelectMode ? `<span class="ph-check">${photoSelect.has(p.id)?'✓':''}</span>` : ''}
     </button>`).join('');
   $$('[data-photo-thumb]',grid).forEach(async img=>{
@@ -4106,25 +4163,69 @@ function initPhotos(){
     } else openPhotoViewer(id);
   });
 }
+/* ===== Photo album: full-screen, swipe between photos (oldest on the left, like Photos), thumbnail strip,
+   date / angle / weight with the change since the first photo in view. Follows the grid's angle filter. ===== */
 async function openPhotoViewer(id){
-  const p = state.photos.find(x=>x.id===id); if(!p) return;
-  const u = await blobUrl(id);
-  openModal(`${p.angle} · ${fmtDate(p.date)}`, `
-    <div class="ph-full">${u?`<img src="${u}" alt="${esc(p.angle)} progress photo from ${fmtDate(p.date)}">`:'<p class="footnote">Image file missing.</p>'}</div>
-    ${p.note?`<p style="margin-top:10px;font-size:14px;">${esc(p.note)}</p>`:''}
-    <div class="form-actions wrap"><button class="btn btn-danger" id="phDel" style="margin-right:auto;">Delete</button><button class="btn" id="phPts">📍 ${p.landmarks ? 'Redo' : 'Set'} alignment points</button><button class="btn btn-accent-pep" id="phClose">Close</button></div>
-  `, body=>{
-    $('#phClose',body).addEventListener('click', closeModal);
-    $('#phPts',body).addEventListener('click', ()=>{ closeModal(); openPointPicker(p.id, ()=> openPhotoViewer(p.id)); });
-    $('#phDel',body).addEventListener('click', ()=>{
-      closeModal();
-      confirmAction('Delete this photo from this device?', async ()=>{
-        [id, id+'_t'].forEach(k=>{ const u2 = blobUrlCache.get(k); if(u2){ URL.revokeObjectURL(u2); blobUrlCache.delete(k); } });
-        try{ await delBlob(id); await delBlob(id+'_t'); }catch(e){}
-        await dbDelete('photos', id);
-      });
+  const list = state.photos.filter(p=> photoFilter==='All' || p.angle===photoFilter).sort((a,b)=> a.date.localeCompare(b.date) || String(a.id).localeCompare(String(b.id)));
+  if(!list.some(p=>p.id===id)){ const p = state.photos.find(x=>x.id===id); if(!p) return; list.length = 0; list.push(p); }
+  let idx = Math.max(0, list.findIndex(p=>p.id===id));
+  const ov = openOverlay('Progress photos');
+  const onKey = e=>{ if(e.key==='Escape') close(); if(e.key==='ArrowLeft') go(idx-1); if(e.key==='ArrowRight') go(idx+1); };
+  document.addEventListener('keydown', onKey);
+  const close = ()=>{ document.removeEventListener('keydown', onKey); closeOverlay(ov); };
+  const firstW = list.find(p=> photoWeight(p)!=null);
+  ov.innerHTML = `<div class="cmp-top"><h3 id="alTitle"></h3><span class="al-count" id="alCount"></span><button type="button" class="cmp-x" aria-label="Close photos">✕</button></div>
+    <div class="al-track" id="alTrack">${list.map((p,i)=>`<div class="al-slide"><img data-al="${i}" alt="${esc(p.angle)} progress photo from ${esc(fmtDate(p.date))}"></div>`).join('')}</div>
+    <div class="al-info" id="alInfo"></div>
+    ${list.length>1 ? `<div class="al-strip" id="alStrip">${list.map((p,i)=>`<button type="button" data-al-go="${i}" aria-label="${esc(fmtDateShort(p.date))}"><img data-al-t="${i}" alt=""></button>`).join('')}</div>` : ''}
+    <div class="al-actions"><button type="button" id="alEdit">✎ Edit</button><button type="button" id="alPts">📍 Points</button><button type="button" id="alDel" class="danger">Delete</button></div>`;
+  const track = $('#alTrack',ov), strip = $('#alStrip',ov);
+  const load = async i=>{
+    const img = $(`[data-al="${i}"]`,ov); if(!img || img.dataset.done) return;
+    img.dataset.done = '1';
+    const p = list[i];
+    const t = await blobUrl(p.id+'_t'); if(t && !img.src) img.src = t;   // thumbnail first, sharp version right after
+    const u = await blobUrl(p.id); if(u) img.src = u; else if(!t) img.closest('.al-slide').classList.add('missing');
+  };
+  if(strip) $$('[data-al-t]',strip).forEach(async img=>{ const p = list[+img.dataset.alT]; const u = await blobUrl(p.id+'_t') || await blobUrl(p.id); if(u) img.src = u; });
+  function show(){
+    const p = list[idx], w = photoWeight(p);
+    $('#alTitle',ov).textContent = `${p.angle} · ${fmtDate(p.date)}`;
+    $('#alCount',ov).textContent = list.length>1 ? `${idx+1} of ${list.length}` : '';
+    let delta = '';
+    if(w!=null && firstW && firstW!==p){
+      const d = Math.round((w - photoWeight(firstW))*10)/10;
+      delta = `<span class="al-delta ${d<0?'down':d>0?'up':''}">${d>0?'+':d<0?'−':'±'}${Math.abs(d)} lb since ${esc(fmtDateShort(firstW.date))}</span>`;
+    }
+    const days = idx>0 ? daysBetween(list[0].date, p.date) : 0;
+    $('#alInfo',ov).innerHTML = `<div class="al-line">${w!=null ? `<strong>${fmtLb(w)}</strong>` : '<span class="al-dim">No weight</span>'}${delta}${days>0 ? `<span class="al-dim">Day ${days+1}</span>` : ''}</div>${p.note ? `<div class="al-note">${esc(p.note)}</div>` : ''}`;
+    $('#alPts',ov).textContent = `📍 ${p.landmarks ? 'Redo' : 'Set'} points`;
+    [idx-1, idx, idx+1].forEach(i=>{ if(i>=0 && i<list.length) load(i); });
+    if(strip){
+      $$('[data-al-go]',strip).forEach(b=> b.classList.toggle('on', +b.dataset.alGo===idx));
+      const b = $(`[data-al-go="${idx}"]`,strip);
+      if(b) strip.scrollTo({left: b.offsetLeft - strip.clientWidth/2 + b.offsetWidth/2, behavior:'smooth'});
+    }
+  }
+  function go(i, smooth=true){ if(i<0 || i>=list.length) return; track.scrollTo({left: i*track.clientWidth, behavior: smooth ? 'smooth' : 'auto'}); if(!smooth){ idx = i; show(); } }
+  let raf = 0;
+  track.addEventListener('scroll', ()=>{ cancelAnimationFrame(raf); raf = requestAnimationFrame(()=>{ const i = Math.round(track.scrollLeft / (track.clientWidth||1)); if(i!==idx && i>=0 && i<list.length){ idx = i; show(); } }); }, {passive:true});
+  if(strip) strip.addEventListener('click', e=>{ const b = e.target.closest('[data-al-go]'); if(b) go(+b.dataset.alGo); });
+  $('.cmp-x',ov).addEventListener('click', close);
+  const reopen = pid=> ()=>{ if(state.photos.some(x=>x.id===pid)) openPhotoViewer(pid); };
+  $('#alEdit',ov).addEventListener('click', ()=>{ const p = list[idx]; close(); openPhotoEdit(p, reopen(p.id)); });
+  $('#alPts',ov).addEventListener('click', ()=>{ const p = list[idx]; close(); openPointPicker(p.id, ()=> openPhotoViewer(p.id)); });
+  $('#alDel',ov).addEventListener('click', ()=>{
+    const p = list[idx], next = list[idx+1] || list[idx-1];
+    close();
+    confirmAction('Delete this photo from this device?', async ()=>{
+      [p.id, p.id+'_t'].forEach(k=>{ const u2 = blobUrlCache.get(k); if(u2){ URL.revokeObjectURL(u2); blobUrlCache.delete(k); } });
+      try{ await delBlob(p.id); await delBlob(p.id+'_t'); }catch(e){}
+      await dbDelete('photos', p.id);
+      if(next) openPhotoViewer(next.id);
     });
   });
+  requestAnimationFrame(()=> go(idx, false));
 }
 /* ===== Photo alignment =====
    Each photo can store two landmarks (photo.landmarks = {a:{x,y}, b:{x,y}}, as fractions of the image).
@@ -4252,7 +4353,7 @@ async function openCompareModal(ids){
   if(ps.length!==2) return;
   const urls = await Promise.all(ps.map(p=> blobUrl(p.id)));
   const gap = daysBetween(ps[0].date, ps[1].date);
-  const cap = i=> `${i===0?'Before':'After'} · ${fmtDateShort(ps[i].date)}`;
+  const cap = i=>{ const w = photoWeight(ps[i]); return `${i===0?'Before':'After'} · ${fmtDateShort(ps[i].date)}${w!=null ? ' · '+fmtLb(w) : ''}`; };
   const ov = openOverlay('Compare photos');
   let fade = 100, wipe = 50, tuning = null;   // tuning holds the unsaved fine-tune while adjusting
   const tweakOf = ()=> tuning || ((ps[1].alignTweaks||{})[ps[0].id]) || null;
@@ -5638,8 +5739,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.35.1';
+const APP_VERSION = '1.36.0';
 const WHATS_NEW = [
+  {v:'1.36.0', title:'A real photo album', items:[
+    ['🖼️','Tap a progress photo and swipe through them all, with a thumbnail strip to jump around.'],
+    ['⚖️','Add your weight to a photo. Each photo shows its weight and the change since your first.'],
+    ['🤳','The front camera opens in a wide view, like the zoomed-out selfie in the Camera app.'],
+  ]},
   {v:'1.34.0', title:'Streaks, insights and a little celebration', items:[
     ['🔥','Streaks and a weekly summary on Today: how often you hit your schedule, doses logged and weight change.'],
     ['💡','Smart insights: when a vial will run out, beyond-use dates coming up, your usual dose time, and weight since you started.'],
