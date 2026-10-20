@@ -25,8 +25,11 @@ Enrol at <https://developer.apple.com/programs/enroll/> with your Apple ID. Appr
 Description `Pep Prep`, Identifier `iCloud.com.kingc4rl.pepprep`. Continue → Register.
 
 Then **+** again → **App IDs** → **App** → Description `Pep Prep`, Bundle ID **Explicit** `com.kingc4rl.pepprep`.
-Under Capabilities tick **HealthKit** and **iCloud** (choose *Include CloudKit support* only if asked; then **Edit** next to iCloud
-and select the `iCloud.com.kingc4rl.pepprep` container). Continue → Register.
+Under Capabilities tick **HealthKit** and **iCloud**, and for iCloud choose **Include CloudKit support** (the "Xcode 6" label is old
+wording and doesn't matter). Continue → Register.
+
+Now link the container: open the new **Pep Prep** App ID from the Identifiers list → **Edit** (or **Configure**) next to iCloud →
+tick `iCloud.com.kingc4rl.pepprep` → Continue → **Save**. (The Edit button only appears after the App ID is registered.)
 
 ### 3. Create the app in App Store Connect
 <https://appstoreconnect.apple.com/apps> → **+** → **New App** → Platform iOS, Name `Pep Prep` (if taken, anything, e.g. `Pep Prep Personal`; it's never public),
