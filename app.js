@@ -4388,7 +4388,10 @@ async function openCompareModal(ids){
 async function openGhostCamera(angle, onCapture){
   const ov = openOverlay('Take progress photo');
   let facing = lsGet('ledger.camFacing','user'), stream = null, timer = +lsGet('ledger.camTimer','0') || 0, ghostOpacity = +lsGet('ledger.ghostOpacity','40');
-  let counting = null, lens = lsGet('ledger.camLens','1'), uwId = null, zoomCap = null;
+  let counting = null, uwId = null, zoomCap = null;
+  // back: '0.5' | '1'; front: 'wide' (the full 4:3 sensor, like the Camera app's zoomed-out selfie) | '1'
+  const lensKey = ()=> facing==='user' ? 'ledger.camFrontLens' : 'ledger.camLens';
+  let lens;
   const stop = ()=>{ if(stream){ stream.getTracks().forEach(t=> t.stop()); stream = null; } if(counting){ clearInterval(counting); counting = null; } };
   const close = ()=>{ stop(); closeOverlay(ov); };
   const lastOf = a=> state.photos.filter(p=> p.angle===a).sort((x,y)=> y.date.localeCompare(x.date))[0];
@@ -4396,13 +4399,16 @@ async function openGhostCamera(angle, onCapture){
     const last = lastOf(angle);
     const gu = last ? await blobUrl(last.id) : null;
     const mirror = facing==='user' ? 'transform:scaleX(-1);' : '';
+    lens = lsGet(lensKey(), facing==='user' ? 'wide' : '1');
     ov.innerHTML = `<div class="cmp-top"><h3>Guided photo</h3><button type="button" class="cmp-x" aria-label="Close camera">✕</button></div>
       <div class="cmp-modes">${PHOTO_ANGLES.map(a=>`<button type="button" class="${a===angle?'on':''}" data-angle="${a}">${a}</button>`).join('')}</div>
       <div class="cmp-stage"><div class="cmp-box cam-box">
         <video id="camVideo" playsinline autoplay muted style="${mirror}"></video>
         ${gu ? `<img id="camGhost" src="${gu}" alt="" style="${mirror}opacity:${ghostOpacity/100}">` : ''}
         <div class="tune-grid"></div>
-        <div class="cam-lens" id="camLens" hidden><button type="button" data-lens="0.5">.5</button><button type="button" data-lens="1">1×</button></div>
+        <div class="cam-lens" id="camLens" hidden>${facing==='user'
+          ? `<button type="button" data-lens="wide" aria-label="Wide selfie"><svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12h18M3 12l4-4M3 12l4 4M21 12l-4-4M21 12l-4 4"/></svg></button><button type="button" data-lens="1">1×</button>`
+          : `<button type="button" data-lens="0.5">.5</button><button type="button" data-lens="1">1×</button>`}</div>
         <div class="cam-count" id="camCount" hidden></div>
         <div class="cam-msg" id="camMsg">Starting camera…</div>
       </div></div>
@@ -4425,7 +4431,9 @@ async function openGhostCamera(angle, onCapture){
     if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){ msg.textContent = 'This browser can\'t open the camera. Use "Choose file" instead.'; return; }
     try{
       const useUW = facing==='environment' && lens==='0.5' && uwId;
-      stream = await navigator.mediaDevices.getUserMedia({video:{...(useUW ? {deviceId:{exact:uwId}} : {facingMode: facing}), width:{ideal:1920}, height:{ideal:1920}}, audio:false});
+      // A square 1920 request gets a 16:9 feed, which crops the front sensor; asking for its full 4:3 frame gives the wide view.
+      const size = facing==='user' && lens==='wide' ? {width:{ideal:4032}, height:{ideal:3024}} : {width:{ideal:1920}, height:{ideal:1920}};
+      stream = await navigator.mediaDevices.getUserMedia({video:{...(useUW ? {deviceId:{exact:uwId}} : {facingMode: facing}), ...size}, audio:false});
       if(!ov.isConnected){ stop(); return; }
       video.srcObject = stream; await video.play().catch(()=>{});
       msg.hidden = true;
@@ -4435,7 +4443,8 @@ async function openGhostCamera(angle, onCapture){
     }
   }
   /* .5× / 1× like the Camera app. The back ultra-wide lens is its own camera (iPhone labels it "Back Ultra Wide Camera");
-     where the browser instead exposes a zoom range that goes below 1, the same buttons set the zoom. */
+     where the browser instead exposes a zoom range that goes below 1, the same buttons set the zoom.
+     Front: wide (full sensor, lowest zoom) or 1× (the standard 16:9 feed). */
   async function setupLens(usingUW){
     const box = $('#camLens',ov); if(!box || !stream) return;
     const track = stream.getVideoTracks()[0];
@@ -4445,8 +4454,10 @@ async function openGhostCamera(angle, onCapture){
       if(uwId && lens==='0.5' && !usingUW && !(zoomCap && zoomCap.min < 1)){ stop(); return render(); }
     }
     const zoomable = zoomCap && zoomCap.min < 1;
-    if(facing!=='environment' || !(uwId || zoomable)){ box.hidden = true; return; }
-    if(zoomable && !usingUW){
+    if(facing==='user'){
+      if(lens==='wide' && zoomCap && zoomCap.min < 1){ try{ await track.applyConstraints({advanced:[{zoom: zoomCap.min}]}); }catch(e){} }
+    } else if(!(uwId || zoomable)){ box.hidden = true; return; }
+    else if(zoomable && !usingUW){
       try{ await track.applyConstraints({advanced:[{zoom: lens==='0.5' ? Math.max(zoomCap.min, .5) : 1}]}); }catch(e){}
     }
     box.hidden = false;
@@ -4454,9 +4465,9 @@ async function openGhostCamera(angle, onCapture){
       b.classList.toggle('on', b.dataset.lens===lens);
       b.addEventListener('click', async ()=>{
         if(b.dataset.lens===lens) return;
-        lens = b.dataset.lens; lsSet('ledger.camLens', lens);
+        lens = b.dataset.lens; lsSet(lensKey(), lens);
         $$('[data-lens]',box).forEach(x=> x.classList.toggle('on', x.dataset.lens===lens));
-        if(uwId){ stop(); render(); }
+        if(facing==='user' || uwId){ stop(); render(); }
         else track.applyConstraints({advanced:[{zoom: lens==='0.5' ? Math.max(zoomCap.min, .5) : 1}]}).catch(()=>{});
       });
     });
