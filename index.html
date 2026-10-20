@@ -1390,6 +1390,12 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .glass-search svg{ width:18px; height:18px; flex:none; fill:none; stroke:currentColor; stroke-width:2.4; stroke-linecap:round; }
 .glass-search input{ flex:1; min-width:0; padding:0; height:42px; }
 .glass-search input::-webkit-search-cancel-button{ -webkit-appearance:none; }
+.search-row{ display:flex; align-items:center; gap:12px; margin:0 0 14px; animation:searchIn .22s cubic-bezier(.2,.8,.2,1); }
+.search-row .glass-search{ flex:1 1 auto; min-width:0; width:auto; margin:0; }
+.search-row .glass-search input, .search-row .glass-search input:focus, .search-row .glass-search input:focus-visible{ outline:none; box-shadow:none; border:0; background:transparent; }
+.search-cancel{ flex:none; }
+.search-cancel{ font-size:16px; font-weight:500; color:var(--info); white-space:nowrap; }
+@keyframes searchIn{ from{ opacity:0; transform:translateY(-8px); } }
 .vial-shelf{ grid-template-columns:repeat(2, minmax(0,1fr)); gap:12px; }
 .vial-tile{ padding:14px 10px 14px; border-radius:24px; gap:3px;
   background:linear-gradient(180deg, rgba(255,255,255,.7), rgba(255,255,255,.5)) !important; -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge), var(--gl-shadow) !important; }
@@ -1603,8 +1609,8 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
       <section id="inventoryView" class="view" hidden>
 
         <div class="card bare">
-          <div class="card-h ios-hide"><h3>Stash</h3><div class="card-actions"><button class="btn btn-sm" id="scanVialBtn" hidden>Scan</button><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button></div></div>
-          <label class="glass-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg><input type="search" id="stashSearch" placeholder="Search" autocomplete="off" aria-label="Search your stash"></label>
+          <div class="card-h ios-hide"><h3>Stash</h3><div class="card-actions"><button class="btn btn-sm" id="scanVialBtn" hidden>Scan</button><button class="btn btn-accent-pep btn-sm" id="addVialBtn">+ Add vial</button><button class="btn btn-sm" id="stashSearchBtn">Search</button></div></div>
+          <div class="search-row" id="stashSearchRow" hidden><label class="glass-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg><input type="search" id="stashSearch" placeholder="Search" autocomplete="off" aria-label="Search your stash"></label><button type="button" class="link-btn search-cancel" id="stashSearchCancel">Cancel</button></div>
           <div id="vialList"></div>
         </div>
 

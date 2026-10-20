@@ -5255,6 +5255,7 @@ const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventor
 const NAV_ICONS = {
   plus:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
   scan:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8V5.5A1.5 1.5 0 015.5 4H8M16 4h2.5A1.5 1.5 0 0120 5.5V8M20 16v2.5a1.5 1.5 0 01-1.5 1.5H16M8 20H5.5A1.5 1.5 0 014 18.5V16M7 12h10"/></svg>',
+  search:'<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg>',
   reset:'<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/></svg>',
 };
 const TAB_META = {
@@ -5262,7 +5263,7 @@ const TAB_META = {
   protocols:{title:'Protocols', sub:()=>{ const n = state.protocols.filter(isActiveP).length; return n ? `${n} active` : ''; }, actions:[['plus','#addProtocolBtn','Add protocol']]},
   inventory:{title:'Stash', sub:()=>{ const live = state.vials.filter(v=>!isDepleted(v)); const kinds = new Set(live.map(v=> (v.compound||'').trim().toLowerCase())).size;
     const n = live.reduce((t,v)=> t + num(v.qty,1) + (v.remainingMg!=null?1:0), 0); return live.length ? `${kinds} peptide${kinds===1?'':'s'} · ${n} vial${n===1?'':'s'}` : ''; },
-    actions:[['scan','#scanVialBtn','Scan a vial'],['plus','#addVialBtn','Add vial']]},
+    actions:[['scan','#scanVialBtn','Scan a vial'],['plus','#addVialBtn','Add vial'],['search','#stashSearchBtn','Search your stash']], noSync:true},
   ask:{title:'Claude', sub:()=> 'Ask about your protocols and data'},
   progress:{title:'Progress'},
   more:{title:'More'},
@@ -5274,6 +5275,7 @@ function updateNav(){
   $('#iosTitle').textContent = m.title; $('#iosBarTitle').textContent = m.title;
   const sub = m.sub ? m.sub() : ''; $('#iosSub').textContent = sub; $('#iosSub').hidden = !sub;
   $('#navBack').hidden = !m.back;
+  $('#syncPill').hidden = !!m.noSync;                     // the Stash puts its search button in the backup button's corner
   // proxy buttons: the real buttons stay in the page (hidden), so their existing handlers keep working
   $('#navActions').innerHTML = (m.actions||[]).filter(([,sel])=>{ const b = $(sel); return b && !(sel==='#scanVialBtn' && b.hidden); })
     .map(([ic,sel,label])=> `<button type="button" class="glass-btn" data-proxy="${sel}" aria-label="${esc(label)}">${NAV_ICONS[ic]}</button>`).join('');
@@ -5959,6 +5961,13 @@ async function boot(){
   nativeOnForeground();
   const scanBtn = $('#scanVialBtn'); if(scanBtn && capPlugin('CapacitorBarcodeScanner')){ scanBtn.hidden = false; scanBtn.addEventListener('click', scanFindVial); updateNav(); }
   const ss = $('#stashSearch'); if(ss) ss.addEventListener('input', ()=>{ stashSel = null; lotSel = null; renderVials(); });
+  // the stash search stays tucked away until its button in the top corner is tapped
+  const sRow = $('#stashSearchRow');
+  const closeSearch = ()=>{ sRow.hidden = true; if(ss.value){ ss.value = ''; renderVials(); } ss.blur(); };
+  $('#stashSearchBtn').addEventListener('click', ()=>{ if(!sRow.hidden && !ss.value) return closeSearch(); sRow.hidden = false; ss.focus(); });
+  $('#stashSearchCancel').addEventListener('click', closeSearch);
+  ss.addEventListener('keydown', e=>{ if(e.key==='Escape') closeSearch(); });
+  ss.addEventListener('blur', ()=>{ if(!ss.value) setTimeout(()=>{ if(document.activeElement!==ss && !ss.value) sRow.hidden = true; }, 150); });
   renderAll();
   registerServiceWorker();
   showAppVersion();
