@@ -5562,8 +5562,14 @@ async function syncDoseCalendar(){
 /* ---- Barcode scanning (vial labels, lot numbers) ---- */
 async function scanCode(){
   const BS = capPlugin('CapacitorBarcodeScanner'); if(!BS) return null;
-  try{ const r = await BS.scanBarcode({hint:17, scanInstructions:'Point at the vial\'s barcode or QR code', scanButton:false}); return r && r.ScanResult ? String(r.ScanResult).trim() : null; }
-  catch(e){ return null; }
+  // The raw native plugin (no npm wrapper here) needs every field: iOS rejects the call as "invalid parameters" without
+  // scanText, cameraDirection (1 = back) and scanOrientation (1 = portrait).
+  try{ const r = await BS.scanBarcode({hint:17, scanInstructions:'Point at the vial\'s barcode or QR code', scanButton:false, scanText:' ', cameraDirection:1, scanOrientation:1}); return r && r.ScanResult ? String(r.ScanResult).trim() : null; }
+  catch(e){
+    const code = String((e && e.code) || '');
+    if(!/0006$/.test(code)) showToast(/0007$/.test(code) ? 'Camera access is off for Pep Prep. Turn it on in Settings › Pep Prep.' : 'Couldn\'t start the scanner. Try again.');
+    return null;
+  }
 }
 async function scanFindVial(){
   const code = await scanCode(); if(!code) return;
