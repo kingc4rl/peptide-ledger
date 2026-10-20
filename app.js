@@ -1254,7 +1254,7 @@ function openDoseModal(p){
    o: {color, name, dose, units, sched, status, kind (good|due|bad|muted), pct (0-1 or null)} */
 function penSVG(o, id){
   const A = o.color, W = 360, H = 66, cy = 30, R = 15, r = 12.5;
-  const hubX = 18, holderX = 34, bodyX = 132, dialX = 316, chromeX = 332, end = 342;
+  const hubX = 26, holderX = 34, bodyX = 132, dialX = 316, chromeX = 332, end = 342;
   const cartL = holderX+13, cartR = bodyX-6;
   const lvl = o.pct==null ? 1 : Math.max(.03, Math.min(1, o.pct));
   const plX = cartL + (cartR - cartL - 9) * lvl;
@@ -1278,7 +1278,7 @@ function penSVG(o, id){
     <linearGradient id="${id}cr" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#6e717a"/><stop offset=".16" stop-color="#e6e8ec"/><stop offset=".28" stop-color="#ffffff"/><stop offset=".42" stop-color="#9fa3ab"/><stop offset=".62" stop-color="#d9dce1"/><stop offset=".84" stop-color="#7c8089"/><stop offset="1" stop-color="#a9adb4"/></linearGradient>
     <linearGradient id="${id}crx" x1="0" x2="1"><stop offset="0" stop-color="#000" stop-opacity=".25"/><stop offset=".25" stop-color="#000" stop-opacity="0"/><stop offset=".7" stop-color="#fff" stop-opacity=".25"/><stop offset="1" stop-color="#000" stop-opacity=".2"/></linearGradient>
     <linearGradient id="${id}gl" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8396a5" stop-opacity=".75"/><stop offset=".1" stop-color="#ffffff" stop-opacity=".6"/><stop offset=".22" stop-color="#ffffff" stop-opacity=".95"/><stop offset=".34" stop-color="#eef5f9" stop-opacity=".2"/><stop offset=".78" stop-color="#dce8f0" stop-opacity=".2"/><stop offset=".93" stop-color="#9fb3c2" stop-opacity=".5"/><stop offset="1" stop-color="#ffffff" stop-opacity=".7"/></linearGradient>
-    <linearGradient id="${id}hub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8ea6c9" stop-opacity=".9"/><stop offset=".3" stop-color="#eef4fb" stop-opacity=".9"/><stop offset=".6" stop-color="#c3d3ea" stop-opacity=".85"/><stop offset="1" stop-color="#7f97bd" stop-opacity=".9"/></linearGradient>
+    <linearGradient id="${id}hub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#b9bec6" stop-opacity=".5"/><stop offset=".3" stop-color="#ffffff" stop-opacity=".75"/><stop offset=".6" stop-color="#eef0f3" stop-opacity=".35"/><stop offset="1" stop-color="#a7adb5" stop-opacity=".5"/></linearGradient>
     <linearGradient id="${id}lq" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${shade(A,-.1)}" stop-opacity=".5"/><stop offset=".35" stop-color="${shade(A,.55)}" stop-opacity=".3"/><stop offset="1" stop-color="${shade(A,-.2)}" stop-opacity=".55"/></linearGradient>
     <linearGradient id="${id}rub" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset=".3" stop-color="#6b6e75"/><stop offset=".6" stop-color="#3a3c41"/><stop offset="1" stop-color="#1c1d20"/></linearGradient>
     <linearGradient id="${id}rod" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="#8d9098"/><stop offset=".4" stop-color="#f1f2f4"/><stop offset="1" stop-color="#7a7d85"/></linearGradient>
@@ -1289,9 +1289,9 @@ function penSVG(o, id){
   </defs>
   <ellipse cx="${W/2+8}" cy="${cy+R+8}" rx="${W/2-22}" ry="4.6" fill="url(#${id}sh)"/>
   <!-- needle + translucent ribbed hub -->
-  <rect x="2" y="${cy-.55}" width="${hubX}" height="1.1" fill="url(#${id}rod)"/>
-  <path d="M${hubX} ${cy-8} H${holderX+1} V${cy+8} H${hubX} Q${hubX-3} ${cy+8} ${hubX-3} ${cy+5} V${cy-5} Q${hubX-3} ${cy-8} ${hubX} ${cy-8}Z" fill="url(#${id}hub)"/>
-  ${Array.from({length:6},(_,i)=>`<rect x="${hubX+1+i*2.4}" y="${cy-8}" width=".7" height="16" fill="#3e5a86" fill-opacity=".28"/>`).join('')}
+  <rect x="${hubX-16}" y="${cy-.55}" width="16" height="1.1" fill="url(#${id}rod)"/>
+  <path d="M${hubX} ${cy-8} H${holderX+1} V${cy+8} H${hubX} Q${hubX-3} ${cy+8} ${hubX-3} ${cy+5} V${cy-5} Q${hubX-3} ${cy-8} ${hubX} ${cy-8}Z" fill="url(#${id}hub)" stroke="#8b929b" stroke-opacity=".45" stroke-width=".6"/>
+  ${Array.from({length:3},(_,i)=>`<rect x="${hubX+1.5+i*2.6}" y="${cy-8}" width=".7" height="16" fill="#6b7280" fill-opacity=".22"/>`).join('')}
   <rect x="${hubX-3}" y="${cy-6}" width="${holderX-hubX+4}" height="2" fill="#fff" fill-opacity=".6"/>
   <!-- clear holder, cartridge, large printed scale -->
   <path d="${holder}" fill="#eaf1f6" fill-opacity=".3"/>
