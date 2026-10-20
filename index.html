@@ -1279,17 +1279,18 @@ input, select, textarea{ font-size:17px !important; }
 .app-head{ display:none; }
 
 /* large title header and the compact bar that fades in on scroll */
-.ios-hero{ position:relative; z-index:2; max-width:1080px; margin:0 auto; padding:calc(env(safe-area-inset-top,0px) + 6px) var(--gutter-r) 2px var(--gutter-l); }
-.ios-nav{ display:flex; justify-content:space-between; align-items:center; min-height:44px; }
+.ios-hero{ position:relative; z-index:2; max-width:1080px; margin:0 auto; padding:calc(env(safe-area-inset-top,0px) + 2px) var(--gutter-r) 2px var(--gutter-l); }
+.ios-nav{ display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:44px; }
+.ios-nav-l:not(:has(> :not([hidden]))){ display:none; }
 .ios-nav-l, .ios-nav-r, #navActions{ display:flex; align-items:center; gap:10px; }
-.ios-title{ font-size:34px; font-weight:700; line-height:1.12; letter-spacing:-.022em; margin:6px 0 0; color:#000; }
+.ios-title{ flex:1; min-width:0; font-size:34px; font-weight:700; line-height:1.12; letter-spacing:-.022em; margin:0; color:#000; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .ios-sub{ color:var(--label2); font-size:15px; margin-top:3px; }
 .ios-bar{ position:fixed; top:0; left:0; right:0; z-index:35; height:calc(env(safe-area-inset-top,0px) + 44px); padding-top:env(safe-area-inset-top,0px);
   display:flex; align-items:center; justify-content:center; font-weight:600; font-size:17px; color:#000;
   background:rgba(247,247,249,.72); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); border-bottom:.5px solid rgba(0,0,0,.1);
   opacity:0; transform:translateY(-4px); transition:opacity .2s, transform .2s; pointer-events:none; }
 .ios-bar.on{ opacity:1; transform:none; pointer-events:auto; }
-.page{ padding-top:10px; }
+.page{ padding-top:6px; }
 .banner-wrap{ max-width:1080px; margin:0 auto; }
 
 /* glass circle buttons */
@@ -1510,11 +1511,11 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
   <header class="ios-hero" id="iosHero">
     <div class="ios-nav">
       <div class="ios-nav-l"><button type="button" class="glass-btn nav-back" id="navBack" hidden aria-label="Back to More"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 5l-7 7 7 7"/></svg></button></div>
+      <h1 class="ios-title" id="iosTitle">Today</h1>
       <div class="ios-nav-r"><span id="navActions"></span>
         <button type="button" class="glass-btn sync-pill" id="syncPill" title="Backup and storage" aria-label="Backup and storage"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 18.5h10.2a4.3 4.3 0 0 0 .6-8.56A6 6 0 0 0 6.3 9.1 4.7 4.7 0 0 0 7 18.5z"/><path d="M9.5 13.5l2 2 3.5-3.8"/></svg><span class="sync-dot off" id="syncDot"></span><span class="sr-only" id="syncLabel">Loading…</span></button>
       </div>
     </div>
-    <h1 class="ios-title" id="iosTitle">Today</h1>
     <div class="ios-sub" id="iosSub"></div>
   </header>
 
