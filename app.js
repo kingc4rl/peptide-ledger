@@ -5141,8 +5141,12 @@ async function eraseAll(){
   renderAll();
 }
 async function openBackupModal(){
-  const counts = [['protocols','Protocols'],['vials','Vials'],['supplies','Supplies'],['checkins','Check-ins'],['photos','Photos'],['labs','Lab draws'],['urine','Urine strips'],['vendors','Vendors']]
-    .map(([k,l])=>`<span class="pill pill-muted">${state[k].length} ${l.toLowerCase()}</span>`).join('');
+  // retired sections (supplies, labs, urine) only show if old records are still stored
+  const counts = [['protocols','protocol'],['vials','vial'],['checkins','check-in'],['photos','photo'],['vendors','vendor'],['supplies','supply','supplies'],['labs','lab draw'],['urine','urine strip']]
+    .filter(([k], i)=> i<5 || state[k].length)
+    .map(([k,one,many])=>{ const n = state[k].length; return `<span class="pill pill-muted">${n} ${n===1 ? one : (many || one+'s')}</span>`; }).join('');
+  const auto = IS_NATIVE && capPlugin('ICloudBackup') && nativeOn('autoBackup','1');
+  const autoLast = lsGet('ledger.autoBackupDate',''), autoLocal = lsGet('ledger.autoBackupWhere','')==='local', autoWhere = autoLocal ? 'Files › On My iPhone › Pep Prep' : 'iCloud Drive › Pep Prep';
   let usage = '';
   try{
     if(navigator.storage && navigator.storage.estimate){
@@ -5153,15 +5157,17 @@ async function openBackupModal(){
   }catch(e){}
   const last = lsGet('ledger.lastBackup','');
   openModal('Backup & restore', `
-    <p style="font-size:14px;margin-bottom:8px;">Everything you enter is saved only in this app on this device. Nothing is sent to a server. A backup file is the only copy that survives a lost phone, a deleted app or cleared browser data.</p>
+    <p style="font-size:14px;margin-bottom:8px;">${auto
+      ? `Your data lives in this app on this phone. Nothing is sent to a server. A backup is saved automatically every week to <strong>${esc(autoWhere)}</strong> (the last 8 are kept)${autoLocal ? '. iCloud Drive looked switched off, so it stays on this phone: turn on iCloud Drive in Settings so it survives a lost phone.' : ', so it survives a lost phone or a deleted app.'}`
+      : 'Everything you enter is saved only in this app on this device. Nothing is sent to a server. A backup file is the only copy that survives a lost phone, a deleted app or cleared browser data.'}</p>
     <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">${counts}</div>
-    <p class="footnote">${last?`Last backup: ${fmtDate(last)}.`:'No backup yet.'} ${esc(usage)}</p>
+    <p class="footnote">${auto ? (autoLast ? `Last automatic backup: ${fmtDate(autoLast)}.` : 'The first automatic backup runs shortly.') : (last?`Last backup: ${fmtDate(last)}.`:'No backup yet.')} ${esc(usage)}</p>
     <div class="backup-actions">
       <button class="btn btn-accent-pep" id="bkExport">⬇ Export backup file</button>
       <label class="btn" for="bkFile" style="margin:0;color:var(--ink);font-size:13.5px;">⬆ Restore from file</label>
       <input type="file" id="bkFile" accept="application/json,.json" hidden>
     </div>
-    <p class="footnote" style="margin-top:8px;">On iPhone, Export opens the share sheet. Choose "Save to Files" (iCloud Drive works well). Restoring replaces everything currently in the app.</p>
+    <p class="footnote" style="margin-top:8px;">${auto ? 'Export saves an extra copy anywhere you like through the share sheet. To restore, pick a backup file, including one from iCloud Drive › Pep Prep.' : 'On iPhone, Export opens the share sheet. Choose "Save to Files" (iCloud Drive works well).'} Restoring replaces everything currently in the app.</p>
     <div class="footnote" id="bkStatus" style="margin-top:8px;min-height:16px;"></div>
     <details style="margin-top:12px;"><summary class="footnote" style="cursor:pointer;">Erase all data</summary>
       <p class="footnote" style="margin:8px 0;">Deletes every protocol, vial, photo and lab result from this device. Export a backup first if you might want it back.</p>
@@ -5592,7 +5598,7 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.35.0';
+const APP_VERSION = '1.35.1';
 const WHATS_NEW = [
   {v:'1.34.0', title:'Streaks, insights and a little celebration', items:[
     ['🔥','Streaks and a weekly summary on Today: how often you hit your schedule, doses logged and weight change.'],
