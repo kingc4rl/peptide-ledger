@@ -2494,7 +2494,9 @@ function renderVials(){
       : `${totalQty} sealed${num(lots[0].mgPerVial,0)?` · ${num(lots[0].mgPerVial,0)} mg`:''}`;
     const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
     const vendors = [...new Set(lots.map(v=> (v.pharmacy||'').trim()).filter(Boolean))];
-    return {compound, name: compound, brand: vendors.length===1 ? vendors[0] : '', color, pct, low: totalLow, meta, totalQty, anyCalc, totalDays, rows, mgTag};
+    const openNow = lots.some(v=> v.remainingMg!=null);
+    const allVials = totalQty + lots.filter(v=> v.remainingMg!=null).length;   // sealed plus open
+    return {compound, name: compound, brand: vendors.length===1 ? vendors[0] : '', color, pct, low: totalLow, meta, totalQty, allVials, openNow, anyCalc, totalDays, rows, mgTag};
   });
   if(stashSel && !groups[stashSel]) stashSel = null;
   if(lotSel && !(stashSel && groups[stashSel].some(v=>v.id===lotSel))) lotSel = null;
@@ -2502,10 +2504,9 @@ function renderVials(){
   const loop = shelf.length > 3, copies = loop ? Math.ceil(8/shelf.length) : 1, midCopy = 0;
   const tilesHTML = c=> shelf.map((g,i)=>`
     <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" data-i="${i}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}"${c!==midCopy ? ' aria-hidden="true" tabindex="-1"' : ''}>
-      ${vialSVG(g, c===midCopy ? i : `${i}c${c}`)}
+      <span class="vial-art">${g.openNow ? `<i class="vial-open-dot" title="A vial is open"></i>` : ''}${vialSVG({...g, pct:null}, c===midCopy ? i : `${i}c${c}`)}<span class="vial-count">×${g.allVials}</span></span>
       <span class="vial-label">${esc(g.compound)}</span>
-      <span class="vial-meta">${esc(g.meta)}</span>
-      ${g.pct!=null ? `<span class="vial-lvl"><i style="width:${Math.round(g.pct*100)}%"></i></span>` : ''}
+      <span class="sr-only">${g.allVials} vial${g.allVials===1?'':'s'}${g.openNow ? ', one open' : ''}</span>
     </button>`).join('');
   el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''} ${loop?'loop':'static'}">${Array.from({length:copies},(_,c)=> tilesHTML(c)).join('')}</div>`;
   const grid = $('.vial-shelf', el);
@@ -2520,7 +2521,7 @@ function renderVials(){
     det.style.setProperty('--vc', g.color);
     const pickedLot = g.rows.find(r=> r.id===lotSel);
     det.innerHTML = `<div class="vial-detail-h"><strong>${esc(g.compound)}</strong>
-        <span class="pill pill-muted">${g.totalQty} vial${g.totalQty===1?'':'s'}</span>
+        <span class="pill pill-muted">${g.allVials} vial${g.allVials===1?'':'s'}</span>
         ${g.anyCalc ? `<span class="pill ${g.low?'pill-warn':'pill-good'}">${g.totalDays<=0?'Out':'~'+g.totalDays+'d left'}</span>` : ''}
         <button type="button" class="link-btn vial-add" data-add-vial="${esc(g.compound)}">+ Add vial</button></div>
       <div class="lot-row ${lotSel?'has-sel':''}">${g.rows.map(r=> r.tile).join('')}</div>
