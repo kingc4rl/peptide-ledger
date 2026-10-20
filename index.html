@@ -1416,11 +1416,11 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .vial-shelf .vial-tile.on .vial-label{ color:var(--vc); }
 .vial-shelf .vial-lvl{ width:60%; }
 .vial-shelf.static.has-sel .vial-tile:not(.on){ opacity:.5; }
+/* while swiping, every vial is redrawn each frame: skip the costly CSS shadow filter (the vial art has its own shadow) */
+.vial-shelf.loop .vial-tile .vial-svg, .vial-shelf.loop .vial-tile.on .vial-svg{ filter:none; }
+.vial-shelf.loop .vial-tile .vial-svg{ transition:transform .35s cubic-bezier(.2,.8,.2,1); }
 .hap-test{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .hap-test span{ font-size:14px; margin-right:auto; }
-.shelf-dots{ display:flex; justify-content:center; gap:6px; margin:2px 0 6px; }
-.shelf-dots i{ width:6px; height:6px; border-radius:50%; background:rgba(0,0,0,.16); transition:background .25s, transform .25s; }
-.shelf-dots i.on{ background:rgba(0,0,0,.55); transform:scale(1.1); }
 .vial-shelf ~ .vial-detail::before{ display:none; }
 .stash-none{ text-align:center; padding:20px 0; }
 @media (min-width:700px){ .vial-shelf .vial-tile{ flex-basis:calc(100% / 6); width:calc(100% / 6); } }

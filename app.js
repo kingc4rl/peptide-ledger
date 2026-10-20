@@ -2322,14 +2322,14 @@ function renderSerum(){
 /* ===================== Peptides: Stash ===================== */
 /* Stash carousel: free-floating vials on a ring, three in full view with faded previews either side, looping forever.
    The swipe is driven here rather than by native scrolling, so every vial's position, size and fade are set together
-   in the same frame (no lag or shake). Release throws with momentum and a critically damped spring lands exactly on a
-   vial. A light haptic tick plays as each vial passes the centre. */
+   in the same frame. Letting go glides on at the finger's own speed and slows exponentially (like iOS scrolling),
+   tuned to stop exactly on a vial; tapping a vial spins it to the centre. A light haptic tick plays per vial. */
 let shelfPos = 1;   // centre of the carousel, in vials (vial 1 centred = first three in view); kept across re-renders
-function bindShelf(row, dots, n){
-  const tiles = $$('.vial-tile', row), T = tiles.length, di = dots ? $$('i', dots) : [];
+function bindShelf(row, n){
+  const tiles = $$('.vial-tile', row), T = tiles.length;
   const wrap = (a, m)=> ((a % m) + m) % m;
   const sel = row.classList.contains('has-sel');
-  let W = 1, CW = 1, pos = shelfPos, vel = 0, target = null, raf = 0, lastT = 0, lastTick = null;
+  let W = 1, CW = 1, pos = shelfPos, anim = null, raf = 0, lastTick = null;
   const measure = ()=>{ CW = row.clientWidth; W = tiles[0].offsetWidth || CW/3.5 || 1; };
   function paint(){
     for(let i=0;i<T;i++){
@@ -2337,36 +2337,40 @@ function bindShelf(row, dots, n){
       if(a > 3){ if(t.style.visibility!=='hidden') t.style.visibility = 'hidden'; continue; }
       const e = Math.min(1, Math.max(0, a - 1));                                // the three in view stay full; previews fade
       const x = CW/2 - W/2 + u*W - Math.sign(u)*e*W*.22;                        // previews tuck in a little
-      t.style.visibility = '';
-      t.style.transform = `translate3d(${x.toFixed(2)}px,0,0) scale(${(1 - e*.14).toFixed(4)})`;
+      if(t.style.visibility) t.style.visibility = '';
+      t.style.transform = e ? `translate3d(${x.toFixed(1)}px,0,0) scale(${(1 - e*.14).toFixed(3)})` : `translate3d(${x.toFixed(1)}px,0,0)`;
       t.style.opacity = ((1 - e*.6) * (sel && !t.classList.contains('on') ? .5 : 1)).toFixed(3);
     }
-    const c = wrap(Math.round(pos), T), real = c % n;
-    if(real !== lastTick){
-      if(lastTick!=null) haptic('select');
-      lastTick = real;
-      di.forEach((dot,i)=> dot.classList.toggle('on', [real-1, real, real+1].some(k=> wrap(k, n) === i)));
-    }
+    const real = wrap(Math.round(pos), T) % n;
+    if(real !== lastTick){ if(lastTick!=null) haptic('select'); lastTick = real; }
   }
-  function step(now){
+  // animations are pure functions of time, so every frame lands exactly where it should whatever the frame rate
+  function frame(now){
     raf = 0;
-    if(target==null) return;
-    const dt = Math.min(.032, Math.max(.001, (now - (lastT || now)) / 1000)); lastT = now;
-    const k = 190, d = 2*Math.sqrt(k);                                          // critically damped: no overshoot wobble
-    vel += (-k*(pos - target) - d*vel) * dt; pos += vel*dt;
-    if(Math.abs(pos - target) < .0008 && Math.abs(vel) < .02){ pos = target; vel = 0; target = null; pos = wrap(pos, T); }
+    if(!anim) return;
+    if(anim.t0==null) anim.t0 = now;
+    const t = now - anim.t0;
+    if(t >= anim.dur){ pos = wrap(anim.to, T); anim = null; }
+    else pos = anim.from + (anim.to - anim.from) * anim.ease(t / anim.dur, t);
     shelfPos = pos; paint();
-    if(target!=null) raf = requestAnimationFrame(step);
+    if(anim) raf = requestAnimationFrame(frame);
   }
-  const animateTo = (to, v0)=>{ target = to; vel = v0 || 0; lastT = 0; if(!raf) raf = requestAnimationFrame(step); };
-  const stop = ()=>{ target = null; vel = 0; if(raf){ cancelAnimationFrame(raf); raf = 0; } };
+  const run = a=>{ anim = {...a, from: pos, t0: performance.now()}; if(!raf) raf = requestAnimationFrame(frame); };
+  // glide: starts at velocity (to-from)/tau and decays exponentially; ends when within a hair of the target
+  const TAU = 300;
+  const glide = to=> run({kind:'glide', to, dur: TAU*6, ease: (_, t)=> Math.min(1, (1 - Math.exp(-t/TAU)) / (1 - Math.exp(-6)))});
+  // spin (tap): smooth ease-in-out, longer for vials further away
+  const spin = to=>{ const d = Math.abs(to - pos); run({to, dur: Math.min(900, 280 + 110*d), ease: q=> q<.5 ? 4*q*q*q : 1 - Math.pow(-2*q + 2, 3)/2}); };
+  const stop = ()=>{ anim = null; if(raf){ cancelAnimationFrame(raf); raf = 0; } };
   // drag: horizontal moves are ours (touch-action: pan-y leaves vertical page scrolling to the browser)
   let drag = null, moved = false;
   row.addEventListener('pointerdown', e=>{
     if(e.pointerType==='mouse' && e.button!==0) return;
+    const wasMoving = !!anim && anim.kind==='glide' && Math.abs(anim.to - pos) > .05;   // a tap on a gliding row just stops it, like iOS
     stop(); measure();
     drag = {id:e.pointerId, x0:e.clientX, y0:e.clientY, p0:pos, s:[{x:e.clientX, t:e.timeStamp}], lock:false};
-    moved = false;
+    moved = wasMoving;
+    if(wasMoving) glide(Math.round(pos));
   });
   row.addEventListener('pointermove', e=>{
     if(!drag || e.pointerId!==drag.id) return;
@@ -2374,22 +2378,38 @@ function bindShelf(row, dots, n){
     if(!drag.lock){
       if(Math.abs(dx) < 6) return;
       if(Math.abs(e.clientY - drag.y0) > Math.abs(dx)){ drag = null; return; }
-      drag.lock = true; moved = true; drag.x0 = e.clientX; drag.p0 = pos;
+      drag.lock = true; moved = true; drag.x0 = e.clientX; drag.p0 = pos; drag.s = [{x:e.clientX, t:e.timeStamp}];
       try{ row.setPointerCapture(e.pointerId); }catch(_){}
     }
-    pos = drag.p0 - (e.clientX - drag.x0)/W; shelfPos = pos;
     drag.s.push({x:e.clientX, t:e.timeStamp}); if(drag.s.length > 12) drag.s.shift();
-    if(!raf) raf = requestAnimationFrame(()=>{ raf = 0; paint(); });
+    if(!raf) raf = requestAnimationFrame(dragFrame);
   });
+  /* Finger updates and screen refreshes don't arrive in step, so moving only on each update looks choppy. Instead
+     every frame shows where the finger was 20 ms earlier, interpolated between its updates: steady, smooth motion. */
+  const LAG = 20;
+  function dragFrame(now){
+    raf = 0;
+    if(!drag || !drag.lock) return;
+    const q = now - LAG, s0 = drag.s;
+    let x = s0[s0.length-1].x;
+    for(let i=s0.length-1;i>0;i--){
+      const a = s0[i-1], b = s0[i];
+      if(q >= a.t && q <= b.t){ x = a.x + (b.x - a.x) * (b.t > a.t ? (q - a.t)/(b.t - a.t) : 1); break; }
+      if(q < a.t) x = a.x;
+    }
+    pos = drag.p0 - (x - drag.x0)/W; shelfPos = pos; paint();
+    raf = requestAnimationFrame(dragFrame);
+  }
   const release = e=>{
     if(!drag || e.pointerId!==drag.id) return;
     const d = drag; drag = null;
     if(!d.lock) return;
-    const b = d.s[d.s.length-1], a = d.s.find(q=> b.t - q.t <= 100) || b, dtm = Math.max(1, b.t - a.t);
-    const v = e.timeStamp - b.t > 90 || a===b ? 0 : -(b.x - a.x) / dtm / W;      // vials per ms over the last 0.1 s (0 if the finger paused)
-    const throwTo = Math.round(pos + Math.max(-5, Math.min(5, v*190)));           // flick distance, capped
     if(raf){ cancelAnimationFrame(raf); raf = 0; }
-    animateTo(throwTo, v*1000);
+    const b = d.s[d.s.length-1], a = d.s.find(q=> b.t - q.t <= 100) || b, dtm = b.t - a.t;
+    const v = (e.timeStamp - b.t > 80 || dtm < 8) ? 0 : -(b.x - a.x) / dtm / W;   // vials per ms over the last 0.1 s
+    // where the glide would naturally come to rest, rounded to a vial (a slow release just settles on the nearest)
+    const finger = d.p0 - (b.x - d.x0)/W;                                           // the finger is a touch ahead of the lagged view
+    glide(Math.round(finger + Math.max(-12, Math.min(12, v*TAU))));
   };
   row.addEventListener('pointerup', release);
   row.addEventListener('pointercancel', release);
@@ -2400,18 +2420,18 @@ function bindShelf(row, dots, n){
     if(Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
     e.preventDefault(); stop(); measure();
     pos += e.deltaX / W; shelfPos = pos; paint();
-    clearTimeout(wheelT); wheelT = setTimeout(()=> animateTo(Math.round(pos)), 120);
+    clearTimeout(wheelT); wheelT = setTimeout(()=> glide(Math.round(pos)), 120);
   }, {passive:false});
   // size (a stash drawn while its tab is hidden has none until it's shown)
   new ResizeObserver(()=>{ if(row.clientWidth){ measure(); paint(); } }).observe(row);
   if(row.clientWidth){ measure(); paint(); }
-  // a newly picked vial (tapped preview, scan) glides to the centre if it isn't already in full view
+  // the picked vial (tap, scan) spins round to the centre by the shortest way
   const on = row.querySelector('.vial-tile.on');
   if(on){
     const want = +on.dataset.i;
     let best = null;
     for(let i=0;i<T;i++){ if(i % n !== want) continue; const u = wrap(i - pos + T/2, T) - T/2; if(best==null || Math.abs(u) < Math.abs(best)) best = u; }
-    if(best!=null && Math.abs(best) > 1.01) animateTo(Math.round(pos + best));
+    if(best!=null && Math.abs(best) > .01) spin(Math.round(pos + best));
   }
 }
 function renderVials(){
@@ -2497,14 +2517,14 @@ function renderVials(){
       <span class="vial-meta">${esc(g.meta)}</span>
       ${g.pct!=null ? `<span class="vial-lvl"><i style="width:${Math.round(g.pct*100)}%"></i></span>` : ''}
     </button>`).join('');
-  el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''} ${loop?'loop':'static'}">${Array.from({length:copies},(_,c)=> tilesHTML(c)).join('')}</div>${loop ? `<div class="shelf-dots" aria-hidden="true">${shelf.map(()=>'<i></i>').join('')}</div>` : ''}`;
+  el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''} ${loop?'loop':'static'}">${Array.from({length:copies},(_,c)=> tilesHTML(c)).join('')}</div>`;
   const grid = $('.vial-shelf', el);
-  if(loop) bindShelf(grid, $('.shelf-dots', el), shelf.length);
+  if(loop) bindShelf(grid, shelf.length);
   const selIdx = shelf.findIndex(g=> g.compound===stashSel);
   if(selIdx>=0){
     const g = shelf[selIdx];
     // the detail opens under the carousel for the tapped vial
-    const rowEnd = $('.shelf-dots', el) || grid;
+    const rowEnd = grid;
     const det = document.createElement('div');
     det.className = 'vial-detail';
     det.style.setProperty('--vc', g.color);
