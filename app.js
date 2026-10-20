@@ -2528,7 +2528,6 @@ function vialSVG(g, i){
   <rect x="${cx-26}" y="8" width="52" height="19" rx="3" fill="url(#${id}cap)"/>
   <rect x="${cx-26}" y="13.7" width="52" height=".35" fill="#fff" fill-opacity=".2"/><rect x="${cx-26}" y="19.8" width="52" height=".35" fill="#fff" fill-opacity=".2"/>
   <ellipse cx="${cx}" cy="8.5" rx="26" ry="4" fill="url(#${id}capT)"/>
-  <ellipse cx="${cx}" cy="8.5" rx="8" ry="1.5" fill="${m[0]}" fill-opacity=".5"/>
   <rect x="${cx-26}" y="25.6" width="52" height="1.4" rx=".7" fill="${m[0]}" fill-opacity=".65"/>
   </svg>`;
 }
