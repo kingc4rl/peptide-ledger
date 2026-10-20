@@ -1138,7 +1138,8 @@ function renderProtocols(){
     const day = doseDayISO();
     const sched = active.filter(p=> doseDatesInRange(p, day, day).length);
     const due = sched.filter(p=> injectionsOn(p, day) < splitCount(p)).length;
-    lbl.textContent = !active.length ? '' : due ? `${due} due today` : sched.length ? "Today's doses done" : 'No doses due today';
+    const loggedToday = active.some(p=> injectionsOn(p, day) > 0);
+    lbl.textContent = !active.length ? '' : due ? `${due} due today` : (sched.length || loggedToday) ? 'All done for today ✓' : 'No doses due today';
   }
   if(!active.length){
     el.innerHTML = `<div class="empty"><div class="glyph">💉</div><p>No active protocols. Add one on the Protocols tab to start logging doses.</p><button type="button" class="btn btn-sm" data-goto-tab="protocols">Go to Protocols</button></div>`;
@@ -1176,6 +1177,7 @@ function renderProtocols(){
     b.disabled = true; b.classList.add('pop');
     await logInjection(p, day, 1, nowHHMM());
     showToast(`Logged ${p.compound||'dose'}`);
+    maybeCelebrate();
   }));
 }
 /* Buttons and widgets inside a protocol's dose details (now shown in the review screen). */
@@ -1239,7 +1241,7 @@ function openDoseModal(p){
   `, body=>{
     bindDoseDetail(body, serum);
     const go = $('#doseGo',body);
-    if(go) go.addEventListener('click', async ()=>{ go.disabled = true; await logInjection(p, day, 1, $('#doseTime',body).value); closeModal(); });
+    if(go) go.addEventListener('click', async ()=>{ go.disabled = true; await logInjection(p, day, 1, $('#doseTime',body).value); closeModal(); maybeCelebrate(); });
     const undo = $('#doseUndo',body);
     if(undo) undo.addEventListener('click', async ()=>{ undo.disabled = true; await logInjection(p, day, -1); closeModal(); });
   });
@@ -5038,11 +5040,13 @@ function updateIosBar(){
 let currentTab = 'dose';
 function setTab(name, opts){
   if(!TABS[name]) name = 'dose';
+  const prevTab = currentTab;
   currentTab = name;
   Object.entries(TABS).forEach(([k,sel])=>{ $(sel).hidden = k!==name; });
   const hl = TAB_META[name] && TAB_META[name].back || name;
   $$('.tabbar [data-tab], .claude-orb').forEach(b=>{ const on = b.dataset.tab===hl; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   updateNav();
+  animateView(prevTab, name);
   lsSet('ledger.tab', name);
   if(name==='tools'){ runCalc(); showAppVersion(); }          // redraw the syringe now that it has a width
   if(name==='progress') renderProgress();
@@ -5054,6 +5058,7 @@ function initTabs(){
   $$('.tabbar [data-tab], .claude-orb').forEach(b=> b.addEventListener('click', ()=>{ haptic('select'); setTab(b.dataset.tab); }));
   $$('#moreView [data-goto]').forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.goto)));
   $('#moreBackup').addEventListener('click', ()=> openBackupModal());
+  $('#moreWhatsNew').addEventListener('click', ()=> openWhatsNew(true));
   $('#navBack').addEventListener('click', ()=> setTab(TAB_META[currentTab].back || 'dose'));
   $('#navActions').addEventListener('click', e=>{ const b = e.target.closest('[data-proxy]'); if(b){ const real = $(b.dataset.proxy); if(real) real.click(); } });
   window.addEventListener('scroll', updateIosBar, {passive:true});
@@ -5292,7 +5297,7 @@ async function initNotificationActions(){
       setTab('dose');
       if(ev.actionId==='log'){
         const day = x.iso || doseDayISO();
-        if(injectionsOn(p, day) < splitCount(p)){ await logInjection(p, day, 1, nowHHMM()); showToast(`Logged ${p.compound||'dose'}`); }
+        if(injectionsOn(p, day) < splitCount(p)){ await logInjection(p, day, 1, nowHHMM()); showToast(`Logged ${p.compound||'dose'}`); maybeCelebrate(); }
         else showToast(`${p.compound||'That dose'} is already logged`);
       } else openDoseModal(p);
     });
@@ -5455,6 +5460,173 @@ function nativeOnForeground(){
   scheduleDoseReminders();
 }
 
+/* ===================== Today: streak, this week, insights, celebration ===================== */
+/* A day counts toward the streak when every dose scheduled that day was logged; days with nothing scheduled
+   are skipped (they neither add to nor break the streak). Today counts once it is complete. */
+function dayStatus(iso){
+  const rows = dosesOnDay(iso);
+  if(!rows.length) return 'none';
+  if(rows.some(r=> r.kind==='missed')) return 'missed';
+  if(rows.some(r=> r.kind==='due')) return 'open';
+  return 'done';
+}
+function doseStreak(){
+  const today = doseDayISO();
+  let n = dayStatus(today)==='done' ? 1 : 0, iso = addDays(today, -1);
+  for(let i=0; i<400; i++, iso = addDays(iso, -1)){
+    const s = dayStatus(iso);
+    if(s==='none') continue;
+    if(s==='done') n++; else break;
+  }
+  return n;
+}
+function weekStats(){
+  const today = doseDayISO();
+  let taken = 0, missed = 0, due = 0;
+  for(let i=0;i<7;i++){
+    dosesOnDay(addDays(today, -i)).forEach(r=>{ if(r.kind==='taken') taken++; else if(r.kind==='missed') missed++; else due++; });
+  }
+  const pct = taken+missed ? Math.round(taken/(taken+missed)*100) : null;
+  // weight change over the last 7 days: latest weigh-in vs the one closest to 7 days before it
+  const ws = state.checkins.filter(c=> num(c.weight,null)!=null).map(c=>({d:c.date, w:toUnit(c.weight, c.weightUnit||'lb', 'lb')})).sort((a,b)=> a.d.localeCompare(b.d));
+  let wChange = null;
+  if(ws.length>=2){
+    const last = ws[ws.length-1], target = addDays(last.d, -7);
+    const prev = ws.filter(x=> x.d <= target).pop() || (daysBetween(ws[0].d, last.d) >= 3 ? ws[0] : null);
+    if(prev && prev!==last) wChange = Math.round((last.w - prev.w)*10)/10;
+  }
+  return {taken, missed, due, pct, wChange};
+}
+function todayInsights(){
+  const out = [], today = doseDayISO();
+  const fmtDay = iso=> new Date(iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'short'});
+  state.protocols.filter(isActiveP).forEach(p=>{
+    const v = state.vials.find(x=> x.id===p.activeVialId);
+    if(!v || v.remainingMg==null) return;
+    const d = doseAt(p, today), mg = doseToMg(d.dose, d.doseUnit), f = effectiveFreqDays(p);
+    if(!mg || !f) return;
+    const days = Math.floor(num(v.remainingMg,0)/mg * f);
+    const sealed = state.vials.filter(x=> !isDepleted(x) && (x.compound||'').trim().toLowerCase()===(p.compound||'').trim().toLowerCase()).reduce((s,x)=> s+num(x.qty,0), 0);
+    if(days <= 7) out.push({ic:'vial', tone: days<=2 ? 'warn' : 'pep',
+      t: days<=0 ? `${p.compound} vial is about empty` : `${p.compound} vial runs out in ~${days} day${days===1?'':'s'} (${fmtDay(addDays(today, days))})`,
+      s: sealed>0 ? `${sealed} sealed vial${sealed===1?'':'s'} ready to open` : 'No sealed vials left: time to reorder'});
+  });
+  state.vials.filter(v=> !isDepleted(v) && v.remainingMg!=null && v.bud).forEach(v=>{
+    const left = daysBetween(today, v.bud);
+    if(left>=0 && left<=5) out.push({ic:'clock', tone:'warn', t:`${v.compound} passes its beyond-use date ${left===0?'today':`in ${left} day${left===1?'':'s'}`}`, s:`Use by ${fmtDateShort(v.bud)}`});
+  });
+  // usual injection time, from logged times
+  const timed = state.protocols.filter(isActiveP).map(p=>({p, ts:(Array.isArray(p.doseTimes)?p.doseTimes:[]).slice(-14).map(x=> new Date(x.t))})).filter(x=> x.ts.length>=5)
+    .sort((a,b)=> b.ts.length-a.ts.length)[0];
+  if(timed){
+    const mins = timed.ts.map(d=> d.getHours()*60+d.getMinutes()).sort((a,b)=>a-b), m = mins[Math.floor(mins.length/2)];
+    const hhmm = `${String(Math.floor(m/60)).padStart(2,'0')}:${String(Math.round(m%60/5)*5%60).padStart(2,'0')}`;
+    out.push({ic:'time', tone:'info', t:`You usually take ${timed.p.compound} around ${fmtClock(hhmm)}`, s:`Based on your last ${timed.ts.length} logged doses`});
+  }
+  // weight since the earliest active protocol started
+  const starts = state.protocols.filter(isActiveP).filter(p=> p.startDate).sort((a,b)=> a.startDate.localeCompare(b.startDate));
+  const ws = state.checkins.filter(c=> num(c.weight,null)!=null).sort((a,b)=> a.date.localeCompare(b.date));
+  if(starts.length && ws.length>=2){
+    const p = starts[0], base = ws.filter(c=> c.date <= p.startDate).pop() || ws.find(c=> c.date >= p.startDate), last = ws[ws.length-1];
+    if(base && last && base!==last){
+      const diff = Math.round((toUnit(last.weight,last.weightUnit||'lb','lb') - toUnit(base.weight,base.weightUnit||'lb','lb'))*10)/10;
+      if(Math.abs(diff) >= 0.5) out.push({ic:'trend', tone: diff<0 ? 'good' : 'info', t:`${diff<0?'Down':'Up'} ${Math.abs(diff)} lb since starting ${p.compound}`, s:`${fmtDateShort(base.date)} → ${fmtDateShort(last.date)}`});
+    }
+  }
+  return out.slice(0, 4);
+}
+const INSIGHT_ICONS = {
+  vial:'<path d="M9 3h6M10 3v4.5L6.5 18a2 2 0 001.9 2.7h7.2a2 2 0 001.9-2.7L14 7.5V3"/><path d="M7.5 14h9"/>',
+  clock:'<circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/>',
+  time:'<path d="M12 3a9 9 0 100 18 9 9 0 000-18z"/><path d="M12 7v5l3.5 2"/>',
+  trend:'<path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/>',
+};
+function renderTodaySummary(){
+  const el = $('#todaySummary'); if(!el) return;
+  if(!state.protocols.some(isActiveP)){ el.innerHTML = ''; el.hidden = true; return; }
+  el.hidden = false;
+  const streak = doseStreak(), w = weekStats(), ins = todayInsights();
+  const ring = w.pct==null ? '' : `<svg class="wk-ring" viewBox="0 0 44 44" aria-hidden="true"><circle cx="22" cy="22" r="18" class="bg"/><circle cx="22" cy="22" r="18" class="fg" style="stroke-dasharray:${(w.pct/100*113.1).toFixed(1)} 113.1"/></svg>`;
+  el.innerHTML = `<div class="card-block-head"><div class="card-h"><h3>This week</h3>${streak>=2 ? `<span class="streak-chip">🔥 ${streak}-day streak</span>` : ''}</div></div>
+    <div class="card wk-card">
+      <div class="wk-grid">
+        <div class="wk-stat">${ring}<div><strong>${w.pct==null?'—':w.pct+'%'}</strong><span>on schedule</span></div></div>
+        <div class="wk-stat"><div><strong>${w.taken}</strong><span>doses logged</span></div></div>
+        <div class="wk-stat"><div><strong>${streak}</strong><span>day streak</span></div></div>
+        <div class="wk-stat"><div><strong class="${w.wChange<0?'good':''}">${w.wChange==null?'—':(w.wChange>0?'+':'')+w.wChange+' lb'}</strong><span>weight, 7 days</span></div></div>
+      </div>
+      ${ins.length ? `<div class="insights">${ins.map(x=>`<div class="insight ${x.tone}"><span class="ins-ic"><svg viewBox="0 0 24 24" aria-hidden="true">${INSIGHT_ICONS[x.ic]}</svg></span><div><strong>${esc(x.t)}</strong><small>${esc(x.s)}</small></div></div>`).join('')}</div>` : ''}
+    </div>`;
+}
+/* Confetti and a done ring the first time all of today's doses are logged. */
+function maybeCelebrate(){
+  const today = doseDayISO();
+  if(dayStatus(today)!=='done' || lsGet('ledger.celebrated','')===today) return;
+  lsSet('ledger.celebrated', today);
+  haptic('success');
+  const streak = doseStreak();
+  const layer = document.createElement('div'); layer.className = 'celebrate'; layer.setAttribute('aria-hidden','true');
+  const colors = ['#ff8a1e','#ffb469','#5aa9ff','#34c759','#ff375f','#ffd60a','#a78bfa'];
+  let bits = '';
+  for(let i=0;i<70;i++){
+    const x = (Math.random()*2-1)*190, y = -(160 + Math.random()*260), r = Math.random()*720-360, d = .9 + Math.random()*.7;
+    bits += `<i style="--x:${x.toFixed(0)}px;--y:${y.toFixed(0)}px;--r:${r.toFixed(0)}deg;--d:${d.toFixed(2)}s;background:${colors[i%colors.length]};${i%3?'':'border-radius:50%;'}"></i>`;
+  }
+  layer.innerHTML = `<div class="cel-burst">${bits}</div>
+    <div class="cel-card"><svg viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="27" class="bg"/><circle cx="32" cy="32" r="27" class="fg"/><path d="M21 33l7.5 7.5L44 25" class="ck"/></svg>
+      <strong>All done for today</strong><span>${streak>=2 ? `🔥 ${streak}-day streak` : 'Nice work. See you tomorrow.'}</span></div>`;
+  document.body.appendChild(layer);
+  layer.addEventListener('click', ()=> layer.remove());
+  setTimeout(()=> layer.classList.add('out'), 2300);
+  setTimeout(()=> layer.remove(), 2800);
+}
+
+/* ===================== Launch animation, screen transitions, What's new ===================== */
+const APP_VERSION = '1.34.0';
+const WHATS_NEW = [
+  {v:'1.34.0', title:'Streaks, insights and a little celebration', items:[
+    ['🔥','Streaks and a weekly summary on Today: how often you hit your schedule, doses logged and weight change.'],
+    ['💡','Smart insights: when a vial will run out, beyond-use dates coming up, your usual dose time, and weight since you started.'],
+    ['🎉','Log the last dose of the day and get a small celebration.'],
+    ['✨','A launch animation and smooth transitions between screens.'],
+  ]},
+  {v:'1.32.0', title:'The Liquid Glass redesign', items:[
+    ['📱','Large titles, a floating glass tab bar and Claude as its own button.'],
+    ['✅','One-tap logging with the round button beside each pen.'],
+    ['🧪','Stash as glass tiles with search.'],
+  ]},
+];
+function openWhatsNew(all){
+  const list = all ? WHATS_NEW : WHATS_NEW.slice(0,1);
+  openModal("What's new", `${list.map((r,i)=>`<div class="wn-block">
+      ${i===0 && !all ? `<div class="wn-hero"><img src="icons/icon-192.png" alt="" width="72" height="72"><div class="wn-ver">Version ${esc(r.v)}</div><h2>${esc(r.title)}</h2></div>` : `<h4 class="wn-h">${esc(r.v)} · ${esc(r.title)}</h4>`}
+      ${r.items.map(([ic,t])=>`<div class="wn-item"><span>${ic}</span><p>${esc(t)}</p></div>`).join('')}</div>`).join('')}
+    <button type="button" class="btn btn-accent-pep wn-go" id="wnGo">Continue</button>`, body=>{
+    $('#wnGo',body).addEventListener('click', closeModal);
+  });
+}
+function maybeShowWhatsNew(){
+  const seen = lsGet('ledger.seenVersion','');
+  lsSet('ledger.seenVersion', APP_VERSION);
+  // only after an update, never on a first install with no data
+  if(seen===APP_VERSION || (!seen && !hasAnyData())) return;
+  if(WHATS_NEW[0].v!==APP_VERSION) return;
+  setTimeout(()=> openWhatsNew(false), 900);
+}
+function hideLaunch(){
+  const l = $('#launch'); if(!l) return;
+  const wait = Math.max(0, 650 - (performance.now() - (window.__launchT||0)));
+  setTimeout(()=>{ l.classList.add('out'); setTimeout(()=> l.remove(), 520); }, wait);
+}
+const TAB_ORDER = ['dose','protocols','inventory','progress','more','tools','resources','ask'];
+function animateView(prev, next){
+  const el = $(TABS[next]); if(!el || prev===next || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  const dir = TAB_ORDER.indexOf(next) >= TAB_ORDER.indexOf(prev) ? 1 : -1;
+  el.style.setProperty('--dir', dir);
+  el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
+  setTimeout(()=> el.classList.remove('view-in'), 400);
+}
+
 /* ===================== Render all ===================== */
 function renderAll(){
   renderProtocols();
@@ -5469,6 +5641,7 @@ function renderAll(){
   if(currentTab==='progress') renderProgress();
   renderBackupNudge();
   scheduleDoseReminders();
+  renderTodaySummary();
   updateNav();
 }
 
@@ -5500,6 +5673,8 @@ async function boot(){
   renderStoragePill();
   setTab('dose', {keepScroll:true});   // the app always opens on Dose
   resolveDataReady();
+  hideLaunch();
+  maybeShowWhatsNew();
   if(IS_NATIVE && lsGet('ledger.remindAsked','')!=='1' && capPlugin('LocalNotifications')){ lsSet('ledger.remindAsked','1'); setRemindersOn(true); }
   nativeOnForeground();
   const scanBtn = $('#scanVialBtn'); if(scanBtn && capPlugin('CapacitorBarcodeScanner')){ scanBtn.hidden = false; scanBtn.addEventListener('click', scanFindVial); updateNav(); }
