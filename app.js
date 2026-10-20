@@ -2362,57 +2362,47 @@ function bindShelf(row, n){
   // spin (tap): smooth ease-in-out, longer for vials further away
   const spin = to=>{ const d = Math.abs(to - pos); run({to, dur: Math.min(900, 280 + 110*d), ease: q=> q<.5 ? 4*q*q*q : 1 - Math.pow(-2*q + 2, 3)/2}); };
   const stop = ()=>{ anim = null; if(raf){ cancelAnimationFrame(raf); raf = 0; } };
-  // drag: horizontal moves are ours (touch-action: pan-y leaves vertical page scrolling to the browser)
-  let drag = null, moved = false;
-  row.addEventListener('pointerdown', e=>{
-    if(e.pointerType==='mouse' && e.button!==0) return;
-    const wasMoving = !!anim && anim.kind==='glide' && Math.abs(anim.to - pos) > .05;   // a tap on a gliding row just stops it, like iOS
+  // gestures: touch events on the phone (they arrive with no delay), pointer events for a mouse or pen.
+  // Horizontal moves are ours; vertical ones are left to the page (touch-action: pan-y).
+  let drag = null, moved = false, caught = false;
+  const start = (x, y, t)=>{
+    caught = !!anim && Math.abs(anim.to - pos) > .02;      // touching a moving row catches it right where it is
     stop(); measure();
-    drag = {id:e.pointerId, x0:e.clientX, y0:e.clientY, p0:pos, s:[{x:e.clientX, t:e.timeStamp}], lock:false};
-    moved = wasMoving;
-    if(wasMoving) glide(Math.round(pos));
-  });
-  row.addEventListener('pointermove', e=>{
-    if(!drag || e.pointerId!==drag.id) return;
-    const dx = e.clientX - drag.x0;
-    if(!drag.lock){
-      if(Math.abs(dx) < 6) return;
-      if(Math.abs(e.clientY - drag.y0) > Math.abs(dx)){ drag = null; return; }
-      drag.lock = true; moved = true; drag.x0 = e.clientX; drag.p0 = pos; drag.s = [{x:e.clientX, t:e.timeStamp}];
-      try{ row.setPointerCapture(e.pointerId); }catch(_){}
-    }
-    drag.s.push({x:e.clientX, t:e.timeStamp}); if(drag.s.length > 12) drag.s.shift();
-    if(!raf) raf = requestAnimationFrame(dragFrame);
-  });
-  /* Finger updates and screen refreshes don't arrive in step, so moving only on each update looks choppy. Instead
-     every frame shows where the finger was 20 ms earlier, interpolated between its updates: steady, smooth motion. */
-  const LAG = 20;
-  function dragFrame(now){
-    raf = 0;
-    if(!drag || !drag.lock) return;
-    const q = now - LAG, s0 = drag.s;
-    let x = s0[s0.length-1].x;
-    for(let i=s0.length-1;i>0;i--){
-      const a = s0[i-1], b = s0[i];
-      if(q >= a.t && q <= b.t){ x = a.x + (b.x - a.x) * (b.t > a.t ? (q - a.t)/(b.t - a.t) : 1); break; }
-      if(q < a.t) x = a.x;
-    }
-    pos = drag.p0 - (x - drag.x0)/W; shelfPos = pos; paint();
-    raf = requestAnimationFrame(dragFrame);
-  }
-  const release = e=>{
-    if(!drag || e.pointerId!==drag.id) return;
-    const d = drag; drag = null;
-    if(!d.lock) return;
-    if(raf){ cancelAnimationFrame(raf); raf = 0; }
-    const b = d.s[d.s.length-1], a = d.s.find(q=> b.t - q.t <= 100) || b, dtm = b.t - a.t;
-    const v = (e.timeStamp - b.t > 80 || dtm < 8) ? 0 : -(b.x - a.x) / dtm / W;   // vials per ms over the last 0.1 s
-    // where the glide would naturally come to rest, rounded to a vial (a slow release just settles on the nearest)
-    const finger = d.p0 - (b.x - d.x0)/W;                                           // the finger is a touch ahead of the lagged view
-    glide(Math.round(finger + Math.max(-12, Math.min(12, v*TAU))));
+    drag = {x0:x, y0:y, p0:pos, s:[{x, t}], lock:false};
+    moved = caught;                                         // ...and that touch isn't a tap on a vial
   };
-  row.addEventListener('pointerup', release);
-  row.addEventListener('pointercancel', release);
+  const move = (x, y, t)=>{
+    if(!drag) return false;
+    if(!drag.lock){
+      const dx = x - drag.x0, dy = y - drag.y0;
+      if(Math.abs(dx) < 4 && Math.abs(dy) < 4) return false;
+      if(Math.abs(dy) > Math.abs(dx)){ drag = null; if(caught) glide(Math.round(pos)); return false; }
+      drag.lock = true; moved = true;
+    }
+    drag.s.push({x, t}); if(drag.s.length > 12) drag.s.shift();
+    pos = drag.p0 - (x - drag.x0)/W; shelfPos = pos;       // the vials stay glued to the finger
+    if(!raf) raf = requestAnimationFrame(()=>{ raf = 0; if(drag) paint(); });
+    return true;
+  };
+  const end = t=>{
+    const d = drag; drag = null;
+    if(!d || !d.lock){ if(caught) glide(Math.round(pos)); return; }
+    if(raf){ cancelAnimationFrame(raf); raf = 0; }
+    paint();
+    const b = d.s[d.s.length-1], a = d.s.find(q=> b.t - q.t <= 100) || b, dtm = b.t - a.t;
+    const v = (t - b.t > 80 || dtm < 8) ? 0 : -(b.x - a.x) / dtm / W;                 // vials per ms over the last 0.1 s
+    // glide on at the finger's speed to where it would naturally stop, rounded to a vial
+    glide(Math.round(pos + Math.max(-12, Math.min(12, v*TAU))));
+  };
+  row.addEventListener('touchstart', e=>{ if(e.touches.length===1) start(e.touches[0].clientX, e.touches[0].clientY, e.timeStamp); else drag = null; }, {passive:true});
+  row.addEventListener('touchmove', e=>{ const q = e.touches[0]; if(q && move(q.clientX, q.clientY, e.timeStamp) && e.cancelable) e.preventDefault(); }, {passive:false});
+  row.addEventListener('touchend', e=>{ if(!e.touches.length) end(e.timeStamp); }, {passive:true});
+  row.addEventListener('touchcancel', e=> end(e.timeStamp), {passive:true});
+  row.addEventListener('pointerdown', e=>{ if(e.pointerType==='touch' || e.button!==0) return; start(e.clientX, e.clientY, e.timeStamp); });
+  row.addEventListener('pointermove', e=>{ if(e.pointerType==='touch' || !drag) return; if(move(e.clientX, e.clientY, e.timeStamp)){ try{ row.setPointerCapture(e.pointerId); }catch(_){} } });
+  const pEnd = e=>{ if(e.pointerType!=='touch') end(e.timeStamp); };
+  row.addEventListener('pointerup', pEnd);
+  row.addEventListener('pointercancel', pEnd);
   row.addEventListener('click', e=>{ if(moved){ e.stopPropagation(); e.preventDefault(); moved = false; } }, true);   // a swipe isn't a tap
   // trackpad / mouse wheel
   let wheelT = 0;
