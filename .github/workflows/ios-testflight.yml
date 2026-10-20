@@ -6,6 +6,9 @@ name: iPhone app (TestFlight)
 
 on:
   workflow_dispatch:
+  # TestFlight builds expire after 90 days; a fresh build on the 1st of each month keeps the app installable
+  schedule:
+    - cron: '17 9 1 * *'
   push:
     branches: [main]
     paths: ['index.html', 'app.js', 'sw.js', 'manifest.webmanifest', 'icons/**', 'native/**', '.github/workflows/ios-testflight.yml']

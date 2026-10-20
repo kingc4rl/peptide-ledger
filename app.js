@@ -5072,6 +5072,13 @@ function renderBackupNudge(){
   const last = lsGet('ledger.lastBackup','');
   const stale = !last || daysBetween(last, todayISO()) >= 14;
   const snoozed = lsGet('ledger.nudgeSnooze','') === todayISO();
+  // iPhone app with weekly automatic backups: back up now if one is due, and only nag if that fails
+  if(IS_NATIVE && capPlugin('ICloudBackup') && nativeOn('autoBackup','1')){
+    if(hasAnyData() && daysBetween(lsGet('ledger.autoBackupDate','2000-01-01'), todayISO()) >= 7) autoBackup(false);
+    el.hidden = !(lsGet('ledger.autoBackupFailed','')==='1' && hasAnyData() && !snoozed);
+    $('#backupNudgeText').textContent = 'The automatic backup to iCloud Drive didn\'t work. Back up by hand for now.';
+    return;
+  }
   el.hidden = !(hasAnyData() && stale && !snoozed && storageMode!=='memory');
   $('#backupNudgeText').textContent = last ? `Last backup ${fmtDate(last)}. Your data lives only on this device.` : 'No backup yet. Your data lives only on this device.';
 }
@@ -5318,16 +5325,19 @@ async function nativeShareFile(name, text, title){
   try{ await SH.share({title, url:w.uri, dialogTitle:title}); }catch(e){ if(!/cancel/i.test(String(e && e.message))) throw e; return 'cancel'; }
   return true;
 }
+let autoBackupBusy = false;
 async function autoBackup(force){
-  const IB = capPlugin('ICloudBackup'); if(!IB) return null;
+  const IB = capPlugin('ICloudBackup'); if(!IB || autoBackupBusy) return null;
   if(!force && (!nativeOn('autoBackup','1') || daysBetween(lsGet('ledger.autoBackupDate','2000-01-01'), todayISO()) < 7)) return null;
   if(!force && !(state.protocols.length || state.vials.length || state.checkins.length)) return null;   // nothing worth saving yet
+  autoBackupBusy = true;
   try{
     const r = await IB.save({name:`pep-prep-auto-${todayISO()}.json`, text: JSON.stringify(await buildBackupPayload())});
-    lsSet('ledger.autoBackupDate', todayISO()); lsSet('ledger.autoBackupWhere', r.location||'');
-    lsSet('ledger.lastBackup', todayISO()); renderBackupNudge(); renderInstallCard();
+    lsSet('ledger.autoBackupDate', todayISO()); lsSet('ledger.autoBackupWhere', r.location||''); lsSet('ledger.autoBackupFailed', '');
+    lsSet('ledger.lastBackup', todayISO());
     return r;
-  }catch(e){ console.warn('Automatic backup failed', e); return null; }
+  }catch(e){ console.warn('Automatic backup failed', e); lsSet('ledger.autoBackupFailed', '1'); return null; }
+  finally{ autoBackupBusy = false; renderBackupNudge(); renderInstallCard(); }
 }
 
 /* ---- Apple Health: logged weights go to Health; weigh-ins from a scale come back as check-ins ---- */
@@ -5582,7 +5592,7 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.34.0';
+const APP_VERSION = '1.35.0';
 const WHATS_NEW = [
   {v:'1.34.0', title:'Streaks, insights and a little celebration', items:[
     ['🔥','Streaks and a weekly summary on Today: how often you hit your schedule, doses logged and weight change.'],
