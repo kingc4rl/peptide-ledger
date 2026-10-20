@@ -2320,34 +2320,62 @@ function renderSerum(){
 }
 
 /* ===================== Peptides: Stash ===================== */
-/* Stash carousel: one row of vials, three in view, swiped sideways with snapping. Vials ease smaller and fainter
-   as they slide toward the edges, and the dots show which part of the row is in view. */
-function bindShelf(row, dots, keepX){
-  if(!row) return;
+/* Stash carousel: one row of free-floating vials, three in full view with faded previews either side.
+   It loops forever: the row holds `copies` repeats of the n vials, and once a swipe settles it jumps by whole copies
+   back to the middle one (invisible, since the copies are identical). Each vial passing the centre gives a haptic tick. */
+function bindShelf(row, dots, keepX, n, midCopy){
   const tiles = $$('.vial-tile', row), di = dots ? $$('i', dots) : [];
-  if(keepX!=null) row.scrollLeft = keepX;
-  const on = row.querySelector('.vial-tile.on');
-  if(on){   // bring a newly picked vial (e.g. from a scan) into view
-    const l = on.offsetLeft, r = l + on.offsetWidth;
-    if(l < row.scrollLeft || r > row.scrollLeft + row.clientWidth) row.scrollTo({left: Math.max(0, l - row.clientWidth/3), behavior: keepX==null ? 'auto' : 'smooth'});
+  const tw = ()=> (tiles[1] ? tiles[1].offsetLeft - tiles[0].offsetLeft : tiles[0].offsetWidth) || 1;
+  const centreOf = i=> tiles[i].offsetLeft + tiles[i].offsetWidth/2 - row.clientWidth/2;   // scrollLeft that centres tile i
+  const centreIdx = ()=> Math.round((row.scrollLeft + row.clientWidth/2 - tiles[0].offsetLeft - tiles[0].offsetWidth/2) / tw());
+  let raf = 0, lastReal = null, settle = 0, touching = false;
+  const recentre = ()=>{
+    if(touching || !row.clientWidth) return;
+    const c = centreIdx(), copy = Math.floor(c / n);
+    if(copy !== midCopy) row.scrollLeft += (midCopy - copy) * n * tw();
+  };
+  function place(keepX){
+    if(keepX) row.scrollLeft = keepX;
+    else row.scrollLeft = centreOf(midCopy*n + 1);        // start with the first three vials in full view
+    recentre();
+    const on = row.querySelector('.vial-tile.on');
+    if(on){   // bring a newly picked vial (e.g. from a scan) into view: the nearest copy of it
+      const c = centreIdx(), want = +on.dataset.i;
+      let best = null;
+      tiles.forEach((t,i)=>{ if(+t.dataset.i===want && (best==null || Math.abs(i-c) < Math.abs(best-c))) best = i; });
+      if(best!=null && Math.abs(best - c) > 1) row.scrollTo({left: centreOf(best), behavior: keepX ? 'smooth' : 'auto'});
+    }
+    paint();
   }
-  let raf = 0;
   const paint = ()=>{
     raf = 0;
-    const w = row.clientWidth || 1, mid = row.scrollLeft + w/2;
+    const w = tw(), mid = row.scrollLeft + row.clientWidth/2;
     tiles.forEach(t=>{
-      const c = t.offsetLeft + t.offsetWidth/2;
-      const d = Math.min(1, Math.abs(c - mid) / (w/2 + t.offsetWidth/2));   // 0 centre, 1 just off screen
-      const k = Math.max(0, d - .55) / .45;                                   // only the outer edge fades
-      t.style.setProperty('--edge', k.toFixed(3));
+      const dx = t.offsetLeft + t.offsetWidth/2 - mid, u = Math.abs(dx) / w;   // distance from centre, in vials
+      if(u > 3.2) return;
+      const e = Math.min(1, Math.max(0, u - 1));          // the three in view stay full; previews fade
+      t.style.setProperty('--edge', e.toFixed(3));
+      t.style.setProperty('--pull', (-Math.sign(dx) * e * w * .22).toFixed(1) + 'px');   // and tuck in so more of them peeks in
     });
-    if(di.length){
-      const first = Math.round(row.scrollLeft / ((tiles[0] && tiles[0].offsetWidth) || 1));
-      di.forEach((dot,i)=> dot.classList.toggle('on', i>=first && i<first+3));
+    const real = ((centreIdx() % n) + n) % n;
+    if(real !== lastReal){
+      if(lastReal!=null) haptic('select');
+      lastReal = real;
+      di.forEach((dot,i)=> dot.classList.toggle('on', [real-1, real, real+1].some(k=> ((k%n)+n)%n === i)));
     }
   };
-  row.addEventListener('scroll', ()=>{ if(!raf) raf = requestAnimationFrame(paint); }, {passive:true});
-  requestAnimationFrame(paint);
+  row.addEventListener('scroll', ()=>{
+    if(!raf) raf = requestAnimationFrame(paint);
+    clearTimeout(settle); settle = setTimeout(recentre, 160);
+  }, {passive:true});
+  row.addEventListener('touchstart', ()=>{ touching = true; }, {passive:true});
+  row.addEventListener('touchend', ()=>{ touching = false; clearTimeout(settle); settle = setTimeout(recentre, 160); }, {passive:true});
+  tiles.forEach(t=> t.style.setProperty('--edge', '1'));
+  // a stash drawn while its tab is hidden has no size yet: position it once it becomes visible
+  if(!row.clientWidth){
+    const ro = new ResizeObserver(()=>{ if(row.clientWidth){ ro.disconnect(); place(null); } });
+    ro.observe(row);
+  } else place(keepX);
 }
 function renderVials(){
   const el = $('#vialList');
@@ -2424,15 +2452,18 @@ function renderVials(){
   if(stashSel && !groups[stashSel]) stashSel = null;
   if(lotSel && !(stashSel && groups[stashSel].some(v=>v.id===lotSel))) lotSel = null;
   const prevShelf = $('.vial-shelf', el), prevX = prevShelf ? prevShelf.scrollLeft : null;
-  el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''}">${shelf.map((g,i)=>`
-    <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}">
-      ${vialSVG(g, i)}
+  // more than three peptides loop endlessly: the row holds several copies and quietly re-centres when it settles
+  const loop = shelf.length > 3, copies = loop ? 2*Math.ceil(21/shelf.length) + 1 : 1, midCopy = (copies-1)/2;
+  const tilesHTML = c=> shelf.map((g,i)=>`
+    <button type="button" class="vial-tile ${stashSel===g.compound?'on':''} ${g.low?'low':''}" data-vial-group="${esc(g.compound)}" data-i="${i}" aria-expanded="${stashSel===g.compound}" style="--vc:${g.color}"${c!==midCopy ? ' aria-hidden="true" tabindex="-1"' : ''}>
+      ${vialSVG(g, c===midCopy ? i : `${i}c${c}`)}
       <span class="vial-label">${esc(g.compound)}</span>
       <span class="vial-meta">${esc(g.meta)}</span>
       ${g.pct!=null ? `<span class="vial-lvl"><i style="width:${Math.round(g.pct*100)}%"></i></span>` : ''}
-    </button>`).join('')}</div>${shelf.length>3 ? `<div class="shelf-dots" aria-hidden="true">${shelf.map(()=>'<i></i>').join('')}</div>` : ''}`;
+    </button>`).join('');
+  el.innerHTML = `<div class="vial-shelf ${stashSel?'has-sel':''} ${loop?'loop':'static'}">${Array.from({length:copies},(_,c)=> tilesHTML(c)).join('')}</div>${loop ? `<div class="shelf-dots" aria-hidden="true">${shelf.map(()=>'<i></i>').join('')}</div>` : ''}`;
   const grid = $('.vial-shelf', el);
-  bindShelf(grid, $('.shelf-dots', el), prevX);
+  if(loop) bindShelf(grid, $('.shelf-dots', el), prevX, shelf.length, midCopy);
   const selIdx = shelf.findIndex(g=> g.compound===stashSel);
   if(selIdx>=0){
     const g = shelf[selIdx];
@@ -5420,7 +5451,7 @@ function haptic(kind){
   const H = capPlugin('Haptics'); if(!H) return;
   try{
     if(kind==='success') H.notification({type:'SUCCESS'});
-    else if(kind==='select') H.selectionChanged();
+    else if(kind==='select'){ if(!haptic.primed){ H.selectionStart(); haptic.primed = true; } H.selectionChanged(); }   // iOS ignores selectionChanged until selectionStart
     else H.impact({style: kind==='medium' ? 'MEDIUM' : 'LIGHT'});
   }catch(e){}
 }
