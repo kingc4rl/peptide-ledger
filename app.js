@@ -6345,10 +6345,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.43.0';
+const APP_VERSION = '1.44.0';
 const WHATS_NEW = [
+  {v:'1.44.0', title:'A more realistic site map', items:[
+    ['📍','The injection site map now shows a realistic front view, with grids on your lower abdomen (belly-button height down, out to the hips) and the front of your thighs.'],
+  ]},
   {v:'1.43.0', title:'A new injection site map', items:[
-    ['📍','An illustrated body with grids over your abdomen, thighs, arms, flanks and glutes. Tap the exact square you used.'],
+    ['📍','An illustrated body with grids over your injection areas. Tap the exact square you used.'],
     ['🔴','Past injections show as red dots that fade over three weeks, so you can see where to rotate next.'],
   ]},
   {v:'1.42.0', title:'Confirm before logging', items:[
