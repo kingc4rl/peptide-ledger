@@ -3658,7 +3658,8 @@ const INJECTION_SITES = [
   {name:'Glute – L',         view:'back',  cx:212, cy:162, rx:12, ry:12},
   {name:'Glute – R',         view:'back',  cx:238, cy:162, rx:12, ry:12},
 ];
-const SITE_NAMES = INJECTION_SITES.filter(s=> s.view==='front').map(s=>s.name);   // the areas on the map (arm/flank/glute names stay valid for old entries)
+// the areas on the map, used for rotation and the site list (older names such as upper abdomen or glutes stay valid in history)
+const SITE_NAMES = ['Abdomen lower – R', 'Abdomen lower – L', 'Thigh – R', 'Thigh – L'];
 function siteLogOf(p){ return Array.isArray(p && p.siteLog) ? p.siteLog.filter(e=>e && e.site) : []; }
 function lastSiteOf(p){
   const log = siteLogOf(p).slice().sort((a,b)=> (a.date||'').localeCompare(b.date||''));
@@ -3690,16 +3691,15 @@ function bmPatch(tl, tr, br, bl, bowTop=0, bowBot=0){
     return [x, bmLerp(yTop, yBot, v)];
   };
 }
-/* Areas: name, the patch, grid size, and which squares belong (one abdomen grid is split into R/L and upper/lower). */
+/* Areas: name, the patch, grid size, and which squares belong (one abdomen grid is split into right and left). */
 const BM_AREAS = (()=>{
-  const abd = bmPatch([84,186],[216,186],[202,236],[98,236], 12, 26);
+  // abdomen from belly-button height down, reaching out toward the hips; squares touching the navel are left out
+  const abd = bmPatch([70,208],[230,208],[226,252],[74,252], 0, 20);
   const out = [];
   const add = (name, pt, cols, rows, keep)=> out.push({name, pt, cols, rows, keep: keep || (()=>true)});
-  const nearNavel = (c,r)=> (c===4||c===5) && (r===2||r===3);    // squares touching the navel are left out
-  add('Abdomen upper – R', abd, 10, 6, (c,r)=> c<5 && r<3 && !nearNavel(c,r));
-  add('Abdomen upper – L', abd, 10, 6, (c,r)=> c>=5 && r<3 && !nearNavel(c,r));
-  add('Abdomen lower – R', abd, 10, 6, (c,r)=> c<5 && r>=3 && !nearNavel(c,r));
-  add('Abdomen lower – L', abd, 10, 6, (c,r)=> c>=5 && r>=3 && !nearNavel(c,r));
+  const nearNavel = (c,r)=> (c===5||c===6) && r===0;
+  add('Abdomen lower – R', abd, 12, 4, (c,r)=> c<6 && !nearNavel(c,r));
+  add('Abdomen lower – L', abd, 12, 4, (c,r)=> c>=6 && !nearNavel(c,r));
   add('Thigh – R', bmPatch([66,284],[104,290],[128,426],[82,428]), 3, 7);
   add('Thigh – L', bmPatch([196,290],[234,284],[218,428],[172,426]), 3, 7);
   return out;
