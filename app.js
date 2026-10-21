@@ -1231,7 +1231,7 @@ function openQuickLog(p){
   const units0 = conc && perMg ? round1(perMg/conc*100) : null;
   const now = new Date(), hh = String(now.getHours()).padStart(2,'0'), mm = String(now.getMinutes()).padStart(2,'0');
   const done = injectionsOn(p, day);
-  const sst = {site:'', spot:'', view:null};
+  const sst = {site:'', spot:''};
   const fromMg = mg=> unit==='mcg' ? mg*1000 : mg;      // mg → the protocol's own unit
   openModal(p.compound || 'Log dose', `
     <div class="ql">
@@ -1846,7 +1846,7 @@ function openProtocolModal(existing, prefill){
           <div><label for="pSite" class="footnote" style="display:block;margin-bottom:3px;">Site used</label>
             <select id="pSite">
               <option value="">No change</option>
-              ${INJECTION_SITES.map(s=>`<option value="${esc(s.name)}">${esc(s.name)}</option>`).join('')}
+              ${SITE_NAMES.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('')}
               ${lastSiteOf(p)? '<option value="__undo">↩ Remove latest entry</option>' : ''}
             </select>
           </div>
@@ -2019,11 +2019,11 @@ function openProtocolModal(existing, prefill){
     });
 
     // Injection site: body map + select stay in sync
-    const pst = {site:'', spot:'', view:null};
+    const pst = {site:'', spot:''};
     const drawMap = bindBodyMap($('#pSiteMap',body), p, pst, ()=>{ $('#pSite',body).value = pst.site; });
     $('#pSite',body).addEventListener('change', ()=>{
       const v = $('#pSite',body).value;
-      pst.site = (v && v!=='__undo') ? v : ''; pst.spot = ''; pst.view = pst.site ? bmViewOf(pst.site) : pst.view;
+      pst.site = (v && v!=='__undo') ? v : ''; pst.spot = '';
       drawMap();
     });
     (function(){
@@ -3658,7 +3658,7 @@ const INJECTION_SITES = [
   {name:'Glute – L',         view:'back',  cx:212, cy:162, rx:12, ry:12},
   {name:'Glute – R',         view:'back',  cx:238, cy:162, rx:12, ry:12},
 ];
-const SITE_NAMES = INJECTION_SITES.map(s=>s.name);
+const SITE_NAMES = INJECTION_SITES.filter(s=> s.view==='front').map(s=>s.name);   // the areas on the map (arm/flank/glute names stay valid for old entries)
 function siteLogOf(p){ return Array.isArray(p && p.siteLog) ? p.siteLog.filter(e=>e && e.site) : []; }
 function lastSiteOf(p){
   const log = siteLogOf(p).slice().sort((a,b)=> (a.date||'').localeCompare(b.date||''));
@@ -3675,11 +3675,12 @@ function suggestNextSite(p){
   return SITE_NAMES.slice().sort((a,b)=> (lastUsed[a]||'').localeCompare(lastUsed[b]||''))[0];
 }
 /* ===== Injection site map =====
-   An illustrated figure (front and back) with curved grids over the usual subcutaneous areas. Every grid square is a
-   spot you can tap; it is saved as {site: area name (used for rotation), spot: square id}. Past injections show as red
-   dots that fade over three weeks; the area to use next is tinted blue. Entries from before spots existed sit at the
-   middle of their area. */
+   A front view of the torso and legs (cropped at the chest, like an injection-site chart) with curved grids over the
+   abdomen and the front of each thigh. Every grid square is a spot you can tap; it is saved as {site: area name (used
+   for rotation), spot: square id}. Past injections show as red dots that fade over three weeks; the area to use next is
+   tinted blue. Entries from before spots existed sit at the middle of their area. */
 const BM_SKIN = '#f9e3c6', BM_LINE = '#3d3542';
+const BM_OUTLINE = 'M126 0 C127 8 121 15 106 21 C88 27 66 30 56 40 C48 48 47 62 50 76 C52 86 56 94 62 100 C64 126 66 154 68 180 C69 196 71 208 71 220 C71 236 66 252 63 266 C60 282 58 302 59 324 C61 356 67 394 75 434 L134 434 C136 402 141 362 145 334 C146 326 147 321 150 319 C153 321 154 326 155 334 C159 362 164 402 166 434 L225 434 C233 394 239 356 241 324 C242 302 240 282 237 266 C234 252 229 236 229 220 C229 208 231 196 232 180 C234 154 236 126 238 100 C244 94 248 86 250 76 C253 62 252 48 244 40 C234 30 212 27 194 21 C179 15 173 8 174 0 Z';
 function bmLerp(a, b, t){ return a + (b-a)*t; }
 // A grid over a four-cornered patch (corners clockwise from top-left), optionally bowed: point(u,v) for u,v in 0..1.
 function bmPatch(tl, tr, br, bl, bowTop=0, bowBot=0){
@@ -3689,29 +3690,21 @@ function bmPatch(tl, tr, br, bl, bowTop=0, bowBot=0){
     return [x, bmLerp(yTop, yBot, v)];
   };
 }
-/* Areas: name, view, the patch, grid size, and which squares belong (to split one patch into L/R or upper/lower). */
+/* Areas: name, the patch, grid size, and which squares belong (one abdomen grid is split into R/L and upper/lower). */
 const BM_AREAS = (()=>{
-  const abd = bmPatch([78,186],[222,186],[204,262],[96,262], 14, 26);
+  const abd = bmPatch([84,186],[216,186],[202,236],[98,236], 12, 26);
   const out = [];
-  const add = (name, view, pt, cols, rows, keep)=> out.push({name, view, pt, cols, rows, keep: keep || (()=>true)});
-  // front: abdomen around the navel (squares right next to it are left out), and the front of each thigh
-  const nearNavel = (c,r)=> (c===4||c===5) && (r===2||r===3);
-  add('Abdomen upper – R', 'front', abd, 10, 6, (c,r)=> c<5 && r<3 && !nearNavel(c,r));
-  add('Abdomen upper – L', 'front', abd, 10, 6, (c,r)=> c>=5 && r<3 && !nearNavel(c,r));
-  add('Abdomen lower – R', 'front', abd, 10, 6, (c,r)=> c<5 && r>=3 && !nearNavel(c,r));
-  add('Abdomen lower – L', 'front', abd, 10, 6, (c,r)=> c>=5 && r>=3 && !nearNavel(c,r));
-  add('Thigh – R', 'front', bmPatch([70,318],[120,312],[132,398],[84,402]), 3, 6);
-  add('Thigh – L', 'front', bmPatch([180,312],[230,318],[216,402],[168,398]), 3, 6);
-  // back: backs of the upper arms, the flanks (love handles) and the upper outer glutes
-  add('Upper arm – L', 'back', bmPatch([30,104],[50,102],[47,178],[27,180]), 2, 5);
-  add('Upper arm – R', 'back', bmPatch([250,102],[270,104],[273,180],[253,178]), 2, 5);
-  add('Flank – L', 'back', bmPatch([74,196],[104,196],[102,246],[70,246]), 2, 3);
-  add('Flank – R', 'back', bmPatch([196,196],[226,196],[230,246],[198,246]), 2, 3);
-  add('Glute – L', 'back', bmPatch([80,262],[146,262],[146,316],[76,310], 6, 0), 4, 3);
-  add('Glute – R', 'back', bmPatch([154,262],[220,262],[224,310],[154,316], 6, 0), 4, 3);
+  const add = (name, pt, cols, rows, keep)=> out.push({name, pt, cols, rows, keep: keep || (()=>true)});
+  const nearNavel = (c,r)=> (c===4||c===5) && (r===2||r===3);    // squares touching the navel are left out
+  add('Abdomen upper – R', abd, 10, 6, (c,r)=> c<5 && r<3 && !nearNavel(c,r));
+  add('Abdomen upper – L', abd, 10, 6, (c,r)=> c>=5 && r<3 && !nearNavel(c,r));
+  add('Abdomen lower – R', abd, 10, 6, (c,r)=> c<5 && r>=3 && !nearNavel(c,r));
+  add('Abdomen lower – L', abd, 10, 6, (c,r)=> c>=5 && r>=3 && !nearNavel(c,r));
+  add('Thigh – R', bmPatch([66,284],[104,290],[128,426],[82,428]), 3, 7);
+  add('Thigh – L', bmPatch([196,290],[234,284],[218,428],[172,426]), 3, 7);
   return out;
 })();
-// Every tappable square: {id, area, view, pts:[[x,y]x4], cx, cy}
+// Every tappable square: {id, area, pts:[[x,y]x4], cx, cy}
 const BM_CELLS = (()=>{
   const cells = [];
   BM_AREAS.forEach((a, ai)=>{
@@ -3719,7 +3712,7 @@ const BM_CELLS = (()=>{
       if(!a.keep(c, r)) continue;
       const pts = [a.pt(c/a.cols, r/a.rows), a.pt((c+1)/a.cols, r/a.rows), a.pt((c+1)/a.cols, (r+1)/a.rows), a.pt(c/a.cols, (r+1)/a.rows)];
       const [cx, cy] = a.pt((c+.5)/a.cols, (r+.5)/a.rows);
-      cells.push({id: `${ai}:${c}:${r}`, area: a.name, view: a.view, pts, cx, cy});
+      cells.push({id: `f${ai}:${c}:${r}`, area: a.name, pts, cx, cy});
     }
   });
   return cells;
@@ -3728,60 +3721,46 @@ function bmAreaCentre(name){
   const cs = BM_CELLS.filter(c=> c.area===name); if(!cs.length) return null;
   return [cs.reduce((t,c)=> t+c.cx, 0)/cs.length, cs.reduce((t,c)=> t+c.cy, 0)/cs.length];
 }
-function bmViewOf(site){ const a = BM_AREAS.find(x=> x.name===site); return a ? a.view : 'front'; }
-// The figure: arms, then torso and legs, with a few contour lines; the same silhouette serves the back view.
-function bmFigure(view){
-  const arm = side=>{ const k = side<0 ? 1 : -1, X = x=> side<0 ? x : 300-x;
-    return `<path d="M${X(66)} 48 C${X(44)} 54 ${X(34)} 74 ${X(32)} 100 L${X(28)} 190 C${X(26)} 214 ${X(24)} 238 ${X(22)} 262 C${X(18)} 276 ${X(14)} 290 ${X(18)} 304 C${X(22)} 318 ${X(30)} 324 ${X(38)} 316 C${X(44)} 306 ${X(46)} 292 ${X(46)} 278 L${X(50)} 230 C${X(54)} 200 ${X(58)} 168 ${X(62)} 140 Z" fill="url(#bmSkinG)" stroke="${BM_LINE}" stroke-width="1.6" stroke-linejoin="round"/>
-      <path d="M${X(24)} 300 l${-k*0} 0 M${X(26)} 292 C${X(28)} 300 ${X(30)} 306 ${X(29)} 312 M${X(32)} 292 C${X(35)} 300 ${X(36)} 306 ${X(35)} 314 M${X(38)} 290 C${X(41)} 298 ${X(42)} 304 ${X(41)} 312" fill="none" stroke="${BM_LINE}" stroke-width="1" stroke-linecap="round" opacity=".55"/>`; };
-  const body = `<path d="M126 0 C126 12 112 20 88 26 C64 32 54 46 54 70 L58 150 C60 174 68 188 68 206 C66 228 60 248 62 272 L66 404 L146 404 L150 300 L154 404 L234 404 L238 272 C240 248 234 228 232 206 C232 188 240 174 242 150 L246 70 C246 46 236 32 212 26 C188 20 174 12 174 0 Z" fill="url(#bmSkinG)" stroke="${BM_LINE}" stroke-width="1.6" stroke-linejoin="round"/>`;
-  const front = `<path d="M96 132 C104 142 112 146 120 146 M204 132 C196 142 188 146 180 146" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>
-    <ellipse cx="150" cy="222" rx="7" ry="4" fill="none" stroke="${BM_LINE}" stroke-width="1.2"/><circle cx="150" cy="222" r="2" fill="none" stroke="${BM_LINE}" stroke-width="1"/>
-    <path d="M134 290 Q150 300 166 290" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>`;
-  const back = `<path d="M150 40 L150 250" fill="none" stroke="${BM_LINE}" stroke-width="1" stroke-dasharray="2 4" opacity=".5"/>
-    <path d="M92 80 C100 104 116 112 132 106 M208 80 C200 104 184 112 168 106" fill="none" stroke="${BM_LINE}" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>
-    <path d="M150 262 L150 300 M96 318 Q120 330 146 320 M154 320 Q180 330 204 318" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>`;
-  const defs = `<defs><linearGradient id="bmSkinG" x1="0" x2="1"><stop offset="0" stop-color="#ecc9a3"/><stop offset=".2" stop-color="#f7dcbd"/><stop offset=".5" stop-color="${BM_SKIN}"/><stop offset=".8" stop-color="#f7dcbd"/><stop offset="1" stop-color="#ecc9a3"/></linearGradient></defs>`;
-  return defs + arm(-1) + arm(1) + body + (view==='back' ? back : front);
-}
-function bodyMapSVG(p, selected, spot, view){
-  view = view || 'front';
+function bodyMapSVG(p, selected, spot){
   const log = siteLogOf(p), today = todayISO();
   const next = suggestNextSite(p);
   const poly = pts=> pts.map(([x,y])=> `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
-  const cells = BM_CELLS.filter(c=> c.view===view);
-  // grid lines: every square outlined; the suggested area tinted, the selected square filled
-  const grid = cells.map(c=> `<polygon points="${poly(c.pts)}" class="bm-cell${c.area===next ? ' next' : ''}${c.id===spot ? ' sel' : ''}" data-site="${esc(c.area)}" data-spot="${c.id}" tabindex="-1"><title>${esc(c.area)}</title></polygon>`).join('');
-  // history dots, newest on top, fading over 21 days
-  const dots = log.filter(e=> bmViewOf(e.site)===view).sort((a,b)=> (a.date||'').localeCompare(b.date||'')).map(e=>{
+  const grid = BM_CELLS.map(c=> `<polygon points="${poly(c.pts)}" class="bm-cell${c.area===next ? ' next' : ''}${c.id===spot ? ' sel' : ''}" data-site="${esc(c.area)}" data-spot="${c.id}"><title>${esc(c.area)}</title></polygon>`).join('');
+  // history dots, newest on top, fading over three weeks
+  const dots = log.slice().sort((a,b)=> (a.date||'').localeCompare(b.date||'')).map(e=>{
     const cell = e.spot ? BM_CELLS.find(c=> c.id===e.spot) : null;
     const at = cell ? [cell.cx, cell.cy] : bmAreaCentre(e.site); if(!at) return '';
-    const age = Math.max(0, daysBetween(e.date, today));
-    if(age > 42) return '';
+    const age = Math.max(0, daysBetween(e.date, today)); if(age > 42) return '';
     const op = Math.max(.18, 1 - age/21*0.82);
-    return `<circle cx="${at[0].toFixed(1)}" cy="${at[1].toFixed(1)}" r="5.2" class="bm-dot" style="opacity:${op.toFixed(2)}"><title>${esc(e.site)} · ${esc(fmtDateShort(e.date))}</title></circle>`;
+    return `<circle cx="${at[0].toFixed(1)}" cy="${at[1].toFixed(1)}" r="5.4" class="bm-dot" style="opacity:${op.toFixed(2)}"><title>${esc(e.site)} · ${esc(fmtDateShort(e.date))}</title></circle>`;
   }).join('');
   const sel = spot ? BM_CELLS.find(c=> c.id===spot) : null;
-  const selMark = sel && sel.view===view ? `<circle cx="${sel.cx.toFixed(1)}" cy="${sel.cy.toFixed(1)}" r="7" class="bm-pick"/>` : '';
-  const tabs = ['front','back'].map(v=> `<button type="button" data-bm-view="${v}" class="${v===view?'on':''}">${v==='front'?'Front':'Back'}</button>`).join('');
-  return `<div class="bm-tabs" role="tablist">${tabs}</div>
-  <svg viewBox="0 0 300 404" role="img" aria-label="Injection site map, ${view} view. Tap a square to choose where you injected.">
-    ${bmFigure(view)}
+  const selMark = sel ? `<circle cx="${sel.cx.toFixed(1)}" cy="${sel.cy.toFixed(1)}" r="7.2" class="bm-pick"/>` : '';
+  const L = BM_LINE;
+  return `<svg viewBox="0 84 300 352" role="img" aria-label="Injection site map. Tap a square to choose where you injected.">
+    <defs>
+      <linearGradient id="bmSkinG" x1="0" x2="1"><stop offset="0" stop-color="#ecc9a3"/><stop offset=".22" stop-color="#f7dcbd"/><stop offset=".5" stop-color="${BM_SKIN}"/><stop offset=".78" stop-color="#f7dcbd"/><stop offset="1" stop-color="#ecc9a3"/></linearGradient>
+      <linearGradient id="bmFadeG" x1="0" x2="0" y1="84" y2="150" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity="0"/><stop offset="1" stop-color="#fff"/></linearGradient>
+      <mask id="bmFadeM" maskUnits="userSpaceOnUse" x="0" y="0" width="300" height="440"><rect width="300" height="440" fill="url(#bmFadeG)"/></mask>
+    </defs>
+    <g mask="url(#bmFadeM)">
+      <path d="${BM_OUTLINE}" fill="url(#bmSkinG)" stroke="${L}" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M82 120 C90 138 104 148 124 150 M218 120 C210 138 196 148 176 150" fill="none" stroke="${L}" stroke-width="1.5" stroke-linecap="round"/>
+    </g>
+    <ellipse cx="150" cy="214" rx="7" ry="4" fill="none" stroke="${L}" stroke-width="1.3"/><circle cx="150" cy="214" r="2" fill="none" stroke="${L}" stroke-width="1"/>
+    <path d="M138 312 Q150 322 162 312" fill="none" stroke="${L}" stroke-width="1.4" stroke-linecap="round"/>
     <g class="bm-grid">${grid}</g>
     <g pointer-events="none">${dots}${selMark}</g>
-    <text x="${view==='front'?16:284}" y="22" class="bm-side">R</text><text x="${view==='front'?284:16}" y="22" class="bm-side">L</text>
+    <text x="24" y="104" class="bm-side">R</text><text x="276" y="104" class="bm-side">L</text>
   </svg>
   <div class="bm-legend"><span><i class="k-dot"></i>Recent</span><span><i class="k-old"></i>Older</span><span><i class="k-next"></i>Suggested next</span><span><i class="k-sel"></i>This dose</span></div>`;
 }
-/* Wire a map into a container. st = {site, spot, view}; onChange runs after a square is picked or cleared. */
+/* Wire a map into a container. st = {site, spot}; onChange runs after a square is picked or cleared. */
 function bindBodyMap(el, p, st, onChange){
-  const draw = ()=>{ el.innerHTML = bodyMapSVG(p, st.site, st.spot, st.view || bmViewOf(st.site || suggestNextSite(p))); };
+  const draw = ()=>{ el.innerHTML = bodyMapSVG(p, st.site, st.spot); };
   el.addEventListener('click', e=>{
-    const t = e.target.closest('[data-bm-view]');
-    if(t){ st.view = t.dataset.bmView; draw(); return; }
     const z = e.target.closest('[data-spot]'); if(!z) return;
     if(st.spot===z.dataset.spot){ st.site = ''; st.spot = ''; } else { st.site = z.dataset.site; st.spot = z.dataset.spot; }
-    st.view = bmViewOf(st.site) || st.view;
     haptic('select'); draw(); onChange && onChange();
   });
   draw();
