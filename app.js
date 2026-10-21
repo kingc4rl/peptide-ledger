@@ -528,7 +528,7 @@ function renderCalcResult(){
   const filterLine = m.loss ? [['Filter loss', `${cfmt(m.loss,2)} mL`]] : [];
   let html = '';
   if(C.mode==='reverse'){
-    const base = [['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['1 unit', cmg(m.conc/100)]];
+    const base = [['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['1 unit', cmg(m.conc/100)]];
     if(C.revTab==='units'){
       const u = num(C.revUnits,0), mg = u/100*m.conc;
       html = u>0 ? `<div class="pc-hero"><div class="pc-hero-big">${cmg(mg)}</div><div class="pc-hero-sub">in ${cfmt(u,1)} units (${cfmt(u/100,3)} mL)</div><div class="pc-hero-meta">${Math.floor(m.usableMl/(u/100)+1e-9)} draws of ${cfmt(u,1)}u in the vial</div></div>` : `<div class="pc-empty">Enter the units you're drawing.</div>`;
@@ -557,7 +557,7 @@ function renderCalcResult(){
       <div class="pc-syr">${calcSyringeSVG(m.units, C.syrCap)}</div>
       <div class="pc-stats"><div><strong>${m.doses}</strong><span>doses in the vial</span></div><div><strong>${m.usableMl ? Math.round(m.leftMl/m.usableMl*100) : 0}%</strong><span>left after one dose</span></div><div><strong>${cfmt(m.leftMl,2)}</strong><span>mL left</span></div></div>
       ${blendBreak(m.doseMl)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Dose', cmg(m.actualMg)], ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Dose', cmg(m.actualMg)], ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}
       ${vialPair(m.leftMl, ` @ ${cmg(m.actualMg)}`)}`;
   } else if(C.device==='pen'){
     const max = Math.max(1, num(C.penMax,60)), shots = Math.ceil(m.units/max - 1e-9);
@@ -575,7 +575,7 @@ function renderCalcResult(){
       ${per > CALC_VIAL_ML ? `<div class="pc-warn">${cfmt(m.usableMl,2)} mL won't fit in ${carts} cartridge${carts>1?'s':''}. You need at least ${needCarts}.</div>` : ''}
       <div class="pc-carts">${Array.from({length:carts}, (_,i)=>{ const ml = Math.min(per, CALC_VIAL_ML); return `<div class="pc-cart"><div class="pc-cart-bar"><i style="width:${Math.round(ml/CALC_VIAL_ML*100)}%"></i></div><div class="pc-cart-h">Cartridge ${i+1}<span>${Math.round(ml/CALC_VIAL_ML*100)}% full</span></div><div class="pc-cart-n"><span><strong class="mono">${cfmt(ml,2)}</strong> mL</span><span><strong class="mono">${cfmt(ml*m.conc,2)}</strong> mg</span><span><strong class="mono">${m.doseMl?Math.floor(ml/m.doseMl+1e-9):0}</strong> doses</span></div></div>`; }).join('')}</div>
       ${blendBreak(m.doseMl)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}`;
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}`;
   } else {
     const per = num(C.sprayMl,0), mgPer = per*m.conc, sprays = mgPer ? m.doseMg/mgPer : 0, whole = Math.ceil(sprays - 1e-9);
     html = per>0 ? `<div class="pc-hero">
@@ -585,7 +585,7 @@ function renderCalcResult(){
       </div>
       <div class="pc-stats"><div><strong>${Math.floor(m.usableMl/per+1e-9)}</strong><span>sprays in the bottle</span></div><div><strong>${whole ? Math.floor(m.usableMl/(whole*per)+1e-9) : 0}</strong><span>doses of ${whole}</span></div><div><strong>${cfmt(m.conc,2)}</strong><span>mg/mL</span></div></div>
       ${blendBreak(per)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water/saline', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Concentration', `${cfmt(m.conc,3)} mg/mL`, true], ['Per spray', cmg(mgPer)]])}` : `<div class="pc-empty">Enter how much one spray or pump delivers.</div>`;
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water/saline', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per spray', cmg(mgPer)]])}` : `<div class="pc-empty">Enter how much one spray or pump delivers.</div>`;
   }
   el.innerHTML = (warn.length ? `<div class="pc-warn">${warn.join(' ')}</div>` : '') + html;
   const use = $('#pcUseWater', el);
@@ -1214,7 +1214,8 @@ function penRowHTML(p, color, day, i){
   const kind = m.vs.kind==='empty' ? 'bad' : m.stCls;
   const dose = m.amt.replace(/^([\d.]+)([a-z]+)$/i, '$1 $2');
   return `<button type="button" class="dose-pen" data-pen="${p.id}" aria-label="${esc(`${p.compound||'Protocol'}, ${dose}, ${status}. Tap to review and log.`)}">
-    ${penSVG({color, name: p.compound||'Untitled', dose, units: m.u!=null ? m.u : '—', sched: scheduleTag(p), status, kind, pct}, 'pn'+i)}</button>`;
+    ${penSVG({color, name: p.compound||'Untitled', dose, units: m.u!=null ? m.u : '—', sched: scheduleTag(p), status, kind, pct}, 'pn'+i)}
+    <span class="pen-cap" style="--pc:${color}"><strong>${esc(p.compound||'Untitled')}</strong><span class="pen-cap-d">${esc(dose)}${m.u!=null ? ` · ${m.u}u` : ''}</span><span class="pen-cap-s ${kind}">${esc(status)}</span></span></button>`;
 }
 /* Review & log screen for a protocol: the pen, a confirm box with dose, units and time, then the full details. */
 function openDoseModal(p){
@@ -1597,6 +1598,12 @@ async function resumeProtocol(p){
 }
 function stripId(obj){ const {id, ...rest} = obj; return rest; }
 /* Protocols tab: every non-archived protocol, tap to edit. */
+function relDay(iso){
+  const t = doseDayISO(), n = daysBetween(t, iso);
+  if(n===0) return 'Today'; if(n===1) return 'Tomorrow'; if(n===-1) return 'Yesterday';
+  if(n>1 && n<7) return new Date(iso+'T00:00:00').toLocaleDateString(undefined,{weekday:'long'});
+  return fmtDateShort(iso);
+}
 function renderProtocolManager(){
   const el = $('#protocolManager');
   if(!el) return;
@@ -1604,27 +1611,41 @@ function renderProtocolManager(){
     .sort((a,b)=> (a.status==='paused') - (b.status==='paused') || (a.compound||'').localeCompare(b.compound||'', undefined, {sensitivity:'base'}));
   if(!list.length){ el.innerHTML = `<div class="empty"><div class="glyph">📋</div><p>No protocols yet. Add one to set its dose, schedule and vial.</p></div>`; return; }
   const colorMap = protocolColorMap();
-  el.innerHTML = list.map(p=>{
-    const d = doseAt(p, doseDayISO());
-    const u = unitsPerInjection(p, doseDayISO());
+  el.innerHTML = list.map((p,pi)=>{
+    const day = doseDayISO();
+    const d = doseAt(p, day);
+    const u = unitsPerInjection(p, day);
     const paused = p.status==='paused';
     const notStarted = p.startDate && p.startDate > todayISO();
     const freq = num(p.frequencyDays,null);
-    const sched = scheduleLabel(p) || (freq ? (freq===1 ? 'Daily' : `Every ${freq} days`) : 'No schedule set');
+    const sched = scheduleTag(p) || (freq ? (freq===1 ? 'Daily' : `Every ${freq} days`) : 'No schedule');
     const hl = halfLifeOf(p);
     const parts = blendParts(p);
-    return `<div class="card-flat pm-row ${paused?'paused-row':''}" data-open-protocol="${p.id}">
-      <div style="min-width:0;">
-        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
-          <span class="serum-dot" style="background:${colorMap.get(p.id)||'var(--muted)'}"></span>
-          <strong>${esc(p.compound||'Untitled compound')}</strong>
-          <span class="pill pill-pep">${esc(fmtDose(d.dose, d.doseUnit))}</span>
-          ${u!=null?`<span class="pill pill-info">${u} units</span>`:''}
-          ${paused?'<span class="pill pill-muted">Paused</span>':notStarted?'<span class="pill pill-muted">Not started</span>':''}
-        </div>
-        <div class="footnote" style="margin-top:4px;">${esc(sched)}${splitCount(p)>1?` · split ×${splitCount(p)}`:''}${parts ? ` · blend: ${esc(parts.map(c=>c.name).join(', '))}` : hl?` · t½ ${esc(fmtHours(hl))}`:''}${titrationSteps(p).length?` · ${titrationSteps(p).length} titration step${titrationSteps(p).length===1?'':'s'}`:''}</div>
+    const color = colorMap.get(p.id) || 'var(--muted)';
+    const vial = p.activeVialId ? state.vials.find(v=> v.id===p.activeVialId) : null;
+    const pct = vial && vial.remainingMg!=null && num(vial.mgPerVial,0)>0 ? Math.max(0, Math.min(1, num(vial.remainingMg,0)/num(vial.mgPerVial,1))) : null;
+    // next dose: today (if any injection is still to do), otherwise the protocol's next scheduled day
+    let next = '';
+    if(paused) next = 'Paused';
+    else if(notStarted) next = `Starts ${relDay(p.startDate)}`;
+    else {
+      const todayLeft = doseDatesInRange(p, day, day).length && injectionsOn(p, day) < splitCount(p);
+      const nd = todayLeft ? day : (p.nextDose && p.nextDose > day ? p.nextDose : (doseDatesInRange(p, addDays(day,1), addDays(day,60))[0] || ''));
+      const t = fmtClock(p.doseTime);
+      next = nd ? `${nd===day && p.nextDose && p.nextDose < day ? 'Overdue' : relDay(nd)}${t ? ' · '+t : ''}` : '';
+    }
+    const steps = titrationSteps(p), stepNow = steps.filter(s0=> s0.start <= day).length;
+    const ring = steps.length ? (()=>{ const f = stepNow/steps.length, C2 = 2*Math.PI*15;
+      return `<span class="pm-ring" title="Titration step ${stepNow} of ${steps.length}"><svg viewBox="0 0 36 36"><circle cx="18" cy="18" r="15" class="pm-ring-bg"/><circle cx="18" cy="18" r="15" class="pm-ring-fg" style="stroke:${color};stroke-dasharray:${(C2*f).toFixed(1)} ${C2.toFixed(1)}"/></svg><span>${stepNow}/${steps.length}</span></span>`; })() : '';
+    const meta = [splitCount(p)>1 ? `${splitCount(p)}× a day` : '', parts ? parts.map(c=>c.name).join(' + ') : hl ? `t½ ${fmtHours(hl)}` : '', u!=null ? `${u} units` : ''].filter(Boolean).join(' · ');
+    return `<div class="pm-row2 ${paused?'paused-row':''}" data-open-protocol="${p.id}" role="button" tabindex="0" style="--pc:${color}">
+      <div class="pm-art">${vialSVG({color, pct: pct==null ? null : pct, mgTag:'', name: p.compound||'', brand:'', lot:''}, 'pm'+pi)}</div>
+      <div class="pm-main">
+        <div class="pm-top"><strong>${esc(p.compound||'Untitled compound')}</strong><span class="pill pill-pep">${esc(fmtDose(d.dose, d.doseUnit))}</span></div>
+        <div class="pm-next ${paused?'is-paused':''}">${next ? esc(next) : esc(sched)}</div>
+        <div class="pm-meta">${esc(sched)}${meta ? ' · '+esc(meta) : ''}</div>
       </div>
-      ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : `<span class="footnote" aria-hidden="true" style="white-space:nowrap">Edit ›</span>`}
+      ${paused ? `<button class="btn btn-sm" data-resume-protocol="${p.id}">▶ Resume</button>` : ring || '<span class="ios-chev" aria-hidden="true"></span>'}
     </div>`;
   }).join('');
   $$('[data-open-protocol]',el).forEach(c=> c.addEventListener('click', ()=> openProtocolModal(state.protocols.find(p=>p.id===c.dataset.openProtocol))));
@@ -1634,10 +1655,8 @@ function renderArchivedProtocols(){
   const el = $('#archivedProtocolList');
   if(!el) return;
   const archived = state.protocols.filter(p=>p.status==='archived').sort((a,b)=> (b.endedDate||'').localeCompare(a.endedDate||''));
-  if(!archived.length){
-    el.innerHTML = `<div class="empty" style="padding:14px 8px;"><p>Nothing archived yet. Archiving a protocol instead of deleting it keeps it here.</p></div>`;
-    return;
-  }
+  const card = el.closest('.card'); if(card) card.hidden = !archived.length;
+  if(!archived.length){ el.innerHTML = ''; return; }
   el.innerHTML = archived.map(p=>`
     <div class="card-flat" style="margin-bottom:8px;">
       <div style="display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;">
@@ -2009,6 +2028,8 @@ const HALF_LIFE_RULES = [
   [/ipamorelin/i, 2], [/sermorelin/i, 0.2], [/tesamorelin/i, 0.5], [/ghrp-?2/i, 0.5], [/ghrp-?6/i, 0.5],
   [/hexarelin/i, 1], [/mk-?677|ibutamoren/i, 24], [/pt-?141|bremelanotide/i, 2.7],
   [/thymosin alpha|tα1|ta1/i, 2], [/bpc-?157/i, 4],
+  // rough estimates (little human data); edit the protocol to use your own
+  [/ghk-?cu|copper peptide/i, 1], [/\bkpv\b/i, 1], [/tb-?500|thymosin beta/i, 48],
 ];
 function defaultHalfLife(name){
   const s = String(name||'');
@@ -2091,7 +2112,7 @@ function serumSeries(){
     if(parts){
       const bi = PROTOCOL_COLORS.indexOf(base);
       parts.forEach((c,i)=>{
-        if(!c.hl){ if(isActiveP(p)) missing.push(`${p.compound||'Blend'}: ${c.name}`); return; }
+        if(!c.hl){ if(isActiveP(p)) missing.push(`${c.name} (in ${p.compound||'your blend'})`); return; }
         out.push({p, id:`${p.id}:${i}`, label:c.name, sub:p.compound||'Blend', frac:c.frac, hl:c.hl,
           evs: evs.map(e=>({...e, mg:e.mg*c.frac})),
           color: i===0 || bi<0 ? base : PROTOCOL_COLORS[(bi + i*3) % PROTOCOL_COLORS.length]});
@@ -2255,7 +2276,7 @@ function renderSerum(){
   if(!el) return;
   if(ctl) ctl.innerHTML = '';
   const {series, missing} = serumSeries();
-  const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">No half-life for ${missing.map(m=>esc(m)).join(', ')}. Edit the protocol and enter one to chart it.</p>` : '';
+  const miss = missing.length ? `<p class="footnote" style="margin-top:8px;">Not charted (no half-life yet): ${missing.map(m=>esc(m)).join(', ')}. Add one in the protocol to chart it.</p>` : '';
   if(!series.length){
     el.innerHTML = `<div class="empty"><div class="glyph">📉</div><p>Add a protocol and log a dose to see the level of it in your body over time.</p></div>${miss}`;
     return;
@@ -3508,13 +3529,17 @@ function renderCostTracking(){
     const freq = effectiveFreqDays(p) || 0;
     if(freq>0) monthly += costPerMg*doseMg*(30/freq);
   });
+  const comp = Object.entries(byCompound).sort((a,b)=> b[1]-a[1]);
+  const maxC = comp.length ? comp[0][1] : 1;
+  const colorMap = new Map(comp.map(([k],i)=> [k, colorFor(k, i)]));
+  const vend = Object.entries(byVendor).sort((a,b)=> b[1]-a[1]);
   el.innerHTML = `
-    <div class="cost-total"><span>Total logged spend</span><strong class="mono">$${total.toFixed(2)}</strong></div>
-    ${monthly>0? `<div class="cost-total" style="margin-top:2px;"><span>Est. monthly burn (active protocols)</span><strong class="mono">$${monthly.toFixed(2)}</strong></div>`:''}
-    <div class="cost-cols">
-      <div><div class="cost-col-h">By vendor</div>${rows(byVendor)}</div>
-      <div><div class="cost-col-h">By compound</div>${rows(byCompound)}</div>
-    </div>`;
+    <div class="cost-hero">
+      <div><span class="cost-k">Per month</span><strong class="cost-big">${monthly>0 ? '$'+Math.round(monthly).toLocaleString() : '—'}</strong><span class="cost-sub">${monthly>0 ? 'estimated, from your active protocols' : 'add prices to vials your protocols use'}</span></div>
+      <div class="cost-side"><span class="cost-k">Total spent</span><strong>$${Math.round(total).toLocaleString()}</strong></div>
+    </div>
+    <div class="cost-bars">${comp.map(([k,v])=>`<div class="cost-bar"><span class="cost-bar-n">${esc(k)}</span><span class="cost-bar-t"><i style="width:${Math.max(4, v/maxC*100).toFixed(1)}%;background:${colorMap.get(k)}"></i></span><strong class="mono">$${Math.round(v).toLocaleString()}</strong></div>`).join('')}</div>
+    ${vend.length>1 ? `<details class="cost-more"><summary>By vendor</summary>${rows(byVendor)}</details>` : ''}`;
 }
 
 /* ===================== Peptides: per-protocol injection site + daily satisfaction note ===================== */
@@ -3967,33 +3992,101 @@ function chatText(m){
   }
   return out;
 }
+/* Past Claude conversations: grouped by when they were last used, a two-line preview, keyword search across
+   every message, and swipe left on a row to delete it (iOS style). */
+let researchQuery = '';
+function chatTitle(r){
+  let t = String(r.topic||'').trim();
+  if(!t && Array.isArray(r.messages)){ const u = r.messages.find(m=> m.role==='user'); if(u) t = chatText(u).trim(); }
+  if(!t) return 'Untitled chat';
+  t = t.split(/\n/)[0].replace(/\s+/g,' ');
+  const q = t.search(/[?.!](\s|$)/); if(q > 12) t = t.slice(0, q+1);
+  if(t.length > 56){ t = t.slice(0, 55).replace(/\s+\S*$/, '') + '…'; }
+  return t.charAt(0).toUpperCase() + t.slice(1);
+}
+function chatPlain(r){
+  if(Array.isArray(r.messages)) return r.messages.map(m=> chatText(m)).join('\n');
+  return [r.topic, r.answer, r.notes].filter(Boolean).join('\n');
+}
+function chatPreview(r){
+  if(Array.isArray(r.messages)){ const a = r.messages.filter(m=> m.role==='assistant').pop(); if(a) return chatText(a); }
+  return r.answer || r.notes || '';
+}
+const mdStrip = t=> String(t||'').replace(/```[\s\S]*?```/g,' ').replace(/[#*_>`|]+/g,' ').replace(/\[([^\]]+)\]\([^)]+\)/g,'$1').replace(/\s+/g,' ').trim();
 function renderResearch(){
   const el = $('#researchList'); if(!el) return;
+  const searchEl = $('#researchSearch');
+  if(searchEl) searchEl.closest('.cv-search').hidden = state.research.length < 2 && !researchQuery;
   if(!state.research.length){
     el.innerHTML = `<div class="empty"><div class="glyph">💬</div><p>Your conversations with Claude will be saved here.</p></div>`;
     return;
   }
-  const list = state.research.slice().sort((a,b)=> String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
-  el.innerHTML = list.map(r=>{
+  const when = r=> new Date(r.updatedAt || ((r.createdAt||todayISO()) + 'T12:00:00')).getTime();
+  const q = researchQuery.trim().toLowerCase();
+  let list = state.research.slice().sort((a,b)=> when(b) - when(a));
+  if(q) list = list.filter(r=> (chatTitle(r) + '\n' + chatPlain(r)).toLowerCase().includes(q));
+  if(!list.length){ el.innerHTML = `<p class="footnote cv-none">No chats mention “${esc(researchQuery.trim())}”.</p>`; return; }
+  const now = new Date(), startToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime(), DAY = 86400000;
+  const groupOf = t=> t >= startToday ? 'Today' : t >= startToday - DAY ? 'Yesterday' : t >= startToday - 7*DAY ? 'Previous 7 days' : t >= startToday - 30*DAY ? 'Previous 30 days'
+    : new Date(t).toLocaleDateString(undefined, {month:'long', year:'numeric'});
+  const stamp = t=> t >= startToday ? new Date(t).toLocaleTimeString(undefined,{hour:'numeric', minute:'2-digit'}) : t >= startToday - 7*DAY ? new Date(t).toLocaleDateString(undefined,{weekday:'short'}) : new Date(t).toLocaleDateString(undefined,{month:'short', day:'numeric'});
+  const mark = (txt)=>{
+    const e = esc(txt); if(!q) return e;
+    const re = new RegExp(q.replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'), 'gi');
+    return e.replace(re, m=> `<mark>${m}</mark>`);
+  };
+  let html = '', last = null;
+  list.forEach(r=>{
+    const t = when(r), g = groupOf(t);
+    if(g!==last){ html += `${last ? '</div>' : ''}<div class="cv-group-h">${esc(g)}</div><div class="cv-group">`; last = g; }
     const isChat = Array.isArray(r.messages);
+    let prev = mdStrip(chatPreview(r));
+    if(q){ const all = mdStrip(chatPlain(r)), i = all.toLowerCase().indexOf(q); if(i>=0) prev = (i>40 ? '…' : '') + all.slice(Math.max(0, i-40), i+120); }
     const turns = isChat ? r.messages.filter(m=>m.role==='user').length : 0;
-    return `<div class="research-item ${isChat?'chat-item':''}" ${isChat?`data-open-chat="${r.id}"`:''}>
-      <div style="display:flex;justify-content:space-between;gap:8px;">
-        <div style="min-width:0;">
-          <h4>${esc(r.topic||'Untitled')}</h4>
-          <div class="meta">${fmtDate(r.createdAt||todayISO())}${isChat ? ` · ${turns} question${turns===1?'':'s'}${r.costUsd ? ` · ≈ $${r.costUsd.toFixed(2)}` : ''}` : ' · pasted answer'}</div>
-        </div>
-        <button class="icon-btn" data-del-research="${r.id}" aria-label="Delete">✕</button>
+    html += `<div class="cv-row" data-row="${r.id}">
+      <button type="button" class="cv-del" data-del-research="${r.id}">Delete</button>
+      <div class="cv-main" data-open-chat="${r.id}" role="button" tabindex="0">
+        <div class="cv-top"><strong>${mark(chatTitle(r))}</strong><span class="cv-when">${esc(stamp(t))}</span></div>
+        <div class="cv-prev">${mark(prev.slice(0,180)) || '<em>No answer yet</em>'}</div>
+        <div class="cv-meta">${isChat ? `${turns} question${turns===1?'':'s'}${r.costUsd ? ` · ≈ $${r.costUsd.toFixed(2)}` : ''}` : 'Pasted answer'}</div>
       </div>
-      ${isChat ? `<div class="research-body research-md" style="max-height:4.6em;overflow:hidden;">${mdToHtml(r.answer||'')}</div><button type="button" class="btn btn-sm ask-open">Continue chat ›</button>` : `<div class="research-body research-md">${mdToHtml(r.answer||r.notes||'')}</div>`}
     </div>`;
-  }).join('');
+  });
+  el.innerHTML = html + '</div>';
   $$('[data-del-research]',el).forEach(b=> b.addEventListener('click', e=>{ e.stopPropagation(); confirmAction('Delete this conversation?', ()=>{ if(askConv && askConv.id===b.dataset.delResearch) askConv = null; return dbDelete('research', b.dataset.delResearch); }); }));
-  $$('[data-open-chat]',el).forEach(c=> c.addEventListener('click', ()=>{
-    const r = state.research.find(x=>x.id===c.dataset.openChat); if(!r) return;
-    askConv = JSON.parse(JSON.stringify(r));
-    renderAsk(); window.scrollTo({top:0, behavior:'smooth'});
-  }));
+  const open = id=>{
+    const r = state.research.find(x=>x.id===id); if(!r) return;
+    if(Array.isArray(r.messages)){ askConv = JSON.parse(JSON.stringify(r)); renderAsk(); window.scrollTo({top:0, behavior:'smooth'}); }
+    else openModal(chatTitle(r), `<div class="research-md">${mdToHtml(r.answer||r.notes||'')}</div>`);
+  };
+  // swipe a row left to reveal Delete; tapping a revealed row closes it again
+  let openRow = null;
+  const shut = ()=>{ if(openRow){ openRow.querySelector('.cv-main').style.transform = ''; openRow.classList.remove('open'); openRow = null; } };
+  $$('.cv-row',el).forEach(row=>{
+    const main = row.querySelector('.cv-main');
+    let x0 = 0, y0 = 0, dx = 0, mode = null, base = 0;
+    main.addEventListener('touchstart', e=>{ const t = e.touches[0]; x0 = t.clientX; y0 = t.clientY; dx = 0; mode = null; base = row.classList.contains('open') ? -88 : 0; main.style.transition = 'none'; }, {passive:true});
+    main.addEventListener('touchmove', e=>{
+      const t = e.touches[0], mx = t.clientX - x0, my = t.clientY - y0;
+      if(!mode){ if(Math.abs(mx) < 8 && Math.abs(my) < 8) return; mode = Math.abs(mx) > Math.abs(my) ? 'x' : 'y'; if(mode==='x' && openRow && openRow!==row) shut(); }
+      if(mode!=='x') return;
+      if(e.cancelable) e.preventDefault();
+      dx = Math.min(0, Math.max(-120, base + mx)); main.style.transform = `translateX(${dx}px)`;
+    }, {passive:false});
+    main.addEventListener('touchend', ()=>{
+      main.style.transition = '';
+      if(mode!=='x') return;
+      if(dx < -44){ main.style.transform = 'translateX(-88px)'; row.classList.add('open'); openRow = row; }
+      else { main.style.transform = ''; row.classList.remove('open'); if(openRow===row) openRow = null; }
+      main.dataset.swiped = '1'; setTimeout(()=> delete main.dataset.swiped, 50);
+    });
+    main.addEventListener('click', ()=>{
+      if(main.dataset.swiped) return;
+      if(row.classList.contains('open') || openRow){ shut(); return; }
+      open(row.dataset.row);
+    });
+    main.addEventListener('keydown', e=>{ if(e.key==='Enter') open(row.dataset.row); if(e.key==='Delete' || e.key==='Backspace') row.querySelector('.cv-del').click(); });
+  });
 }
 /* ===================== Charts (shared by Progress and Labs) ===================== */
 function niceTicks(min, max, count){
@@ -4036,10 +4129,18 @@ function lineChartSVG(opts){
   (W < 420 && spanDays < 3 ? [[from,'start'],[to,'end']] : [[from,'start'],[mid,'middle'],[to,'end']]).forEach(([iso,anchor])=>{
     g += `<text x="${X(iso).toFixed(1)}" y="${H-8}" class="ch-xlab" text-anchor="${anchor}">${esc(fmtDateShort(iso))}</text>`;
   });
-  (opts.markers||[]).filter(m=> m.x>=from && m.x<=to).forEach((m,i)=>{
-    const x = X(m.x).toFixed(1);
-    g += `<line x1="${x}" x2="${x}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:${m.color}"/>`;
-    g += `<text x="${(+x+4).toFixed(1)}" y="${padT+10+(i%3)*12}" class="ch-mlab" style="fill:${m.color}">${esc(m.label)}</text>`;
+  // event labels: flip to the left of their line near the right edge, and stack into the first row where they fit
+  const rowsUsed = [[],[],[]];
+  (opts.markers||[]).filter(m=> m.x>=from && m.x<=to).forEach(m=>{
+    const x = X(m.x);
+    const label = m.label.length > 24 ? m.label.slice(0,23).trimEnd()+'…' : m.label;
+    const w = label.length*5.9 + 6, right = x + 4 + w <= W - padR;
+    const x0 = right ? x + 4 : x - 4 - w, x1 = x0 + w;
+    let row = rowsUsed.findIndex(rw=> rw.every(([a,b])=> x1 < a || x0 > b));
+    if(row < 0) row = rowsUsed.length - 1;
+    rowsUsed[row].push([x0, x1]);
+    g += `<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${padT}" y2="${H-padB}" class="ch-marker" style="stroke:${m.color}"/>`;
+    g += `<text x="${(right ? x+4 : x-4).toFixed(1)}" y="${padT+10+row*12}" class="ch-mlab" text-anchor="${right?'start':'end'}" style="fill:${m.color}"><title>${esc(m.label)}</title>${esc(label)}</text>`;
   });
   opts.series.forEach(s=>{
     const sp = s.points.filter(p=> p.x>=from && p.x<=to).sort((a,b)=> a.x.localeCompare(b.x));
@@ -4222,7 +4323,38 @@ function renderTrendControls(){
   el.innerHTML = TREND_RANGES.map(r=>`<button type="button" class="chip-btn ${trendRange===r[0]?'on':''}" data-range="${r[0]}">${r[0]}</button>`).join('');
   $('#trendCustom').hidden = trendRange!=='Custom';
 }
+/* Progress summary: first weigh-in → latest, the change, the last 30 days and a sparkline of every weigh-in. */
+function renderProgressHero(){
+  const el = $('#progHero'); if(!el) return;
+  const ws = state.checkins.filter(c=> num(c.weight,null)!=null).map(c=>({d:c.date, w:Math.round(toUnit(c.weight, c.weightUnit||'lb','lb')*10)/10})).sort((a,b)=> a.d.localeCompare(b.d));
+  el.hidden = ws.length < 2;
+  if(ws.length < 2){ el.innerHTML = ''; return; }
+  const first = ws[0], last = ws[ws.length-1], diff = Math.round((last.w - first.w)*10)/10;
+  const ago = ws.filter(x=> x.d <= addDays(last.d, -30)).pop();
+  const d30 = ago ? Math.round((last.w - ago.w)*10)/10 : null;
+  const W = 320, H = 54, lo = Math.min(...ws.map(x=>x.w)), hi = Math.max(...ws.map(x=>x.w)), span = Math.max(1, daysBetween(first.d, last.d));
+  const X = d=> 4 + (W-8)*daysBetween(first.d, d)/span, Y = w=> 6 + (H-12)*(1 - (w-lo)/((hi-lo)||1));
+  const pts = ws.map(x=> `${X(x.d).toFixed(1)},${Y(x.w).toFixed(1)}`).join(' ');
+  const col = diff<=0 ? 'var(--good)' : '#ff9500';
+  const sign = v=> v>0 ? '+' : v<0 ? '−' : '±';
+  el.innerHTML = `
+    <div class="pgh-top">
+      <div><div class="pgh-change ${diff<0?'down':diff>0?'up':''}">${sign(diff)}${Math.abs(diff)}<small>lb</small></div><div class="pgh-cap">since ${esc(fmtDateShort(first.d))} · ${daysBetween(first.d, last.d)} days</div></div>
+      ${d30!=null ? `<span class="pgh-chip ${d30>0?'up':''}">${sign(d30)}${Math.abs(d30)} lb · 30 days</span>` : ''}
+    </div>
+    <svg class="pgh-spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+      <defs><linearGradient id="phg" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".28"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>
+      <polygon points="${X(first.d).toFixed(1)},${H} ${pts} ${X(last.d).toFixed(1)},${H}" fill="url(#phg)"/>
+      <polyline points="${pts}" fill="none" stroke="${col}" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <div class="pgh-ends">
+      <div class="pgh-end"><span>Start</span><strong>${first.w} lb</strong></div>
+      <span class="pgh-arrow">→</span>
+      <div class="pgh-end r"><span>Now</span><strong>${last.w} lb</strong></div>
+    </div>`;
+}
 function renderProgress(){
+  renderProgressHero();
   renderTrendControls();
   const el = $('#trendCharts'); if(!el) return;
   LINE_CHARTS.clear();
@@ -5278,7 +5410,7 @@ async function sendAsk(){
   if(askBusy){ if(askAbort) askAbort.abort(); return; }
   const input = $('#askInput'); const text = input.value.trim(); if(!text) return;
   const key = claudeKey(); if(!key) return renderAsk();
-  if(!askConv) askConv = {model: claudeModel(), system: askSystemPrompt(), messages: [], topic: text.slice(0,90), createdAt: todayISO(), costUsd: 0};
+  if(!askConv) askConv = {model: claudeModel(), system: askSystemPrompt(), messages: [], topic: chatTitle({topic:text}), createdAt: todayISO(), costUsd: 0};
   askConv.messages.push({role:'user', content:[{type:'text', text}]});
   input.value = ''; input.style.height = '';
   askBusy = true; renderAsk(); askScrollEnd();
@@ -5404,6 +5536,7 @@ function openAskSettings(){
   });
 }
 function initAskChat(){
+  const rs = $('#researchSearch'); if(rs) rs.addEventListener('input', ()=>{ researchQuery = rs.value; renderResearch(); });
   $('#askKeySave').addEventListener('click', ()=>{
     const k = $('#askKeyInput').value.trim();
     if(!/^sk-ant-/.test(k)){ $('#askKeyInput').focus(); $('#askKeyInput').setCustomValidity('That doesn\'t look like an Anthropic API key (it starts with sk-ant-).'); $('#askKeyInput').reportValidity(); return; }
@@ -5420,7 +5553,7 @@ function initAskChat(){
 }
 
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', resources:'#resourcesView', more:'#moreView'};
+const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', endo:'#endoView', settings:'#settingsView', resources:'#resourcesView', more:'#moreView'};
 /* iOS-style navigation: each screen has a large title, an optional subtitle and round glass buttons in the top corner.
    Tools and Resources live under More, so they show a back button and keep More highlighted. */
 const NAV_ICONS = {
@@ -5438,12 +5571,14 @@ const TAB_META = {
   ask:{title:'Claude', sub:()=> 'Ask about your protocols and data'},
   progress:{title:'Progress'},
   more:{title:'More'},
-  tools:{title:'Tools', back:'more', actions:[['reset','#calcReset','Reset calculator']]},
+  tools:{title:'Calculator', back:'more', actions:[['reset','#calcReset','Reset calculator']]},
+  endo:{title:'Endotoxin check', back:'more'},
+  settings:{title:'Settings', back:'more'},
   resources:{title:'Resources', back:'more'},
 };
 function updateNav(){
   const m = TAB_META[currentTab] || {title:''};
-  $('#iosTitle').textContent = m.title; $('#iosBarTitle').textContent = m.title;
+  $('#iosTitle').textContent = m.title; $('#iosTitle').classList.toggle('long', m.title.length > 11); $('#iosBarTitle').textContent = m.title;
   const sub = m.sub ? m.sub() : ''; $('#iosSub').textContent = sub; $('#iosSub').hidden = !sub;
   $('#navBack').hidden = !m.back;
   $('#syncPill').hidden = !!m.noSync;                     // the Stash puts its search button in the backup button's corner
@@ -5468,7 +5603,9 @@ function setTab(name, opts){
   updateNav();
   animateView(prevTab, name);
   lsSet('ledger.tab', name);
-  if(name==='tools'){ runCalc(); showAppVersion(); }          // redraw the syringe now that it has a width
+  if(name==='tools') runCalc();          // redraw the syringe now that it has a width
+  if(name==='endo') runEndo();
+  if(name==='settings'){ showAppVersion(); renderInstallCard(); renderThemeSeg(); }
   if(name==='progress') renderProgress();
   if(name==='ask') renderAsk();
   if(!(opts && opts.keepScroll)) window.scrollTo(0,0);
@@ -5620,6 +5757,26 @@ async function openBackupModal(){
     });
   });
 }
+/* ===== Appearance: Automatic (follows iOS), Light or Dark. Stored per device in ledger.theme. ===== */
+function themePref(){ const t = lsGet('ledger.theme','auto'); return t==='light' || t==='dark' ? t : 'auto'; }
+function isDark(){ const t = themePref(); return t==='dark' || (t==='auto' && matchMedia('(prefers-color-scheme: dark)').matches); }
+function applyTheme(){
+  const t = themePref();
+  if(t==='auto') document.documentElement.removeAttribute('data-theme'); else document.documentElement.setAttribute('data-theme', t);
+  const dark = isDark();
+  document.documentElement.classList.toggle('dark', dark);
+  const meta = document.querySelector('meta[name="theme-color"]'); if(meta) meta.setAttribute('content', dark ? '#000000' : '#f4f4f7');
+}
+function renderThemeSeg(){
+  const t = themePref();
+  $$('[data-theme-set]').forEach(b=>{ const on = b.dataset.themeSet===t; b.classList.toggle('on', on); b.setAttribute('aria-checked', String(on)); });
+}
+applyTheme();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', ()=>{ applyTheme(); if(typeof renderAll==='function') renderAll(); });
+document.addEventListener('click', e=>{
+  const b = e.target.closest('[data-theme-set]'); if(!b) return;
+  lsSet('ledger.theme', b.dataset.themeSet); applyTheme(); renderThemeSeg(); renderAll(); haptic('select');
+});
 let deferredInstall = null;
 function isStandalone(){ return matchMedia('(display-mode: standalone)').matches || navigator.standalone===true; }
 function renderInstallCard(){
@@ -5915,13 +6072,16 @@ function dayStatus(iso){
   if(rows.some(r=> r.kind==='due')) return 'open';
   return 'done';
 }
+/* Streak: consecutive scheduled days with at least one dose logged (split doses don't all have to be in).
+   Today only adds to it once something is logged; it never breaks the streak while the day is still open. */
 function doseStreak(){
   const today = doseDayISO();
-  let n = dayStatus(today)==='done' ? 1 : 0, iso = addDays(today, -1);
+  const took = iso=> dosesOnDay(iso).some(r=> r.kind==='taken');
+  let n = took(today) ? 1 : 0, iso = addDays(today, -1);
   for(let i=0; i<400; i++, iso = addDays(iso, -1)){
-    const s = dayStatus(iso);
-    if(s==='none') continue;
-    if(s==='done') n++; else break;
+    const rows = dosesOnDay(iso);
+    if(!rows.length) continue;
+    if(rows.some(r=> r.kind==='taken')) n++; else break;
   }
   return n;
 }
@@ -6027,8 +6187,14 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.39.0';
+const APP_VERSION = '1.40.0';
 const WHATS_NEW = [
+  {v:'1.40.0', title:'A tidier, clearer app', items:[
+    ['📋','Protocols show a vial, your next dose and titration progress at a glance.'],
+    ['📈','Progress opens with your total change and a trend line; Stash shows monthly spend as a chart.'],
+    ['💬','Past Claude chats are grouped by date with previews and a search. Swipe a chat left to delete it.'],
+    ['⚙️','More now has Calculator, Endotoxin check and Settings as separate pages.'],
+  ]},
   {v:'1.39.0', title:'Mix your own blends', items:[
     ['⚗️','Stash › + › Mix a blend: combine sealed vials (e.g. KPV + GHK-Cu) into one vial. Your sealed counts drop automatically.'],
     ['🔗','The mixed vial links to its protocol, every dose comes off it, and Finish mixes the next batch.'],

@@ -1447,6 +1447,88 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .ac-ic{ font-size:24px; width:32px; text-align:center; }
 .ac-t{ display:flex; flex-direction:column; gap:2px; }
 .ac-t span{ font-size:13px; color:var(--label2); }
+.ch-mlab, .ch-lastlab{ paint-order:stroke; stroke:var(--chart-halo, #f6f6f8); stroke-width:4px; stroke-linejoin:round; }
+/* Protocols list */
+#protocolManager{ display:flex; flex-direction:column; gap:10px; }
+.pm-row2{ display:flex; align-items:center; gap:12px; padding:12px 14px 12px 8px; border-radius:20px; background:rgba(255,255,255,.55); box-shadow:inset 0 0 0 .5px rgba(0,0,0,.06); cursor:pointer; -webkit-tap-highlight-color:transparent; transition:transform .15s; }
+.pm-row2:active{ transform:scale(.985); }
+.pm-art{ width:34px; flex:none; }
+.pm-art .vial-svg{ width:34px; height:auto; display:block; }
+.pm-main{ flex:1; min-width:0; }
+.pm-top{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+.pm-top strong{ font-size:17px; font-weight:600; }
+.pm-next{ font-size:15px; font-weight:600; color:var(--pc); margin-top:2px; }
+.pm-next.is-paused{ color:var(--label2); }
+.pm-meta{ font-size:13px; color:var(--label2); margin-top:2px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.pm-ring{ position:relative; width:40px; height:40px; flex:none; }
+.pm-ring svg{ width:40px; height:40px; transform:rotate(-90deg); }
+.pm-ring circle{ fill:none; stroke-width:4; stroke-linecap:round; }
+.pm-ring-bg{ stroke:rgba(120,120,128,.18); }
+.pm-ring span{ position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:700; color:var(--label2); }
+/* Cost tracking */
+.cost-hero{ display:flex; justify-content:space-between; align-items:flex-end; gap:12px; margin-bottom:14px; }
+.cost-hero > div{ display:flex; flex-direction:column; }
+.cost-k{ font-size:12px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--label2); }
+.cost-big{ font-size:40px; font-weight:700; letter-spacing:-.02em; line-height:1.1; color:var(--accent-pep-strong); font-variant-numeric:tabular-nums; }
+.cost-sub{ font-size:12.5px; color:var(--label2); }
+.cost-side{ text-align:right; }
+.cost-side strong{ font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+.cost-bars{ display:flex; flex-direction:column; gap:9px; }
+.cost-bar{ display:grid; grid-template-columns:minmax(0,96px) 1fr auto; align-items:center; gap:10px; font-size:14px; }
+.cost-bar-n{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cost-bar-t{ height:10px; border-radius:6px; background:rgba(120,120,128,.14); overflow:hidden; }
+.cost-bar-t i{ display:block; height:100%; border-radius:6px; }
+.cost-more{ margin-top:12px; font-size:14px; }
+.cost-more summary{ color:var(--info); font-weight:600; cursor:pointer; padding:4px 0; }
+/* Progress summary */
+.prog-hero{ display:flex; flex-direction:column; gap:12px; }
+.pgh-top{ display:flex; justify-content:space-between; align-items:flex-end; gap:12px; }
+.pgh-change{ font-size:40px; font-weight:700; letter-spacing:-.02em; line-height:1.05; font-variant-numeric:tabular-nums; }
+.pgh-change.down{ color:var(--good); } .pgh-change.up{ color:var(--warn, #ff9500); }
+.pgh-change small{ font-size:18px; font-weight:600; margin-left:3px; }
+.pgh-cap{ font-size:13px; color:var(--label2); margin-top:2px; }
+.pgh-ends{ display:grid; grid-template-columns:1fr auto 1fr; align-items:center; gap:10px; }
+.pgh-end{ display:flex; flex-direction:column; }
+.pgh-end.r{ text-align:right; }
+.pgh-end strong{ font-size:20px; font-weight:700; font-variant-numeric:tabular-nums; }
+.pgh-end span{ font-size:12.5px; color:var(--label2); }
+.pgh-arrow{ color:var(--label2); font-size:18px; }
+.pgh-spark{ width:100%; height:54px; display:block; }
+.pgh-chip{ font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; background:rgba(52,199,89,.14); color:var(--good); white-space:nowrap; }
+.pgh-chip.up{ background:rgba(255,149,0,.14); color:#c76a00; }
+/* readable caption under each pen on Today */
+.pen-cap{ display:flex; align-items:baseline; gap:8px; padding:0 4px 2px 12px; margin-top:-4px; text-align:left; min-width:0; }
+.pen-cap strong{ font-size:16px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pen-cap-d{ font-size:14px; color:var(--label2); white-space:nowrap; }
+.pen-cap-s{ margin-left:auto; font-size:13px; font-weight:600; white-space:nowrap; color:var(--label2); }
+.pen-cap-s.due, .pen-cap-s.warn{ color:var(--accent-pep-strong); }
+.pen-cap-s.done, .pen-cap-s.good, .pen-cap-s.ok{ color:var(--good); }
+.pen-cap-s.bad{ color:var(--bad); }
+.pen-hero .pen-cap{ display:none; }
+/* Past Claude conversations */
+.cv-search{ margin:2px 0 6px; height:40px; background:rgba(120,120,128,.12); box-shadow:none; }
+.cv-group-h{ font-size:13px; font-weight:600; color:var(--label2); text-transform:uppercase; letter-spacing:.04em; margin:16px 4px 6px; }
+.cv-group{ border-radius:18px; overflow:hidden; background:rgba(255,255,255,.55); box-shadow:inset 0 0 0 .5px rgba(0,0,0,.06); }
+.cv-row{ position:relative; overflow:hidden; }
+.cv-row + .cv-row::before{ content:''; position:absolute; top:0; left:16px; right:0; height:.5px; background:rgba(60,60,67,.18); z-index:2; }
+.cv-del{ position:absolute; top:0; right:0; bottom:0; width:88px; border:none; background:#ff3b30; color:#fff; font-size:15px; font-weight:600; cursor:pointer; }
+.cv-main{ position:relative; z-index:1; padding:12px 16px; background:var(--cv-bg, #fbfbfc); cursor:pointer; transition:transform .25s cubic-bezier(.2,.8,.2,1); -webkit-tap-highlight-color:transparent; }
+.cv-main:active{ background:var(--cv-bg-active, #f0f0f3); }
+.cv-top{ display:flex; align-items:baseline; gap:10px; }
+.cv-top strong{ flex:1; min-width:0; font-size:16px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cv-when{ flex:none; font-size:13px; color:var(--label2); }
+.cv-prev{ font-size:14px; color:var(--label2); line-height:1.35; margin-top:3px; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.cv-meta{ font-size:12px; color:var(--label3, #a1a1a6); margin-top:4px; }
+.cv-main mark{ background:rgba(255,204,0,.45); color:inherit; border-radius:3px; padding:0 1px; }
+.cv-none{ text-align:center; padding:18px 0 8px; }
+/* Settings */
+.set-group-h{ font-size:13px; font-weight:600; color:var(--label2); text-transform:uppercase; letter-spacing:.04em; margin:18px 6px 8px; }
+#settingsView > .set-group-h:first-child{ margin-top:6px; }
+.seg3{ display:flex; background:rgba(120,120,128,.14); border-radius:12px; padding:3px; gap:2px; }
+.seg3 button{ flex:1; border:none; background:none; border-radius:9px; padding:9px 4px; font:600 14px var(--sf-text, system-ui), sans-serif; color:var(--ink); cursor:pointer; transition:background .2s, box-shadow .2s; }
+.seg3 button.on{ background:var(--seg-on, #fff); box-shadow:0 2px 8px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
+.glass-search input:focus, .glass-search input:focus-visible{ outline:none; box-shadow:none; border:0; background:transparent; }
+.ios-title.long{ font-size:28px; }
 .hap-test{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .hap-test span{ font-size:14px; margin-right:auto; }
 .vial-shelf ~ .vial-detail::before{ display:none; }
@@ -1609,7 +1691,6 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
 
         <div class="card">
           <div class="card-h ios-hide"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div>
-          <p class="footnote" style="margin-bottom:10px;">Tap a protocol to edit its dose, schedule, vial, half-life and titration.</p>
           <div id="protocolManager"></div>
         </div>
 
@@ -1630,13 +1711,13 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
 
         <div class="card">
           <h3 style="font-size:16px;margin-bottom:4px;">Cost tracking</h3>
-          <p class="footnote" style="margin-bottom:10px;">Pulled from prices you log on each vial. Add a price next time you log a vial to fill this in.</p>
           <div id="costSummary"></div>
         </div>
 
       </section>
 
       <section id="progressView" class="view" hidden>
+        <div class="card prog-hero" id="progHero" hidden></div>
         <div class="card ci-card" id="checkinCard">
           <div class="card-h"><h3>Log weight</h3></div>
           <div class="ci-date-row">
@@ -1666,7 +1747,6 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
           <div class="chip-row" id="photoFilter" role="group" aria-label="Filter by angle"></div>
           <div class="photo-tools"><button type="button" class="btn btn-sm" id="photoSelectBtn">Compare two</button><button type="button" class="btn btn-sm btn-accent-pep" id="photoCompareBtn" hidden disabled>Compare</button><span class="footnote" id="photoSelectHint" hidden>Pick two photos.</span></div>
           <div class="photo-grid" id="photoGrid"></div>
-          <p class="footnote" style="margin-top:10px;">Photos stay on this device and are included in backups.</p>
         </div>
       </section>
 
@@ -1700,6 +1780,7 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
 
         <div class="card">
           <div class="card-h"><h3>Past conversations</h3></div>
+          <label class="glass-search cv-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg><input type="search" id="researchSearch" placeholder="Search chats" autocomplete="off" aria-label="Search past conversations"></label>
           <div class="research-thread" id="researchList"></div>
         </div>
 
@@ -1727,7 +1808,7 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
 
       <div id="pcCard">
         <div class="card pc-card">
-          <div class="card-h"><h3>Peptide calculator</h3><button type="button" class="btn btn-sm ios-hide" id="calcReset">Reset</button></div>
+          <div class="card-h ios-hide"><h3>Peptide calculator</h3><button type="button" class="btn btn-sm ios-hide" id="calcReset">Reset</button></div>
           <div id="pcSetup"></div>
         </div>
         <div class="card pc-card pc-result" id="pcResult"></div>
@@ -1735,9 +1816,32 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
         <div class="calc-fine pc-fine">Research use only. This tool does arithmetic; it doesn't evaluate dosing decisions.</div>
       </div>
 
+      </section>
+
+      <section id="settingsView" class="view" hidden>
+        <div class="set-group-h">Appearance</div>
+        <div class="card set-card">
+          <div class="seg3" id="themeSeg" role="radiogroup" aria-label="Appearance">
+            <button type="button" data-theme-set="auto" role="radio">Automatic</button><button type="button" data-theme-set="light" role="radio">Light</button><button type="button" data-theme-set="dark" role="radio">Dark</button>
+          </div>
+          <p class="footnote" style="margin-top:8px;">Automatic follows your iPhone's light or dark setting.</p>
+        </div>
+        <div class="set-group-h">App</div>
+        <div class="card set-card">
+          <div id="installInfo"></div>
+        </div>
+        <div class="set-group-h">Data</div>
+        <div class="card set-card">
+          <p class="footnote" style="margin:0 0 10px;">Your data is stored only in this app on this device. Keep a backup somewhere safe.</p>
+          <button type="button" class="btn btn-sm" id="openBackupBtn">Backup &amp; restore</button>
+          <div class="footnote mono" id="appVersion" style="margin-top:12px;"></div>
+        </div>
+      </section>
+
+      <section id="endoView" class="view" hidden>
       <div class="card calc-card" id="endoCard">
-        <h3>Endotoxin check</h3>
-        <p class="footnote endo-lede">Checks your injection against the FDA/USP &lt;85&gt; endotoxin ceiling using the vial, water and dose above.</p>
+        <h3 class="ios-hide">Endotoxin check</h3>
+        <p class="footnote endo-lede">Checks your injection against the FDA/USP &lt;85&gt; endotoxin ceiling using the vial, water and dose from the Calculator.</p>
         <div class="endo-form">
           <div class="field endo-wide"><label for="endoCompound">Compound (optional)</label>
             <input type="text" id="endoCompound" list="endoCompounds" placeholder="Search, e.g. BPC-157" autocomplete="off">
@@ -1780,19 +1884,14 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
         </details>
       </div>
 
-        <div class="card">
-          <h3 style="font-size:16px;margin-bottom:6px;">App &amp; backup</h3>
-          <div id="installInfo"></div>
-          <div class="footnote mono" id="appVersion" style="margin-top:6px;"></div>
-          <p class="footnote" style="margin:8px 0 10px;">Your data is stored only in this app on this device. Export a backup now and then, and keep the file somewhere safe.</p>
-          <button type="button" class="btn btn-sm" id="openBackupBtn">Backup &amp; restore</button>
-        </div>
       </section>
 
       <section id="moreView" class="view" hidden>
         <div class="ios-list">
-          <button type="button" class="ios-row" data-goto="tools"><span class="ios-ic" style="--ic:#ff8a1e"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span class="ios-row-t">Tools<small>Peptide calculator, endotoxin check</small></span><span class="ios-chev"></span></button>
+          <button type="button" class="ios-row" data-goto="tools"><span class="ios-ic" style="--ic:#ff8a1e"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span class="ios-row-t">Calculator<small>Reconstitution, syringe units, labels</small></span><span class="ios-chev"></span></button>
+          <button type="button" class="ios-row" data-goto="endo"><span class="ios-ic" style="--ic:#ff5e57"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5.5L5.5 17a2.5 2.5 0 0 0 2.2 3.7h8.6a2.5 2.5 0 0 0 2.2-3.7L14 8.5V3"/><path d="M7.5 14h9"/></svg></span><span class="ios-row-t">Endotoxin check<small>Check a dose against the FDA ceiling</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="resources"><span class="ios-ic" style="--ic:#5aa9ff"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><span class="ios-row-t">Resources<small>Links, guides and vendors</small></span><span class="ios-chev"></span></button>
+          <button type="button" class="ios-row" data-goto="settings"><span class="ios-ic" style="--ic:#8e8e93"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg></span><span class="ios-row-t">Settings<small>Appearance, iPhone app, reminders</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" id="moreWhatsNew"><span class="ios-ic" style="--ic:#a78bfa"><svg viewBox="0 0 24 24"><path d="M12 3l2.2 5.6L20 9.5l-4.5 3.9 1.4 5.8L12 16.3l-4.9 2.9 1.4-5.8L4 9.5l5.8-.9z"/></svg></span><span class="ios-row-t">What's new<small>Recent updates to Pep Prep</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" id="moreBackup"><span class="ios-ic" style="--ic:#34c759"><svg viewBox="0 0 24 24"><path d="M7 18.5h10.2a4.3 4.3 0 0 0 .6-8.56A6 6 0 0 0 6.3 9.1 4.7 4.7 0 0 0 7 18.5z"/><path d="M12 15.5v-6M9.5 12l2.5-2.5 2.5 2.5"/></svg></span><span class="ios-row-t">Backup &amp; restore<small id="moreBackupSub">Export or restore your data</small></span><span class="ios-chev"></span></button>
         </div>
