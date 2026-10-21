@@ -6187,8 +6187,11 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.40.0';
+const APP_VERSION = '1.41.0';
 const WHATS_NEW = [
+  {v:'1.41.0', title:'Dark mode', items:[
+    ['🌙','Pep Prep now has a dark theme. It follows your iPhone automatically, or pick Light or Dark in More › Settings.'],
+  ]},
   {v:'1.40.0', title:'A tidier, clearer app', items:[
     ['📋','Protocols show a vial, your next dose and titration progress at a glance.'],
     ['📈','Progress opens with your total change and a trend line; Stash shows monthly spend as a chart.'],

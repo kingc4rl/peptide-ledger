@@ -6,6 +6,7 @@
 <title>Pep Prep</title>
 <meta name="description" content="Private peptide tracker: dosing, protocols, inventory and progress. Data stays on your device.">
 <meta name="theme-color" content="#f4f4f7">
+<script>try{var t=localStorage.getItem("ledger.theme");if(t==="dark"||(t!=="light"&&matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}</script>
 <meta name="color-scheme" content="light">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -1631,6 +1632,84 @@ input[type=checkbox], .field input[type=checkbox]{ width:47px !important; height
 .wn-item p{ margin:0; font-size:15px; line-height:1.4; }
 .wn-go{ width:100%; margin-top:16px; padding:15px; font-size:17px; }
 @media (prefers-reduced-motion: reduce){ #launch{ display:none; } .celebrate .cel-burst{ display:none; } }
+
+/* ===================== Dark mode =====================
+   html.dark is set by applyTheme() (Automatic follows iOS; Light/Dark in Settings) and by the tiny script in <head>
+   so the first paint is already right. The glass becomes smoked glass over a near-black backdrop. */
+html.dark, html.dark #page-peptides{ color-scheme:dark;
+  --ink:#f2f2f7; --paper:#000; --surface:rgba(44,44,46,.62); --surface-2:rgba(58,58,60,.55);
+  --line:rgba(255,255,255,.1); --line-soft:rgba(255,255,255,.08); --muted:#98989f; --label2:#98989f; --label3:#6e6e73;
+  --fill:rgba(118,118,128,.26);
+  --gl:rgba(44,44,46,.66); --gl-edge:inset 0 1px 0 rgba(255,255,255,.12), 0 0 0 .5px rgba(255,255,255,.08); --gl-shadow:0 8px 24px rgba(0,0,0,.55);
+  --glass-edge:inset 0 1px 0 rgba(255,255,255,.1); --shadow:0 10px 30px rgba(0,0,0,.45);
+  --accent-pep-strong:#ffa64d; --accent-pep-soft:rgba(255,159,67,.18);
+  --info:#4ea3ff; --info-soft:rgba(78,163,255,.16); --good:#30d158; --good-soft:rgba(48,209,88,.16);
+  --warn:#ff6961; --warn-soft:rgba(255,105,97,.16); --bad:#ff6961; --bad-soft:rgba(255,105,97,.16);
+  --chart-halo:#1c1c1e; --seg-on:#636366; --cv-bg:#1c1c1e; --cv-bg-active:#2c2c2e; --head-bg:rgba(0,0,0,.6);
+}
+html.dark, html.dark body{ background:#000; color:var(--ink); }
+html.dark body::before{ background:
+  radial-gradient(70% 40% at 12% 0%, rgba(70,82,120,.32), transparent 70%),
+  radial-gradient(60% 36% at 100% 30%, rgba(60,60,70,.25), transparent 70%),
+  radial-gradient(65% 38% at 0% 78%, rgba(110,70,30,.18), transparent 72%),
+  linear-gradient(180deg, #0c0c0e 0%, #050506 60%, #000 100%); }
+html.dark #launch{ background:#000; }
+html.dark #launch span{ color:#f2f2f7; }
+/* glass surfaces */
+html.dark .card, html.dark .link-fold-body{
+  background:linear-gradient(180deg, rgba(255,255,255,.07) 0%, rgba(255,255,255,.02) 40%, rgba(255,255,255,0) 60%), rgba(28,28,30,.74);
+  border-color:rgba(255,255,255,.08);
+  box-shadow:0 0 0 .5px rgba(255,255,255,.05), 0 10px 30px rgba(0,0,0,.4), inset 0 1px 0 rgba(255,255,255,.08); }
+html.dark .card.bare{ background:none; border:0; box-shadow:none; }
+html.dark .card-flat, html.dark .dc, html.dark .module-box, html.dark .cf-stats > div, html.dark .lc-readout:not(.on), html.dark .research-item, html.dark .vt-chip,
+html.dark .site-pill, html.dark .day-chip, html.dark .dc-mini, html.dark .log-box, html.dark .swap-row, html.dark .swap-opt, html.dark .lot, html.dark .vial-detail,
+html.dark .pm-row2, html.dark .cv-group, html.dark .wk-stat, html.dark .insight, html.dark .calc-card .cf, html.dark .calc-card .endo-stackrow, html.dark .ci-step,
+html.dark .ci-date, html.dark .coa-nav, html.dark .dc-ring, html.dark .disclaimer, html.dark .card.bare .empty, html.dark .card.bare .vial-detail, html.dark .lot-card{
+  background:rgba(255,255,255,.06) !important; border-color:rgba(255,255,255,.08); box-shadow:inset 0 0 0 .5px rgba(255,255,255,.06); color:var(--ink); }
+html.dark .banner{ background:linear-gradient(180deg, rgba(58,58,60,.7), rgba(44,44,46,.55)); border-color:rgba(255,255,255,.1); }
+html.dark .banner.info{ background:linear-gradient(180deg, rgba(30,60,100,.55), rgba(25,45,80,.45)); }
+/* navigation */
+html.dark .ios-title, html.dark .ios-bar, html.dark .ios-row, html.dark .tabbar button, html.dark .glass-btn, html.dark .sync-pill, html.dark .btn,
+html.dark .chip-btn, html.dark .pc-stepper > button, html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark .pen-cap strong, html.dark .mix-qty button{ color:var(--ink); }
+html.dark .ios-bar{ background:rgba(18,18,20,.72); border-bottom-color:rgba(255,255,255,.08); }
+html.dark .tabbar{ background:rgba(30,30,32,.72); box-shadow:var(--gl-edge), 0 10px 30px rgba(0,0,0,.5); }
+html.dark .tabbar button.active{ color:var(--accent-pep-strong); background:rgba(255,255,255,.1); }
+html.dark .claude-orb:not(.active){ background:rgba(30,30,32,.72); box-shadow:var(--gl-edge), 0 10px 30px rgba(0,0,0,.5); }
+html.dark .ios-list{ background:rgba(28,28,30,.74); box-shadow:0 0 0 .5px rgba(255,255,255,.06), 0 10px 30px rgba(0,0,0,.4); }
+html.dark .ios-row + .ios-row::before, html.dark .cv-row + .cv-row::before{ background:rgba(84,84,88,.6); }
+html.dark .ios-chev{ border-color:#5a5a5e; }
+/* sheets */
+html.dark .modal-backdrop{ background:rgba(0,0,0,.5); }
+html.dark .modal{ background:rgba(28,28,30,.86); border-color:rgba(255,255,255,.08); box-shadow:0 24px 60px rgba(0,0,0,.6), inset 0 1px 0 rgba(255,255,255,.08); color:var(--ink); }
+html.dark .sheet-grab{ background:rgba(255,255,255,.25); }
+/* buttons, chips, fields */
+html.dark .btn, html.dark .hist-btn, html.dark .link-chip, html.dark .syr-size-btn, html.dark .qa-btn, html.dark .seg{ background:rgba(255,255,255,.12); border-color:rgba(255,255,255,.1); box-shadow:none; }
+html.dark .btn-accent-pep, html.dark .dc-log{ background:linear-gradient(180deg,#ffab55 0%,#ff8a1e 100%); color:#fff; }
+html.dark .btn-danger{ color:#ff6961; background:rgba(255,69,58,.16); }
+html.dark .chip-btn.on{ background:rgba(255,138,30,.22); color:var(--accent-pep-strong); }
+html.dark #serumControls .chip-btn{ color:#d1d1d6; }
+html.dark #serumControls .chip-btn.on{ background:#636366; color:#fff; }
+html.dark input, html.dark select, html.dark textarea{ color:#f2f2f7; }
+html.dark input::placeholder, html.dark textarea::placeholder{ color:#6e6e73; }
+html.dark input:focus, html.dark select:focus, html.dark textarea:focus{ background:rgba(255,255,255,.12) !important; }
+html.dark .pc-num input, html.dark .glass-search input, html.dark .pc-num select{ background:none !important; }
+html.dark .glass-search{ background:rgba(44,44,46,.7); box-shadow:0 0 0 .5px rgba(255,255,255,.06); }
+html.dark .cv-search{ background:rgba(118,118,128,.24); }
+html.dark select option{ background:#1c1c1e; color:#f2f2f7; }
+html.dark .pill-muted{ background:rgba(255,255,255,.1); color:#aeaeb2; }
+/* chat */
+html.dark .ask-msg.bot{ background:rgba(44,44,46,.8); color:var(--ink); }
+html.dark .ask-composer{ background:rgba(28,28,30,.86); border-color:rgba(255,255,255,.08); }
+html.dark .ask-send.stop{ background:#f2f2f7; color:#000; }
+html.dark .cv-main mark{ background:rgba(255,204,0,.35); }
+/* charts */
+html.dark .ch-grid{ stroke:rgba(255,255,255,.09); }
+html.dark .scrub-tip, html.dark .lc-readout.on{ background:rgba(58,58,60,.92); }
+html.dark .serum-pan, html.dark .chart{ color:var(--ink); }
+html.dark .pc-seg button.on, html.dark .seg button.on, html.dark .seg .on{ background:#636366; color:#fff; box-shadow:0 1px 4px rgba(0,0,0,.4); }
+html.dark .pc-toggle span{ color:var(--ink); }
+/* syringes keep black print on a clear barrel, so they sit on a light frosted plate in dark mode */
+html.dark .pc-syr, html.dark .syringe-wrap{ background:rgba(242,242,247,.92); border-radius:16px; padding:6px 8px; }
 </style>
 </head>
 <body>
