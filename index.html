@@ -1434,6 +1434,19 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 /* while swiping, every vial is redrawn each frame: skip the costly CSS shadow filter (the vial art has its own shadow) */
 .vial-shelf.loop .vial-tile .vial-svg, .vial-shelf.loop .vial-tile.on .vial-svg{ filter:none; }
 .vial-shelf.loop .vial-tile .vial-svg{ transition:transform .35s cubic-bezier(.2,.8,.2,1); }
+.mix-row{ display:flex; align-items:center; gap:8px; margin-bottom:8px; }
+.mix-row select{ flex:1; min-width:0; }
+.mix-qty{ display:flex; align-items:center; gap:2px; flex:none; border-radius:999px; background:rgba(120,120,128,.12); padding:2px; }
+.mix-qty button{ width:30px; height:30px; border:none; border-radius:50%; background:none; font-size:18px; font-weight:600; color:var(--ink); cursor:pointer; }
+.mix-qty button:disabled{ opacity:.3; }
+.mix-qty span{ min-width:18px; text-align:center; font-weight:700; font-variant-numeric:tabular-nums; }
+.mix-out{ margin-top:10px; font-size:13.5px; }
+.mix-out > div{ display:flex; justify-content:space-between; gap:8px; padding:3px 0; }
+.mix-tot{ border-top:.5px solid rgba(60,60,67,.25); margin-top:4px; padding-top:6px !important; font-weight:600; }
+.add-choice .ios-row{ min-height:68px; }
+.ac-ic{ font-size:24px; width:32px; text-align:center; }
+.ac-t{ display:flex; flex-direction:column; gap:2px; }
+.ac-t span{ font-size:13px; color:var(--label2); }
 .hap-test{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .hap-test span{ font-size:14px; margin-right:auto; }
 .vial-shelf ~ .vial-detail::before{ display:none; }

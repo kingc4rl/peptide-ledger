@@ -1659,14 +1659,14 @@ function renderArchivedProtocols(){
   $$('[data-del-archived]',el).forEach(b=> b.addEventListener('click', ()=> confirmAction('Permanently delete this archived protocol?', ()=> dbDelete('protocols', b.dataset.delArchived))));
 }
 
-function activeVialOptions(compound, selectedId){
+function activeVialOptions(compound, selectedId, isBlend){
   const c = (compound||'').trim().toLowerCase();
-  const list = c ? state.vials.filter(v=> !isDepleted(v) && (v.compound||'').trim().toLowerCase()===c) : [];
+  const list = state.vials.filter(v=> !isDepleted(v) && ((c && (v.compound||'').trim().toLowerCase()===c) || (isBlend && isMixedBlend(v)) || v.id===selectedId));
   return `<option value="">${c && !list.length ? 'No vials of this compound in your stash' : 'None'}</option>` +
     list.map(v=>`<option value="${v.id}" ${selectedId===v.id?'selected':''}>${esc(vialLabel(v))}</option>`).join('');
 }
-function openProtocolModal(existing){
-  const p = existing || {};
+function openProtocolModal(existing, prefill){
+  const p = existing || prefill || {};
   const notStarted = p.startDate && p.startDate > todayISO();
   const curSyr = (p.syringeMl!=null && p.syringeMl!=='') ? parseFloat(p.syringeMl) : 1;
   const syrIsCustom = !SYRINGE_SIZES.some(s=> parseFloat(s.ml)===curSyr);
@@ -1697,7 +1697,7 @@ function openProtocolModal(existing){
       </div>
       <div class="field span2"><label for="pActiveVial">Active vial <span style="font-weight:400;color:var(--muted);">: the one you're drawing from. Picking an unopened vial opens it and starts tracking what's left.</span></label>
         <select id="pActiveVial">
-          ${activeVialOptions(p.compound, p.activeVialId)}
+          ${activeVialOptions(p.compound, p.activeVialId, !!blendOf(p))}
         </select>
       </div>
       <div class="field span2 module-box">
@@ -1786,7 +1786,7 @@ function openProtocolModal(existing){
     // Active-vial choices follow the compound name as you type it.
     $('#pCompound',body).addEventListener('input', ()=>{
       const sel = $('#pActiveVial',body), keep = sel.value;
-      sel.innerHTML = activeVialOptions($('#pCompound',body).value, keep);
+      sel.innerHTML = activeVialOptions($('#pCompound',body).value, keep, $('#pIsBlend',body).checked);
     });
     const dowSel = new Set(weekdaysOf(p)||[]);
     function dowHint(){
@@ -2478,7 +2478,7 @@ function renderVials(){
         ? `<span class="pill pill-pep">Opened${v.dateOpened?' '+esc(fmtDateShort(v.dateOpened)):''}</span><span class="lot-left mono">${Math.round(v.remainingMg*10)/10} / ${mg} mg</span>`
         : `<span class="pill pill-muted">Unopened</span>`;
       const tests = vialTests(v);
-      const meta = [v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
+      const meta = [isMixedBlend(v) ? v.blend.map(c=> `${esc(c.name)} ${round2(num(c.mg,0))} mg`).join(' + ') : '', v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
       const total = qty+(isOpen?1:0);
       const tile = `<button type="button" class="lot-tile ${lotSel===v.id?'on':''}" data-lot="${v.id}" aria-expanded="${lotSel===v.id}" aria-label="${esc(`${v.pharmacy||'No vendor'} ${compound} lot, ${total} vial${total===1?'':'s'}`)}">
         ${vialSVG({color, pct, mgTag: mg?`${mg} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, `l${gi}_${i}`)}${total>1?`<span class="lot-qty">×${total}</span>`:''}</button>`;
@@ -2837,6 +2837,9 @@ function nextVialCandidates(compound, cur){
     });
 }
 function openVialSwapModal({p=null, cur=null, preselect=null}={}){
+  // a home-mixed blend is replaced by mixing another batch from sealed vials, not by opening one
+  if(isMixedBlend(cur)) return openBlendMixModal({p, finishing: cur.remainingMg!=null ? cur : null, recipe: cur.blend, bacMl: cur.bacMl});
+  if(p && blendOf(p) && !cur && !preselect && !nextVialCandidates(p.compound, null).length) return openBlendMixModal({p, recipe: blendOf(p)});
   const finishing = cur && cur.remainingMg!=null ? cur : null;
   const compound = (p && p.compound) || (cur && cur.compound) || (preselect && preselect.compound) || '';
   const color = colorFor(compound, 0);
@@ -2928,6 +2931,143 @@ function openVialSwapModal({p=null, cur=null, preselect=null}={}){
   });
 }
 /* The active protocol (if any) for a compound, used when opening or finishing from the stash. */
+/* ===== Mix a blend: combine sealed vials from the stash into one home-mixed vial =====
+   The blend is stored as an ordinary open vial (compound = blend name, mgPerVial = total) with
+   blend: [{name, mg, count, vialId}] recording what went in. Each source lot loses the sealed vials used
+   (logged in its finishedLog with mixedInto) so counts and cost history stay right. A protocol linked to the
+   blend draws each dose from it; finishing it offers to mix the next batch with the same recipe. */
+function isMixedBlend(v){ return !!(v && Array.isArray(v.blend) && v.blend.length); }
+function mixSources(){ return state.vials.filter(v=> !isDepleted(v) && !isMixedBlend(v) && num(v.qty,0)>=1); }
+function canMixBlend(){ return new Set(mixSources().map(v=> (v.compound||'').trim().toLowerCase())).size >= 2; }
+function openBlendMixModal({p=null, finishing=null, recipe=null, bacMl=null}={}){
+  const BUD_MAX = '9999-12-31';
+  const lotsOf = name=> mixSources().filter(v=> (v.compound||'').trim().toLowerCase()===(name||'').trim().toLowerCase())
+    .sort((a,b)=> (a.bud||BUD_MAX).localeCompare(b.bud||BUD_MAX));
+  // starting rows: the previous recipe, else the protocol's blend, else the two peptides you have most sealed vials of
+  let rows = [];
+  (recipe || []).forEach(c=>{
+    const lots = lotsOf(c.name); const same = lots.find(v=> v.id===c.vialId);
+    rows.push({vialId: (same || lots[0] || {}).id || '', count: Math.max(1, num(c.count,1)), name: c.name});
+  });
+  if(!rows.length){
+    const tally = {};
+    mixSources().forEach(v=>{ const k = (v.compound||'').trim(); tally[k] = (tally[k]||0) + num(v.qty,0); });
+    Object.entries(tally).sort((a,b)=> b[1]-a[1]).slice(0,2).forEach(([k])=> rows.push({vialId: lotsOf(k)[0].id, count:1, name:k}));
+  }
+  const bacDefault = num(bacMl,0) || (p && num(p.bacMl,0)) || 3;
+  const protos = state.protocols.filter(isActiveP);
+  const pick = ()=> rows.map(r0=>({...r0, v: state.vials.find(v=> v.id===r0.vialId)})).filter(r0=> r0.v);
+  const autoName = ()=> [...new Set(pick().map(r0=> (r0.v.compound||'').trim()))].join(' + ');
+  const left = finishing ? round2(num(finishing.remainingMg,0)) : 0;
+  openModal(finishing ? 'Finish & mix next batch' : 'Mix a blend', `
+    ${finishing ? `<div class="swap-sec"><h4>Finishing</h4><p class="footnote">${esc(finishing.compound||'Blend')}${finishing.dateOpened?` · mixed ${esc(fmtDateShort(finishing.dateOpened))}`:''} · ${left>0.05 ? `${left} mg left, counted as discarded` : 'empty'}</p></div>` : ''}
+    <div class="swap-sec"><h4>What goes in</h4>
+      <div id="mixRows"></div>
+      <button type="button" class="btn btn-sm" id="mixAdd" style="margin-top:8px;">+ Add peptide</button>
+    </div>
+    <div class="swap-sec"><h4>Reconstitute</h4>
+      <div class="form-grid">
+        <div class="field"><label for="mixBac">BAC water (mL)</label><input id="mixBac" type="number" inputmode="decimal" step="any" min="0" value="${esc(String(bacDefault))}"></div>
+        <div class="field"><label for="mixDate">Date mixed</label><input id="mixDate" type="date" value="${todayISO()}" max="${todayISO()}"></div>
+        <div class="field span2"><label for="mixName">Name</label><input id="mixName" type="text" value="${esc(p ? p.compound||'' : '')}" placeholder="e.g. KPV + GHK-Cu"></div>
+      </div>
+      <div class="mix-out" id="mixOut"></div>
+    </div>
+    <div class="swap-sec"><h4>Protocol</h4>
+      ${p ? `<p class="footnote">This becomes the active vial for <strong>${esc(p.compound||'this protocol')}</strong>.</p>` : `
+      <select id="mixLink">
+        <option value="__new">Create a daily protocol for it</option>
+        ${protos.map(x=>`<option value="${x.id}">Use for ${esc(x.compound||'protocol')}</option>`).join('')}
+        <option value="">Don't link a protocol</option>
+      </select>`}
+    </div>
+    <div class="form-actions"><button type="button" class="btn" id="mixCancel">Cancel</button><button type="button" class="btn btn-accent-pep" id="mixGo">Mix</button></div>
+    <div class="footnote" id="mixErr" style="margin-top:6px;"></div>
+  `, body=>{
+    const nameIn = $('#mixName',body);
+    let nameTyped = !!nameIn.value;
+    const draw = ()=>{
+      const src = mixSources();
+      $('#mixRows',body).innerHTML = rows.map((r0,i)=>{
+        const v = state.vials.find(x=> x.id===r0.vialId);
+        const max = v ? num(v.qty,0) : 1;
+        return `<div class="mix-row" data-i="${i}">
+          <select data-mix-lot aria-label="Peptide ${i+1}">${r0.vialId ? '' : '<option value="">Choose a peptide…</option>'}${src.map(x=>`<option value="${x.id}" ${x.id===r0.vialId?'selected':''}>${esc(x.compound||'Vial')} · ${num(x.mgPerVial,0)} mg${x.pharmacy?` · ${esc(x.pharmacy)}`:''} (${num(x.qty,0)} sealed)</option>`).join('')}</select>
+          <div class="mix-qty"><button type="button" data-mix-step="-1" aria-label="Fewer" ${r0.count<=1?'disabled':''}>−</button><span>${r0.count}</span><button type="button" data-mix-step="1" aria-label="More" ${r0.count>=max?'disabled':''}>+</button></div>
+          <button type="button" class="icon-btn" data-mix-rm aria-label="Remove" ${rows.length<=1?'disabled':''}>✕</button>
+        </div>`;
+      }).join('');
+      $('#mixAdd',body).disabled = rows.length >= src.length;
+      out();
+    };
+    const out = ()=>{
+      const list = pick(), bac = num($('#mixBac',body).value,0);
+      if(!nameTyped) nameIn.value = autoName();
+      const total = list.reduce((t,r0)=> t + num(r0.v.mgPerVial,0)*r0.count, 0);
+      $('#mixOut',body).innerHTML = list.length ? `${list.map(r0=>{ const mg = num(r0.v.mgPerVial,0)*r0.count; return `<div><span>${esc(r0.v.compound)}</span><strong class="mono">${round2(mg)} mg${bac?` · ${round2(mg/bac)} mg/mL`:''}</strong></div>`; }).join('')}
+        <div class="mix-tot"><span>Total</span><strong class="mono">${round2(total)} mg${bac?` · ${round2(total/bac)} mg/mL`:''}</strong></div>` : '';
+      const ids = list.map(r0=> r0.vialId);
+      $('#mixGo',body).disabled = list.length < 2 || new Set(ids).size !== ids.length || !bac;
+      $('#mixErr',body).textContent = new Set(ids).size !== ids.length ? 'Each lot can only be listed once; use + to add more of it.' : list.length < 2 ? 'Pick at least two peptides.' : '';
+    };
+    $('#mixRows',body).addEventListener('change', e=>{
+      const sel = e.target.closest('[data-mix-lot]'); if(!sel) return;
+      const r0 = rows[+sel.closest('[data-i]').dataset.i]; r0.vialId = sel.value; r0.count = 1; draw();
+    });
+    $('#mixRows',body).addEventListener('click', e=>{
+      const row = e.target.closest('[data-i]'); if(!row) return;
+      const r0 = rows[+row.dataset.i];
+      const st = e.target.closest('[data-mix-step]');
+      if(st){ const v = state.vials.find(x=> x.id===r0.vialId); r0.count = Math.max(1, Math.min(v ? num(v.qty,0) : 1, r0.count + +st.dataset.mixStep)); return draw(); }
+      if(e.target.closest('[data-mix-rm]')){ rows.splice(+row.dataset.i, 1); draw(); }
+    });
+    $('#mixAdd',body).addEventListener('click', ()=>{
+      const used = new Set(rows.map(r0=> r0.vialId));
+      const next = mixSources().find(v=> !used.has(v.id));
+      rows.push({vialId: next ? next.id : '', count:1}); draw();
+    });
+    nameIn.addEventListener('input', ()=>{ nameTyped = nameIn.value.trim()!==''; });
+    $('#mixBac',body).addEventListener('input', out);
+    $('#mixCancel',body).addEventListener('click', closeModal);
+    $('#mixGo',body).addEventListener('click', async ()=>{
+      const list = pick(); if(list.length < 2) return;
+      $('#mixGo',body).disabled = true;
+      const date = $('#mixDate',body).value || todayISO();
+      const bac = num($('#mixBac',body).value, 0);
+      const name = nameIn.value.trim() || autoName();
+      const recipeOut = list.map(r0=>({name: (r0.v.compound||'').trim(), mg: round2(num(r0.v.mgPerVial,0)*r0.count), count: r0.count, vialId: r0.v.id}));
+      const total = round2(recipeOut.reduce((t,c)=> t + c.mg, 0));
+      if(finishing){
+        const fresh = state.vials.find(v=> v.id===finishing.id) || finishing;
+        const log = (Array.isArray(fresh.finishedLog) ? fresh.finishedLog : []).concat({opened: fresh.dateOpened||'', finished: date, leftoverMg: round2(num(fresh.remainingMg,0))});
+        await dbSet('vials', fresh.id, {...stripId(fresh), remainingMg:null, dateOpened:'', finishedLog:log, ...(num(fresh.qty,0)<=0 ? {depleted:true} : {})});
+      }
+      const budDays = num((typeof C!=='undefined' && C && C.budDays), 0);
+      const newId = await dbAdd('vials', {compound: name, mgPerVial: String(total), qty: 0, remainingMg: total, dateOpened: date,
+        bacMl: String(bac), concentration: String(round2(total/bac)), pharmacy: 'Home mix', blend: recipeOut,
+        bud: budDays>0 ? addDays(date, budDays) : '', protocolId: p ? p.id : null});
+      for(const c of recipeOut){
+        const v = state.vials.find(x=> x.id===c.vialId); if(!v) continue;
+        const qty = Math.max(0, num(v.qty,0) - c.count);
+        const fl = (Array.isArray(v.finishedLog) ? v.finishedLog : []).concat(Array.from({length:c.count}, ()=>({opened: date, finished: date, leftoverMg: 0, mixedInto: newId})));
+        await dbSet('vials', v.id, {...stripId(v), qty, finishedLog: fl, ...(qty<=0 && v.remainingMg==null ? {depleted:true} : {})});
+      }
+      // keep any half-lives the protocol already had for these peptides
+      const withHl = old=> recipeOut.map(c=>{ const o = (old||[]).find(x=> (x.name||'').trim().toLowerCase()===c.name.toLowerCase()); return {name:c.name, mg:String(c.mg), halfLifeHours: o ? o.halfLifeHours||'' : ''}; });
+      const link = p ? p.id : ($('#mixLink',body) ? $('#mixLink',body).value : '');
+      closeModal();
+      haptic('success'); showToast(`Mixed ${name}`);
+      if(link==='__new'){
+        setTimeout(()=> openProtocolModal(null, {compound: name, dose:'', doseUnit:'mcg', frequencyDays:'1', blend: withHl(null),
+          activeVialId: newId, vialMg: String(total), bacMl: String(bac), startDate: todayISO(), nextDose: todayISO(), status:'active'}), 260);
+      } else if(link){
+        const fp = state.protocols.find(x=> x.id===link);
+        if(fp) await dbSet('protocols', fp.id, {...stripId(fp), activeVialId: newId, vialMg: String(total), bacMl: String(bac), blend: withHl(blendOf(fp))});
+      }
+    });
+    draw();
+  });
+}
 function protocolForVial(v){
   const linked = state.protocols.find(p=> p.status!=='archived' && p.activeVialId===v.id);
   if(linked) return linked;
@@ -3018,7 +3158,17 @@ function openVialModal(existing, prefill){
     });
   });
 }
-$('#addVialBtn').addEventListener('click', ()=> openVialModal(null));
+$('#addVialBtn').addEventListener('click', ()=>{
+  if(!canMixBlend()) return openVialModal(null);
+  openModal('Add to your stash', `
+    <div class="ios-list add-choice">
+      <button type="button" class="ios-row" id="acVial"><span class="ac-ic">🧪</span><span class="ac-t"><strong>Add vials</strong><span>Log vials you bought</span></span></button>
+      <button type="button" class="ios-row" id="acMix"><span class="ac-ic">⚗️</span><span class="ac-t"><strong>Mix a blend</strong><span>Combine sealed vials into one, e.g. KPV + GHK-Cu</span></span></button>
+    </div>`, body=>{
+    $('#acVial',body).addEventListener('click', ()=>{ closeModal(); setTimeout(()=> openVialModal(null), 240); });
+    $('#acMix',body).addEventListener('click', ()=>{ closeModal(); setTimeout(()=> openBlendMixModal(), 240); });
+  });
+});
 
 /* ===================== Peptides: Supplies ===================== */
 const SUPPLY_CATEGORIES = [
@@ -5877,8 +6027,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.37.0';
+const APP_VERSION = '1.39.0';
 const WHATS_NEW = [
+  {v:'1.39.0', title:'Mix your own blends', items:[
+    ['⚗️','Stash › + › Mix a blend: combine sealed vials (e.g. KPV + GHK-Cu) into one vial. Your sealed counts drop automatically.'],
+    ['🔗','The mixed vial links to its protocol, every dose comes off it, and Finish mixes the next batch.'],
+  ]},
   {v:'1.37.0', title:'A swipeable stash', items:[
     ['🧪','Your vials now float in a single row, three at a time. Swipe left or right to see the rest.'],
   ]},
