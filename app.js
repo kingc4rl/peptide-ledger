@@ -1905,10 +1905,15 @@ function openProtocolModal(existing, prefill){
     $('#pUnits',body).addEventListener('input', fromUnits);
     $('#pActiveVial',body).addEventListener('change', recalc);
     $$('[data-du]',body).forEach(b=> b.addEventListener('click', ()=>{
-      $('#pDoseUnit',body).value = b.dataset.du;
+      const from = $('#pDoseUnit',body).value, to = b.dataset.du;
+      if(from===to) return;
+      $('#pDoseUnit',body).value = to;
       $$('[data-du]',body).forEach(x=>{ const on = x===b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
-      // the number you typed is now read in the new unit (500 → 500 mcg), so the units follow it
-      $('#pDoseUnit',body).dispatchEvent(new Event('input'));
+      // same amount, new unit: 0.5 mg becomes 500 mcg, and the units stay as they are
+      const dIn = $('#pDose',body), v = parseFloat(dIn.value);
+      if(isFinite(v)) dIn.value = String(Math.round((to==='mcg' ? v*1000 : v/1000)*1e6)/1e6);
+      hints();
+      $('#pDoseUnit',body).dispatchEvent(new Event('input'));    // blend and split read-outs follow; units come out the same
     }));
     // Active-vial choices follow the compound name as you type it.
     $('#pCompound',body).addEventListener('input', ()=>{
