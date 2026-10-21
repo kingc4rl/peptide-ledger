@@ -1231,7 +1231,7 @@ function openQuickLog(p){
   const units0 = conc && perMg ? round1(perMg/conc*100) : null;
   const now = new Date(), hh = String(now.getHours()).padStart(2,'0'), mm = String(now.getMinutes()).padStart(2,'0');
   const done = injectionsOn(p, day);
-  let site = '';
+  const sst = {site:'', spot:'', view:null};
   const fromMg = mg=> unit==='mcg' ? mg*1000 : mg;      // mg → the protocol's own unit
   openModal(p.compound || 'Log dose', `
     <div class="ql">
@@ -1262,12 +1262,8 @@ function openQuickLog(p){
       if(!ch.hidden) ch.textContent = `${p.compound||'This protocol'}'s dose will change from ${fmtDose(d.dose, unit)} to ${fmtDose(Math.round(fromMg(mg*n)*1000)/1000, unit)} for this and future doses.`;
       $('#qlGo',body).disabled = !(mg>0);
     };
-    const drawMap = ()=>{
-      $('#qlMap',body).innerHTML = bodyMapSVG(p, site);
-      const next = suggestNextSite(p);
-      $('#qlSite',body).innerHTML = site ? `Logging <strong>${esc(site)}</strong>. Tap it again to clear.` : `Tap where you injected. Suggested next: <strong>${esc(next)}</strong>.`;
-    };
-    $('#qlMap',body).addEventListener('click', e=>{ const z = e.target.closest('[data-site]'); if(!z) return; site = site===z.dataset.site ? '' : z.dataset.site; haptic('select'); drawMap(); });
+    const siteNote = ()=>{ $('#qlSite',body).innerHTML = sst.site ? `Logging <strong>${esc(sst.site)}</strong>. Tap the square again to clear.` : `Tap where you injected. Suggested next: <strong>${esc(suggestNextSite(p))}</strong>.`; };
+    bindBodyMap($('#qlMap',body), p, sst, siteNote);
     $$('[data-ql-step]',body).forEach(b=> b.addEventListener('click', ()=>{
       const inp = uIn || dIn, st = uIn ? 1 : (unit==='mcg' ? 50 : 0.25);
       inp.value = String(Math.max(0, Math.round((num(inp.value,0) + st * +b.dataset.qlStep)*1000)/1000)); haptic('select'); refresh();
@@ -1288,17 +1284,17 @@ function openQuickLog(p){
         } else { upd.dose = dayDose; upd.doseUnit = unit; }
         if(uIn) upd.units = String(round1(num(uIn.value,0)*n));
       }
-      if(site){
-        const log = siteLogOf(cur).filter(e=> e.date!==day).concat({date:day, site}).sort((a,b)=> (a.date||'').localeCompare(b.date||''));
-        upd.siteLog = log.slice(-40);
+      if(sst.site){
+        const log = siteLogOf(cur).filter(e=> e.date!==day).concat({date:day, site:sst.site, spot:sst.spot}).sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+        upd.siteLog = log.slice(-60);
       }
-      if(changed() || site){ await dbSet('protocols', cur.id, upd); cur = state.protocols.find(x=> x.id===p.id) || cur; }
+      if(changed() || sst.site){ await dbSet('protocols', cur.id, upd); cur = state.protocols.find(x=> x.id===p.id) || cur; }
       closeModal();
       await logInjection(cur, day, 1, $('#qlTime',body).value || nowHHMM());
-      showToast(`Logged ${p.compound||'dose'}${site ? ' · '+site : ''}`);
+      showToast(`Logged ${p.compound||'dose'}${sst.site ? ' · '+sst.site : ''}`);
       maybeCelebrate();
     });
-    drawMap(); refresh();
+    siteNote(); refresh();
   });
 }
 /* Review & log screen for a protocol: the pen, a confirm box with dose, units and time, then the full details. */
@@ -2023,22 +2019,11 @@ function openProtocolModal(existing, prefill){
     });
 
     // Injection site: body map + select stay in sync
-    let selSite = '';
-    const drawMap = ()=>{ $('#pSiteMap',body).innerHTML = bodyMapSVG(p, selSite); };
-    drawMap();
-    $('#pSiteMap',body).addEventListener('click', e=>{
-      const z = e.target.closest('[data-site]'); if(!z) return;
-      selSite = selSite===z.dataset.site ? '' : z.dataset.site;
-      $('#pSite',body).value = selSite;
-      drawMap();
-    });
-    $('#pSiteMap',body).addEventListener('keydown', e=>{
-      const z = e.target.closest('[data-site]'); if(!z || (e.key!=='Enter' && e.key!==' ')) return;
-      e.preventDefault(); z.dispatchEvent(new MouseEvent('click',{bubbles:true}));
-    });
+    const pst = {site:'', spot:'', view:null};
+    const drawMap = bindBodyMap($('#pSiteMap',body), p, pst, ()=>{ $('#pSite',body).value = pst.site; });
     $('#pSite',body).addEventListener('change', ()=>{
       const v = $('#pSite',body).value;
-      selSite = (v && v!=='__undo') ? v : '';
+      pst.site = (v && v!=='__undo') ? v : ''; pst.spot = ''; pst.view = pst.site ? bmViewOf(pst.site) : pst.view;
       drawMap();
     });
     (function(){
@@ -2078,7 +2063,7 @@ function openProtocolModal(existing, prefill){
       } else if(siteSel){
         const sd = $('#pSiteDate',body).value || todayISO();
         siteLog = siteLog.filter(e=>e.date!==sd);          // one entry per date; re-logging replaces it
-        siteLog.push({date:sd, site:siteSel});
+        siteLog.push({date:sd, site:siteSel, ...(pst.spot && pst.site===siteSel ? {spot:pst.spot} : {})});
         siteLog.sort((a,b)=> (a.date||'').localeCompare(b.date||''));
       }
       const titration = steps
@@ -3689,37 +3674,118 @@ function suggestNextSite(p){
   const lastUsed = siteLastUsed(p);
   return SITE_NAMES.slice().sort((a,b)=> (lastUsed[a]||'').localeCompare(lastUsed[b]||''))[0];
 }
-function bodyMapSVG(p, selected){
-  const lastUsed = siteLastUsed(p);
-  const last = lastSiteOf(p);
+/* ===== Injection site map =====
+   An illustrated figure (front and back) with curved grids over the usual subcutaneous areas. Every grid square is a
+   spot you can tap; it is saved as {site: area name (used for rotation), spot: square id}. Past injections show as red
+   dots that fade over three weeks; the area to use next is tinted blue. Entries from before spots existed sit at the
+   middle of their area. */
+const BM_SKIN = '#f9e3c6', BM_LINE = '#3d3542';
+function bmLerp(a, b, t){ return a + (b-a)*t; }
+// A grid over a four-cornered patch (corners clockwise from top-left), optionally bowed: point(u,v) for u,v in 0..1.
+function bmPatch(tl, tr, br, bl, bowTop=0, bowBot=0){
+  return (u, v)=>{
+    const x = bmLerp(bmLerp(tl[0], tr[0], u), bmLerp(bl[0], br[0], u), v);
+    const yTop = bmLerp(tl[1], tr[1], u) - bowTop*Math.sin(Math.PI*u), yBot = bmLerp(bl[1], br[1], u) + bowBot*Math.sin(Math.PI*u);
+    return [x, bmLerp(yTop, yBot, v)];
+  };
+}
+/* Areas: name, view, the patch, grid size, and which squares belong (to split one patch into L/R or upper/lower). */
+const BM_AREAS = (()=>{
+  const abd = bmPatch([78,186],[222,186],[204,262],[96,262], 14, 26);
+  const out = [];
+  const add = (name, view, pt, cols, rows, keep)=> out.push({name, view, pt, cols, rows, keep: keep || (()=>true)});
+  // front: abdomen around the navel (squares right next to it are left out), and the front of each thigh
+  const nearNavel = (c,r)=> (c===4||c===5) && (r===2||r===3);
+  add('Abdomen upper – R', 'front', abd, 10, 6, (c,r)=> c<5 && r<3 && !nearNavel(c,r));
+  add('Abdomen upper – L', 'front', abd, 10, 6, (c,r)=> c>=5 && r<3 && !nearNavel(c,r));
+  add('Abdomen lower – R', 'front', abd, 10, 6, (c,r)=> c<5 && r>=3 && !nearNavel(c,r));
+  add('Abdomen lower – L', 'front', abd, 10, 6, (c,r)=> c>=5 && r>=3 && !nearNavel(c,r));
+  add('Thigh – R', 'front', bmPatch([70,318],[120,312],[132,398],[84,402]), 3, 6);
+  add('Thigh – L', 'front', bmPatch([180,312],[230,318],[216,402],[168,398]), 3, 6);
+  // back: backs of the upper arms, the flanks (love handles) and the upper outer glutes
+  add('Upper arm – L', 'back', bmPatch([30,104],[50,102],[47,178],[27,180]), 2, 5);
+  add('Upper arm – R', 'back', bmPatch([250,102],[270,104],[273,180],[253,178]), 2, 5);
+  add('Flank – L', 'back', bmPatch([74,196],[104,196],[102,246],[70,246]), 2, 3);
+  add('Flank – R', 'back', bmPatch([196,196],[226,196],[230,246],[198,246]), 2, 3);
+  add('Glute – L', 'back', bmPatch([80,262],[146,262],[146,316],[76,310], 6, 0), 4, 3);
+  add('Glute – R', 'back', bmPatch([154,262],[220,262],[224,310],[154,316], 6, 0), 4, 3);
+  return out;
+})();
+// Every tappable square: {id, area, view, pts:[[x,y]x4], cx, cy}
+const BM_CELLS = (()=>{
+  const cells = [];
+  BM_AREAS.forEach((a, ai)=>{
+    for(let r=0; r<a.rows; r++) for(let c=0; c<a.cols; c++){
+      if(!a.keep(c, r)) continue;
+      const pts = [a.pt(c/a.cols, r/a.rows), a.pt((c+1)/a.cols, r/a.rows), a.pt((c+1)/a.cols, (r+1)/a.rows), a.pt(c/a.cols, (r+1)/a.rows)];
+      const [cx, cy] = a.pt((c+.5)/a.cols, (r+.5)/a.rows);
+      cells.push({id: `${ai}:${c}:${r}`, area: a.name, view: a.view, pts, cx, cy});
+    }
+  });
+  return cells;
+})();
+function bmAreaCentre(name){
+  const cs = BM_CELLS.filter(c=> c.area===name); if(!cs.length) return null;
+  return [cs.reduce((t,c)=> t+c.cx, 0)/cs.length, cs.reduce((t,c)=> t+c.cy, 0)/cs.length];
+}
+function bmViewOf(site){ const a = BM_AREAS.find(x=> x.name===site); return a ? a.view : 'front'; }
+// The figure: arms, then torso and legs, with a few contour lines; the same silhouette serves the back view.
+function bmFigure(view){
+  const arm = side=>{ const k = side<0 ? 1 : -1, X = x=> side<0 ? x : 300-x;
+    return `<path d="M${X(66)} 48 C${X(44)} 54 ${X(34)} 74 ${X(32)} 100 L${X(28)} 190 C${X(26)} 214 ${X(24)} 238 ${X(22)} 262 C${X(18)} 276 ${X(14)} 290 ${X(18)} 304 C${X(22)} 318 ${X(30)} 324 ${X(38)} 316 C${X(44)} 306 ${X(46)} 292 ${X(46)} 278 L${X(50)} 230 C${X(54)} 200 ${X(58)} 168 ${X(62)} 140 Z" fill="url(#bmSkinG)" stroke="${BM_LINE}" stroke-width="1.6" stroke-linejoin="round"/>
+      <path d="M${X(24)} 300 l${-k*0} 0 M${X(26)} 292 C${X(28)} 300 ${X(30)} 306 ${X(29)} 312 M${X(32)} 292 C${X(35)} 300 ${X(36)} 306 ${X(35)} 314 M${X(38)} 290 C${X(41)} 298 ${X(42)} 304 ${X(41)} 312" fill="none" stroke="${BM_LINE}" stroke-width="1" stroke-linecap="round" opacity=".55"/>`; };
+  const body = `<path d="M126 0 C126 12 112 20 88 26 C64 32 54 46 54 70 L58 150 C60 174 68 188 68 206 C66 228 60 248 62 272 L66 404 L146 404 L150 300 L154 404 L234 404 L238 272 C240 248 234 228 232 206 C232 188 240 174 242 150 L246 70 C246 46 236 32 212 26 C188 20 174 12 174 0 Z" fill="url(#bmSkinG)" stroke="${BM_LINE}" stroke-width="1.6" stroke-linejoin="round"/>`;
+  const front = `<path d="M96 132 C104 142 112 146 120 146 M204 132 C196 142 188 146 180 146" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>
+    <ellipse cx="150" cy="222" rx="7" ry="4" fill="none" stroke="${BM_LINE}" stroke-width="1.2"/><circle cx="150" cy="222" r="2" fill="none" stroke="${BM_LINE}" stroke-width="1"/>
+    <path d="M134 290 Q150 300 166 290" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>`;
+  const back = `<path d="M150 40 L150 250" fill="none" stroke="${BM_LINE}" stroke-width="1" stroke-dasharray="2 4" opacity=".5"/>
+    <path d="M92 80 C100 104 116 112 132 106 M208 80 C200 104 184 112 168 106" fill="none" stroke="${BM_LINE}" stroke-width="1.2" stroke-linecap="round" opacity=".7"/>
+    <path d="M150 262 L150 300 M96 318 Q120 330 146 320 M154 320 Q180 330 204 318" fill="none" stroke="${BM_LINE}" stroke-width="1.3" stroke-linecap="round"/>`;
+  const defs = `<defs><linearGradient id="bmSkinG" x1="0" x2="1"><stop offset="0" stop-color="#ecc9a3"/><stop offset=".2" stop-color="#f7dcbd"/><stop offset=".5" stop-color="${BM_SKIN}"/><stop offset=".8" stop-color="#f7dcbd"/><stop offset="1" stop-color="#ecc9a3"/></linearGradient></defs>`;
+  return defs + arm(-1) + arm(1) + body + (view==='back' ? back : front);
+}
+function bodyMapSVG(p, selected, spot, view){
+  view = view || 'front';
+  const log = siteLogOf(p), today = todayISO();
   const next = suggestNextSite(p);
-  const figure = cx => `
-    <circle cx="${cx}" cy="26" r="15" class="bm-body"/>
-    <rect x="${cx-6}" y="39" width="12" height="10" class="bm-body"/>
-    <rect x="${cx-27}" y="46" width="54" height="114" rx="16" class="bm-body"/>
-    <rect x="${cx-47}" y="50" width="16" height="102" rx="8" class="bm-body"/>
-    <rect x="${cx+31}" y="50" width="16" height="102" rx="8" class="bm-body"/>
-    <rect x="${cx-25}" y="150" width="23" height="150" rx="10" class="bm-body"/>
-    <rect x="${cx+2}" y="150" width="23" height="150" rx="10" class="bm-body"/>`;
-  const zones = INJECTION_SITES.map(s=>{
-    const used = lastUsed[s.name];
-    const cls = ['bm-zone'];
-    if(used) cls.push('used');
-    if(last && last.site===s.name) cls.push('last');
-    if(s.name===next) cls.push('next');
-    if(s.name===selected) cls.push('sel');
-    const ago = used ? daysBetween(used, todayISO()) : null;
-    const title = `${s.name}: ${used ? (ago===0?'used today':`last used ${ago} day${ago===1?'':'s'} ago`) : 'not used yet'}${s.name===next?' (suggested next)':''}`;
-    return `<ellipse cx="${s.cx}" cy="${s.cy}" rx="${s.rx}" ry="${s.ry}" class="${cls.join(' ')}" data-site="${esc(s.name)}" tabindex="0" role="button" aria-pressed="${s.name===selected}" aria-label="${esc(title)}"><title>${esc(title)}</title></ellipse>`;
+  const poly = pts=> pts.map(([x,y])=> `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+  const cells = BM_CELLS.filter(c=> c.view===view);
+  // grid lines: every square outlined; the suggested area tinted, the selected square filled
+  const grid = cells.map(c=> `<polygon points="${poly(c.pts)}" class="bm-cell${c.area===next ? ' next' : ''}${c.id===spot ? ' sel' : ''}" data-site="${esc(c.area)}" data-spot="${c.id}" tabindex="-1"><title>${esc(c.area)}</title></polygon>`).join('');
+  // history dots, newest on top, fading over 21 days
+  const dots = log.filter(e=> bmViewOf(e.site)===view).sort((a,b)=> (a.date||'').localeCompare(b.date||'')).map(e=>{
+    const cell = e.spot ? BM_CELLS.find(c=> c.id===e.spot) : null;
+    const at = cell ? [cell.cx, cell.cy] : bmAreaCentre(e.site); if(!at) return '';
+    const age = Math.max(0, daysBetween(e.date, today));
+    if(age > 42) return '';
+    const op = Math.max(.18, 1 - age/21*0.82);
+    return `<circle cx="${at[0].toFixed(1)}" cy="${at[1].toFixed(1)}" r="5.2" class="bm-dot" style="opacity:${op.toFixed(2)}"><title>${esc(e.site)} · ${esc(fmtDateShort(e.date))}</title></circle>`;
   }).join('');
-  return `<svg viewBox="0 0 300 330" role="group" aria-label="Injection site map">
-    ${figure(75)}${figure(225)}
-    <text x="75" y="322" class="bm-label">FRONT</text><text x="225" y="322" class="bm-label">BACK</text>
-    <text x="22" y="40" class="bm-side">R</text><text x="128" y="40" class="bm-side">L</text>
-    <text x="172" y="40" class="bm-side">L</text><text x="278" y="40" class="bm-side">R</text>
-    ${zones}
+  const sel = spot ? BM_CELLS.find(c=> c.id===spot) : null;
+  const selMark = sel && sel.view===view ? `<circle cx="${sel.cx.toFixed(1)}" cy="${sel.cy.toFixed(1)}" r="7" class="bm-pick"/>` : '';
+  const tabs = ['front','back'].map(v=> `<button type="button" data-bm-view="${v}" class="${v===view?'on':''}">${v==='front'?'Front':'Back'}</button>`).join('');
+  return `<div class="bm-tabs" role="tablist">${tabs}</div>
+  <svg viewBox="0 0 300 404" role="img" aria-label="Injection site map, ${view} view. Tap a square to choose where you injected.">
+    ${bmFigure(view)}
+    <g class="bm-grid">${grid}</g>
+    <g pointer-events="none">${dots}${selMark}</g>
+    <text x="${view==='front'?16:284}" y="22" class="bm-side">R</text><text x="${view==='front'?284:16}" y="22" class="bm-side">L</text>
   </svg>
-  <div class="bm-legend"><span><i class="k-sel"></i>Selected</span><span><i class="k-last"></i>Last used</span><span><i class="k-next"></i>Suggested next</span><span><i class="k-used"></i>Used before</span></div>`;
+  <div class="bm-legend"><span><i class="k-dot"></i>Recent</span><span><i class="k-old"></i>Older</span><span><i class="k-next"></i>Suggested next</span><span><i class="k-sel"></i>This dose</span></div>`;
+}
+/* Wire a map into a container. st = {site, spot, view}; onChange runs after a square is picked or cleared. */
+function bindBodyMap(el, p, st, onChange){
+  const draw = ()=>{ el.innerHTML = bodyMapSVG(p, st.site, st.spot, st.view || bmViewOf(st.site || suggestNextSite(p))); };
+  el.addEventListener('click', e=>{
+    const t = e.target.closest('[data-bm-view]');
+    if(t){ st.view = t.dataset.bmView; draw(); return; }
+    const z = e.target.closest('[data-spot]'); if(!z) return;
+    if(st.spot===z.dataset.spot){ st.site = ''; st.spot = ''; } else { st.site = z.dataset.site; st.spot = z.dataset.spot; }
+    st.view = bmViewOf(st.site) || st.view;
+    haptic('select'); draw(); onChange && onChange();
+  });
+  draw();
+  return draw;
 }
 function siteRowHTML(p){
   const last = lastSiteOf(p);
@@ -6300,8 +6366,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.42.0';
+const APP_VERSION = '1.43.0';
 const WHATS_NEW = [
+  {v:'1.43.0', title:'A new injection site map', items:[
+    ['📍','An illustrated body with grids over your abdomen, thighs, arms, flanks and glutes. Tap the exact square you used.'],
+    ['🔴','Past injections show as red dots that fade over three weeks, so you can see where to rotate next.'],
+  ]},
   {v:'1.42.0', title:'Confirm before logging', items:[
     ['✅','The ✓ beside a pen now opens a quick check: adjust the units (your protocol updates to match), set the time and tap where you injected, then log.'],
     ['✏️','Protocols: Dose has an mg/mcg switch, with Units right below it. Fill in either one and the other follows.'],
