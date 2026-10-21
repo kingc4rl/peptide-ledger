@@ -5109,6 +5109,21 @@ function echoableContent(blocks){
     return true;
   });
 }
+/* POST to the Messages API. The iPhone app's web view only talks to its app-bound domain (the GitHub Pages site), so
+   older builds block a direct fetch to api.anthropic.com. There the request goes through Capacitor's native HTTP
+   instead: the whole streamed reply comes back at once and is wrapped in a Response, so the stream parser is unchanged. */
+async function claudeFetch(signal, headers, body){
+  const url = 'https://api.anthropic.com/v1/messages';
+  const H = capPlugin('CapacitorHttp');
+  if(!(H && claudeFetch.useNative)){
+    try{ return await fetch(url, {method:'POST', signal, headers, body: JSON.stringify(body)}); }
+    catch(e){ if(e && e.name==='AbortError' || !H) throw e; claudeFetch.useNative = true; }
+  }
+  const r = await H.request({url, method:'POST', headers, data: body, responseType:'text', connectTimeout: 30000, readTimeout: 600000});
+  if(signal.aborted){ const e = new Error('Stopped'); e.name = 'AbortError'; throw e; }
+  const text = typeof r.data==='string' ? r.data : JSON.stringify(r.data);
+  return new Response(text, {status: r.status || 200, headers: {'content-type': (r.headers && (r.headers['Content-Type'] || r.headers['content-type'])) || 'text/event-stream'}});
+}
 async function sendAsk(){
   if(askBusy){ if(askAbort) askAbort.abort(); return; }
   const input = $('#askInput'); const text = input.value.trim(); if(!text) return;
@@ -5132,24 +5147,20 @@ async function sendAsk(){
     for(let hop = 0; hop < 5; hop++){
       const hopStart = blocks.length;
       const msgs = hopStart ? askConv.messages.concat([{role:'assistant', content: blocks.filter(Boolean).map(cleanBlock)}]) : askConv.messages;
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method:'POST', signal: askAbort.signal,
-        headers:{
+      const res = await claudeFetch(askAbort.signal, {
           'content-type':'application/json',
           'x-api-key': key,
           'anthropic-version':'2023-06-01',
           'anthropic-dangerous-direct-browser-access':'true',
           'anthropic-beta':'server-side-fallback-2026-07-01',
-        },
-        body: JSON.stringify({
+        }, {
           model: askConv.model, max_tokens: 32000, stream: true,
           system: [{type:'text', text: askConv.system, cache_control:{type:'ephemeral'}}],
           messages: msgs,
           tools: [{type:'web_search_20260209', name:'web_search', max_uses: 6}],
           output_config: {effort: 'medium'},
           fallbacks: 'default',
-        }),
-      });
+        });
       if(!res.ok){
         let detail = ''; try{ const j = await res.json(); detail = (j.error && j.error.message) || ''; }catch(_){}
         errMsg = res.status===401 ? 'Your API key was not accepted. Check it in ⚙ settings.'

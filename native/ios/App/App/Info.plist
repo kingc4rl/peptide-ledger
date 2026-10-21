@@ -101,6 +101,7 @@
 	<key>WKAppBoundDomains</key>
 	<array>
 		<string>kingc4rl.github.io</string>
+		<string>api.anthropic.com</string>
 	</array>
 </dict>
 </plist>
