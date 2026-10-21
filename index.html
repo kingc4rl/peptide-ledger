@@ -1497,15 +1497,6 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .pgh-spark{ width:100%; height:54px; display:block; }
 .pgh-chip{ font-size:13px; font-weight:600; padding:4px 10px; border-radius:999px; background:rgba(52,199,89,.14); color:var(--good); white-space:nowrap; }
 .pgh-chip.up{ background:rgba(255,149,0,.14); color:#c76a00; }
-/* readable caption under each pen on Today */
-.pen-cap{ display:flex; align-items:baseline; gap:8px; padding:0 4px 2px 12px; margin-top:-4px; text-align:left; min-width:0; }
-.pen-cap strong{ font-size:16px; font-weight:600; color:var(--ink); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.pen-cap-d{ font-size:14px; color:var(--label2); white-space:nowrap; }
-.pen-cap-s{ margin-left:auto; font-size:13px; font-weight:600; white-space:nowrap; color:var(--label2); }
-.pen-cap-s.due, .pen-cap-s.warn{ color:var(--accent-pep-strong); }
-.pen-cap-s.done, .pen-cap-s.good, .pen-cap-s.ok{ color:var(--good); }
-.pen-cap-s.bad{ color:var(--bad); }
-.pen-hero .pen-cap{ display:none; }
 /* Past Claude conversations */
 .cv-search{ margin:2px 0 6px; height:40px; background:rgba(120,120,128,.12); box-shadow:none; }
 .cv-group-h{ font-size:13px; font-weight:600; color:var(--label2); text-transform:uppercase; letter-spacing:.04em; margin:16px 4px 6px; }
@@ -1530,6 +1521,30 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .seg3 button.on{ background:var(--seg-on, #fff); box-shadow:0 2px 8px rgba(0,0,0,.12), 0 0 0 .5px rgba(0,0,0,.04); }
 .glass-search input:focus, .glass-search input:focus-visible{ outline:none; box-shadow:none; border:0; background:transparent; }
 .ios-title.long{ font-size:28px; }
+/* smaller ✓ beside each pen */
+.pen-row .pen-quick{ width:34px; height:34px; }
+.pen-row .pen-quick svg{ width:17px; height:17px; stroke-width:3; }
+/* quick-log sheet */
+.ql{ display:flex; flex-direction:column; }
+.ql-sub{ text-align:center; margin:-4px 0 8px; }
+.ql-k{ font-size:13px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--label2); margin-bottom:6px; }
+.ql-opt{ text-transform:none; letter-spacing:0; font-weight:500; color:var(--label3, #a1a1a6); margin-left:4px; }
+.ql-step{ display:flex; align-items:center; gap:10px; }
+.ql-step button{ width:52px; height:52px; flex:none; border-radius:50%; border:none; background:var(--fill); color:var(--ink); font-size:26px; font-weight:500; cursor:pointer; }
+.ql-step input{ flex:1; min-width:0; height:56px; text-align:center; font-size:30px !important; font-weight:700; font-variant-numeric:tabular-nums; }
+.ql-eq{ text-align:center; font-size:15px; color:var(--label2); margin-top:8px; min-height:18px; }
+.ql-change{ margin-top:10px; padding:10px 12px; border-radius:14px; background:var(--accent-pep-soft); color:var(--accent-pep-strong); font-size:13.5px; font-weight:600; line-height:1.35; }
+.ql-row{ display:flex; align-items:center; justify-content:space-between; gap:12px; margin-top:16px; }
+.ql-row .ql-k{ margin:0; }
+.ql-row input{ width:auto; }
+.ql-map{ max-width:250px; margin:0 auto; }
+.ql-site{ text-align:center; margin-top:4px; }
+/* protocol form: dose with an mg/mcg pill */
+.dose-in{ display:flex; align-items:center; gap:10px; }
+.dose-in input{ flex:1; min-width:0; }
+.unit-pill{ display:flex; flex:none; padding:3px; border-radius:999px; background:var(--fill); }
+.unit-pill button{ border:none; background:none; padding:7px 14px; border-radius:999px; font-weight:600; font-size:14px; color:var(--label2); cursor:pointer; }
+.unit-pill button.on{ background:var(--seg-on, #fff); color:var(--ink); box-shadow:0 1px 4px rgba(0,0,0,.14); }
 .hap-test{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .hap-test span{ font-size:14px; margin-right:auto; }
 .vial-shelf ~ .vial-detail::before{ display:none; }
@@ -1670,7 +1685,7 @@ html.dark .banner{ background:linear-gradient(180deg, rgba(58,58,60,.7), rgba(44
 html.dark .banner.info{ background:linear-gradient(180deg, rgba(30,60,100,.55), rgba(25,45,80,.45)); }
 /* navigation */
 html.dark .ios-title, html.dark .ios-bar, html.dark .ios-row, html.dark .tabbar button, html.dark .glass-btn, html.dark .sync-pill, html.dark .btn,
-html.dark .chip-btn, html.dark .pc-stepper > button, html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark .pen-cap strong, html.dark .mix-qty button{ color:var(--ink); }
+html.dark .chip-btn, html.dark .pc-stepper > button, html.dark h1, html.dark h2, html.dark h3, html.dark h4, html.dark .mix-qty button{ color:var(--ink); }
 html.dark .ios-bar{ background:rgba(18,18,20,.72); border-bottom-color:rgba(255,255,255,.08); }
 html.dark .tabbar{ background:rgba(30,30,32,.72); box-shadow:var(--gl-edge), 0 10px 30px rgba(0,0,0,.5); }
 html.dark .tabbar button.active{ color:var(--accent-pep-strong); background:rgba(255,255,255,.1); }

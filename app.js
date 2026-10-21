@@ -1162,7 +1162,7 @@ function renderProtocols(){
   const colorMap = protocolColorMap();
   const day = doseDayISO();
   const serum = serumSeries().series;
-  // each pen gets a round button: orange ✓ logs today's dose in one tap, green ✓ means it's done
+  // each pen gets a round button: orange ✓ opens a quick confirm sheet for today's dose, green ✓ means it's done
   const quick = p=>{
     if(p.startDate && p.startDate > day) return `<span class="pen-quick none"></span>`;
     const done = injectionsOn(p, day) >= splitCount(p), due = doseDatesInRange(p, day, day).length>0;
@@ -1172,13 +1172,7 @@ function renderProtocols(){
   };
   el.innerHTML = `<div class="pen-list">${ordered.map((p,i)=> `<div class="pen-row">${penRowHTML(p, colorMap.get(p.id) || PROTOCOL_COLORS[0], day, i)}${quick(p)}</div>`).join('')}</div>`;
   $$('[data-pen]',el).forEach(b=> b.addEventListener('click', ()=> openDoseModal(state.protocols.find(x=>x.id===b.dataset.pen))));
-  $$('[data-quick-log]',el).forEach(b=> b.addEventListener('click', async ()=>{
-    const p = state.protocols.find(x=>x.id===b.dataset.quickLog); if(!p) return;
-    b.disabled = true; b.classList.add('pop');
-    await logInjection(p, day, 1, nowHHMM());
-    showToast(`Logged ${p.compound||'dose'}`);
-    maybeCelebrate();
-  }));
+  $$('[data-quick-log]',el).forEach(b=> b.addEventListener('click', ()=> openQuickLog(state.protocols.find(x=>x.id===b.dataset.quickLog))));
 }
 /* Buttons and widgets inside a protocol's dose details (now shown in the review screen). */
 function bindDoseDetail(root, serum){
@@ -1214,8 +1208,98 @@ function penRowHTML(p, color, day, i){
   const kind = m.vs.kind==='empty' ? 'bad' : m.stCls;
   const dose = m.amt.replace(/^([\d.]+)([a-z]+)$/i, '$1 $2');
   return `<button type="button" class="dose-pen" data-pen="${p.id}" aria-label="${esc(`${p.compound||'Protocol'}, ${dose}, ${status}. Tap to review and log.`)}">
-    ${penSVG({color, name: p.compound||'Untitled', dose, units: m.u!=null ? m.u : '—', sched: scheduleTag(p), status, kind, pct}, 'pn'+i)}
-    <span class="pen-cap" style="--pc:${color}"><strong>${esc(p.compound||'Untitled')}</strong><span class="pen-cap-d">${esc(dose)}${m.u!=null ? ` · ${m.u}u` : ''}</span><span class="pen-cap-s ${kind}">${esc(status)}</span></span></button>`;
+    ${penSVG({color, name: p.compound||'Untitled', dose, units: m.u!=null ? m.u : '—', sched: scheduleTag(p), status, kind, pct}, 'pn'+i)}</button>`;
+}
+/* Concentration (mg/mL) a protocol draws at: the active vial's, else the protocol's own vial recipe. */
+function protoConc(p){
+  const v = p && p.activeVialId ? state.vials.find(x=> x.id===p.activeVialId) : null;
+  if(v){
+    if(num(v.concentration,0) > 0) return num(v.concentration);
+    if(num(v.mgPerVial,0) > 0 && num(v.bacMl,0) > 0) return num(v.mgPerVial)/num(v.bacMl);
+  }
+  return num(p && p.vialMg,0) > 0 && num(p && p.bacMl,0) > 0 ? num(p.vialMg)/num(p.bacMl) : null;
+}
+/* Quick log (the ✓ beside a pen): confirm today's injection, adjust the units if needed (which updates the protocol's
+   dose from now on), pick the time and, optionally, the injection site, then log it. */
+function openQuickLog(p){
+  if(!p) return;
+  const day = doseDayISO(), n = splitCount(p), d = doseAt(p, day);
+  const conc = protoConc(p);
+  const perMg = (doseToMg(d.dose, d.doseUnit) || 0) / n;
+  const unit = d.doseUnit || 'mg';
+  const round1 = x=> Math.round(x*10)/10;
+  const units0 = conc && perMg ? round1(perMg/conc*100) : null;
+  const now = new Date(), hh = String(now.getHours()).padStart(2,'0'), mm = String(now.getMinutes()).padStart(2,'0');
+  const done = injectionsOn(p, day);
+  let site = '';
+  const fromMg = mg=> unit==='mcg' ? mg*1000 : mg;      // mg → the protocol's own unit
+  openModal(p.compound || 'Log dose', `
+    <div class="ql">
+      ${n>1 ? `<div class="footnote ql-sub">Injection ${done+1} of ${n} today</div>` : ''}
+      ${units0!=null ? `
+        <div class="ql-k">Units</div>
+        <div class="ql-step"><button type="button" data-ql-step="-1" aria-label="One unit less">−</button><input id="qlUnits" type="number" inputmode="decimal" step="any" min="0" value="${units0}" aria-label="Units"><button type="button" data-ql-step="1" aria-label="One unit more">+</button></div>
+        <div class="ql-eq" id="qlEq"></div>` : `
+        <div class="ql-k">Dose (${esc(unit)})</div>
+        <div class="ql-step"><button type="button" data-ql-step="-1" aria-label="Less">−</button><input id="qlDose" type="number" inputmode="decimal" step="any" min="0" value="${Math.round(fromMg(perMg)*1000)/1000}" aria-label="Dose"><button type="button" data-ql-step="1" aria-label="More">+</button></div>
+        <div class="ql-eq">Add the vial's concentration to the protocol to log in units.</div>`}
+      <div class="ql-change" id="qlChange" hidden></div>
+      <div class="ql-row"><span class="ql-k">Time</span><input type="time" id="qlTime" value="${hh}:${mm}"></div>
+      <div class="ql-k" style="margin-top:14px;">Injection site <span class="ql-opt">optional</span></div>
+      <div class="body-map ql-map" id="qlMap"></div>
+      <div class="footnote ql-site" id="qlSite"></div>
+    </div>
+    <div class="form-actions"><button type="button" class="btn" id="qlCancel">Cancel</button><button type="button" class="btn btn-accent-pep" id="qlGo">${SYRINGE_ICON}<span>Log dose</span></button></div>
+  `, body=>{
+    const uIn = $('#qlUnits',body), dIn = $('#qlDose',body);
+    const curPerMg = ()=> uIn ? num(uIn.value,0)/100*conc : (unit==='mcg' ? num(dIn.value,0)/1000 : num(dIn.value,0));
+    const changed = ()=> Math.abs(curPerMg() - perMg) > 1e-6;
+    const refresh = ()=>{
+      const mg = curPerMg();
+      if(uIn) $('#qlEq',body).textContent = mg>0 ? `= ${fmtAmount(mg)}${n>1 ? ` · ${fmtAmount(mg*n)} for the day` : ''}` : '';
+      const ch = $('#qlChange',body);
+      ch.hidden = !changed() || !(mg>0);
+      if(!ch.hidden) ch.textContent = `${p.compound||'This protocol'}'s dose will change from ${fmtDose(d.dose, unit)} to ${fmtDose(Math.round(fromMg(mg*n)*1000)/1000, unit)} for this and future doses.`;
+      $('#qlGo',body).disabled = !(mg>0);
+    };
+    const drawMap = ()=>{
+      $('#qlMap',body).innerHTML = bodyMapSVG(p, site);
+      const next = suggestNextSite(p);
+      $('#qlSite',body).innerHTML = site ? `Logging <strong>${esc(site)}</strong>. Tap it again to clear.` : `Tap where you injected. Suggested next: <strong>${esc(next)}</strong>.`;
+    };
+    $('#qlMap',body).addEventListener('click', e=>{ const z = e.target.closest('[data-site]'); if(!z) return; site = site===z.dataset.site ? '' : z.dataset.site; haptic('select'); drawMap(); });
+    $$('[data-ql-step]',body).forEach(b=> b.addEventListener('click', ()=>{
+      const inp = uIn || dIn, st = uIn ? 1 : (unit==='mcg' ? 50 : 0.25);
+      inp.value = String(Math.max(0, Math.round((num(inp.value,0) + st * +b.dataset.qlStep)*1000)/1000)); haptic('select'); refresh();
+    }));
+    (uIn || dIn).addEventListener('input', refresh);
+    $('#qlCancel',body).addEventListener('click', closeModal);
+    $('#qlGo',body).addEventListener('click', async ()=>{
+      const mg = curPerMg(); if(!(mg>0)) return;
+      $('#qlGo',body).disabled = true;
+      let cur = state.protocols.find(x=> x.id===p.id) || p;
+      const upd = {...stripId(cur)};
+      if(changed()){
+        // the new amount becomes the protocol's dose: today's titration step if one is running, else the base dose
+        const dayDose = String(Math.round(fromMg(mg*n)*1000)/1000);
+        if(d.step>0){
+          const steps = titrationSteps(cur).map(x=>({...x})); const st = steps[d.step-1];
+          if(st){ st.dose = dayDose; st.doseUnit = unit; upd.titration = steps; }
+        } else { upd.dose = dayDose; upd.doseUnit = unit; }
+        if(uIn) upd.units = String(round1(num(uIn.value,0)*n));
+      }
+      if(site){
+        const log = siteLogOf(cur).filter(e=> e.date!==day).concat({date:day, site}).sort((a,b)=> (a.date||'').localeCompare(b.date||''));
+        upd.siteLog = log.slice(-40);
+      }
+      if(changed() || site){ await dbSet('protocols', cur.id, upd); cur = state.protocols.find(x=> x.id===p.id) || cur; }
+      closeModal();
+      await logInjection(cur, day, 1, $('#qlTime',body).value || nowHHMM());
+      showToast(`Logged ${p.compound||'dose'}${site ? ' · '+site : ''}`);
+      maybeCelebrate();
+    });
+    drawMap(); refresh();
+  });
 }
 /* Review & log screen for a protocol: the pen, a confirm box with dose, units and time, then the full details. */
 function openDoseModal(p){
@@ -1693,8 +1777,12 @@ function openProtocolModal(existing, prefill){
   openModal(existing? 'Edit protocol' : 'Add protocol', `
     <div class="form-grid">
       <div class="field span2"><label for="pCompound">Compound</label><input id="pCompound" type="text" value="${esc(p.compound||'')}" placeholder="e.g. BPC-157"></div>
-      <div class="field"><label for="pDose">Dose (whole dose day)</label><input id="pDose" type="number" inputmode="decimal" step="any" value="${esc(p.dose||'')}"></div>
-      <div class="field"><label for="pDoseUnit">Unit</label><select id="pDoseUnit">${(()=>{ const u = p.doseUnit || (existing ? 'mcg' : 'mg'); return `<option value="mg" ${u==='mg'?'selected':''}>mg</option><option value="mcg" ${u==='mcg'?'selected':''}>mcg</option>`; })()}</select></div>
+      <div class="field span2"><label for="pDose">Dose</label>
+        <div class="dose-in"><input id="pDose" type="number" inputmode="decimal" step="any" value="${esc(p.dose||'')}" placeholder="e.g. 2.5">
+          ${(()=>{ const u = existing && p.doseUnit ? p.doseUnit : (p.doseUnit || 'mg'); return `<input type="hidden" id="pDoseUnit" value="${u}"><div class="unit-pill" role="radiogroup" aria-label="Dose unit"><button type="button" data-du="mg" class="${u==='mg'?'on':''}" role="radio" aria-checked="${u==='mg'}">mg</button><button type="button" data-du="mcg" class="${u==='mcg'?'on':''}" role="radio" aria-checked="${u==='mcg'}">mcg</button></div>`; })()}
+        </div></div>
+      <div class="field span2"><label for="pUnits">Units</label><input id="pUnits" type="number" inputmode="decimal" step="any" min="0" value="${esc(p.units||'')}" placeholder="Syringe units, e.g. 20">
+        <div class="footnote" id="pUnitsOut" style="margin-top:4px;"></div></div>
       <div class="field span2"><label for="pSplit">Split each dose day into</label>
         <select id="pSplit">${[1,2,3,4].map(k=>`<option value="${k}" ${split===k?'selected':''}>${k===1?'1 injection (no split)':k+' injections'}</option>`).join('')}</select>
         <div class="footnote" id="pSplitOut" style="margin-top:4px;"></div>
@@ -1720,15 +1808,14 @@ function openProtocolModal(existing, prefill){
         </select>
       </div>
       <div class="field span2 module-box">
-        <label style="margin-bottom:6px;display:block;">Reconstitution <span style="font-weight:400;color:var(--muted);">: fills in units below. Leave blank to enter units by hand.</span></label>
+        <label style="margin-bottom:6px;display:block;">Reconstitution <span style="font-weight:400;color:var(--muted);">: lets Dose and Units fill each other in. Uses the active vial if left blank.</span></label>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
           <div><label for="pVialMg" class="footnote" style="display:block;margin-bottom:3px;">Vial size (mg)</label><input id="pVialMg" type="number" inputmode="decimal" step="any" min="0" value="${esc(p.vialMg||'')}" placeholder="e.g. 10"></div>
           <div><label for="pBacMl" class="footnote" style="display:block;margin-bottom:3px;">BAC water added (mL)</label><input id="pBacMl" type="number" inputmode="decimal" step="any" min="0" value="${esc(p.bacMl||'')}" placeholder="e.g. 2"></div>
         </div>
         <div class="footnote" id="pConcOut" style="margin-top:6px;min-height:14px;"></div>
       </div>
-      <div class="field"><label for="pUnits">Syringe units, whole dose</label><input id="pUnits" type="number" inputmode="decimal" step="any" value="${esc(p.units||'')}" placeholder="e.g. 20"></div>
-      <div class="field"><label for="pSyringeMl">Syringe size</label>
+      <div class="field span2"><label for="pSyringeMl">Syringe size</label>
         <select id="pSyringeMl">
           ${SYRINGE_SIZES.map(s=>`<option value="${s.ml}" ${parseFloat(s.ml)===curSyr?'selected':''}>${s.ml} mL (${s.cap} units): ${s.tag}</option>`).join('')}
           ${syrIsCustom? `<option value="${esc(p.syringeMl)}" selected>${esc(p.syringeMl)} mL (custom)</option>` : ''}
@@ -1781,27 +1868,48 @@ function openProtocolModal(existing, prefill){
       <button class="btn btn-accent-pep" id="pSave">Save</button>
     </div>
   `, body=>{
-    function recalc(){
-      const vialMg = parseFloat($('#pVialMg',body).value);
-      const bacMl = parseFloat($('#pBacMl',body).value);
-      const dose = parseFloat($('#pDose',body).value);
-      const doseUnit = $('#pDoseUnit',body).value;
-      const n = parseInt($('#pSplit',body).value,10) || 1;
-      const concOut = $('#pConcOut',body);
-      const splitOut = $('#pSplitOut',body);
-      splitOut.textContent = (n>1 && isFinite(dose) && dose>0) ? `${n} injections of ${fmtDose(dose/n, doseUnit)} each.` : '';
-      const haveRecipe = isFinite(vialMg) && vialMg>0 && isFinite(bacMl) && bacMl>0;
-      if(!haveRecipe){ concOut.textContent = ''; return; }
-      const conc = vialMg/bacMl;
-      if(isFinite(dose) && dose>0){
-        const doseMg = doseUnit==='mcg' ? dose/1000 : dose;
-        const units = (doseMg/conc)*100;
-        $('#pUnits',body).value = Math.round(units*10)/10;
-        concOut.textContent = `${conc.toFixed(2)} mg/mL → ${Math.round(units*10)/10} units for this dose${n>1?` (${Math.round(units/n*10)/10} per injection)`:''}`;
-      } else {
-        concOut.textContent = `${conc.toFixed(2)} mg/mL`;
-      }
+    // Dose ↔ Units: whichever you type fills in the other once a concentration is known
+    // (the reconstitution fields, else the chosen active vial). Both are for the whole dose day.
+    function concNow(){
+      const vialMg = parseFloat($('#pVialMg',body).value), bacMl = parseFloat($('#pBacMl',body).value);
+      if(isFinite(vialMg) && vialMg>0 && isFinite(bacMl) && bacMl>0) return vialMg/bacMl;
+      const v = state.vials.find(x=> x.id===$('#pActiveVial',body).value);
+      if(v){ if(num(v.concentration,0)>0) return num(v.concentration); if(num(v.mgPerVial,0)>0 && num(v.bacMl,0)>0) return num(v.mgPerVial)/num(v.bacMl); }
+      return null;
     }
+    function hints(){
+      const n = parseInt($('#pSplit',body).value,10) || 1, conc = concNow();
+      const dose = parseFloat($('#pDose',body).value), doseUnit = $('#pDoseUnit',body).value, units = parseFloat($('#pUnits',body).value);
+      $('#pSplitOut',body).textContent = (n>1 && isFinite(dose) && dose>0) ? `${n} injections of ${fmtDose(dose/n, doseUnit)} each.` : '';
+      $('#pConcOut',body).textContent = conc ? `${conc.toFixed(2)} mg/mL` : '';
+      $('#pUnitsOut',body).textContent = conc
+        ? (isFinite(units) && units>0 && n>1 ? `${Math.round(units/n*10)/10} units per injection` : '')
+        : 'Add the vial size and BAC water (or pick an active vial) to fill this in from the dose.';
+    }
+    function recalc(){
+      const conc = concNow(), dose = parseFloat($('#pDose',body).value), doseUnit = $('#pDoseUnit',body).value;
+      if(conc && isFinite(dose) && dose>0){
+        const doseMg = doseUnit==='mcg' ? dose/1000 : dose;
+        $('#pUnits',body).value = Math.round(doseMg/conc*100*10)/10;
+      }
+      hints();
+    }
+    function fromUnits(){
+      const conc = concNow(), units = parseFloat($('#pUnits',body).value);
+      if(conc && isFinite(units) && units>0){
+        const mg = units/100*conc, unit = $('#pDoseUnit',body).value;
+        $('#pDose',body).value = String(Math.round((unit==='mcg' ? mg*1000 : mg)*1000)/1000);
+      }
+      hints();
+    }
+    $('#pUnits',body).addEventListener('input', fromUnits);
+    $('#pActiveVial',body).addEventListener('change', recalc);
+    $$('[data-du]',body).forEach(b=> b.addEventListener('click', ()=>{
+      $('#pDoseUnit',body).value = b.dataset.du;
+      $$('[data-du]',body).forEach(x=>{ const on = x===b; x.classList.toggle('on', on); x.setAttribute('aria-checked', String(on)); });
+      // the number you typed is now read in the new unit (500 → 500 mcg), so the units follow it
+      $('#pDoseUnit',body).dispatchEvent(new Event('input'));
+    }));
     // Active-vial choices follow the compound name as you type it.
     $('#pCompound',body).addEventListener('input', ()=>{
       const sel = $('#pActiveVial',body), keep = sel.value;
@@ -6187,8 +6295,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.41.0';
+const APP_VERSION = '1.42.0';
 const WHATS_NEW = [
+  {v:'1.42.0', title:'Confirm before logging', items:[
+    ['✅','The ✓ beside a pen now opens a quick check: adjust the units (your protocol updates to match), set the time and tap where you injected, then log.'],
+    ['✏️','Protocols: Dose has an mg/mcg switch, with Units right below it. Fill in either one and the other follows.'],
+  ]},
   {v:'1.41.0', title:'Dark mode', items:[
     ['🌙','Pep Prep now has a dark theme. It follows your iPhone automatically, or pick Light or Dark in More › Settings.'],
   ]},
