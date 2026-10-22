@@ -2828,55 +2828,116 @@ function coaGrades(t, labelMg){
     endoG: endo==null ? null : endo<=1 ? 'ok' : endo<=5 ? 'warn' : 'bad'
   };
 }
-/* Thumbnail of a certificate: paper sheet, header band, text lines, a results table and a seal. */
+/* Thumbnail of a certificate: a tiny holographic trading card with a foil shimmer, the purity and a dot per assay. */
 function coaMiniSVG(t, labelMg){
   const g = coaGrades(t, labelMg);
-  const dot = k=> k==='ok' ? '#17844f' : k==='warn' ? '#c98a12' : k==='bad' ? '#cf3434' : '#c9c3ba';
-  return `<svg viewBox="0 0 44 56" aria-hidden="true">
-    <rect x="1" y="1" width="42" height="54" rx="2.5" fill="#fffdf9" stroke="rgba(60,50,40,.25)"/>
-    <rect x="1" y="1" width="42" height="9" rx="2.5" fill="#2f4a6b"/><rect x="1" y="7" width="42" height="3" fill="#2f4a6b"/>
-    <rect x="6" y="4" width="20" height="2.4" rx="1" fill="#fff" fill-opacity=".85"/>
-    <rect x="6" y="14" width="26" height="2" rx="1" fill="#8d857b"/><rect x="6" y="18.5" width="18" height="2" rx="1" fill="#b8b0a5"/>
-    ${[['massG',25],['purG',31],['endoG',37]].map(([k,y])=>`<rect x="6" y="${y}" width="22" height="2" rx="1" fill="#cfc8bd"/><circle cx="35" cy="${y+1}" r="2" fill="${dot(g[k])}"/>`).join('')}
-    <circle cx="33" cy="47" r="6" fill="none" stroke="#b33a3a" stroke-width="1.2" stroke-opacity=".75"/><circle cx="33" cy="47" r="3.6" fill="none" stroke="#b33a3a" stroke-width=".7" stroke-opacity=".6"/>
-    <rect x="6" y="46" width="14" height="1.4" fill="#8d857b"/>
-  </svg>`;
+  const dot = k=> k==='ok' ? '#1fae5b' : k==='warn' ? '#e09a12' : k==='bad' ? '#e0443a' : '#b9bcc6';
+  const big = g.pur!=null ? `${Math.floor(g.pur)}%` : g.mass!=null ? `${Math.round(g.mass)}` : '✓';
+  return `<span class="hcm" aria-hidden="true"><span class="hcm-band"></span><span class="hcm-k">COA</span><b class="hcm-big">${esc(big)}</b>
+    <span class="hcm-dots">${['massG','purG','endoG'].map(k=> `<i style="background:${dot(g[k])}"></i>`).join('')}</span><span class="hcm-bar"></span><span class="hcm-foil"></span></span>`;
 }
-/* Full certificate, rebuilt from what the user entered for this vial's lab test. */
-/* One rebuilt certificate sheet for a lab test on a vial. */
+/* A short reference code for a lab test, stable for the same lab, date and lot. */
+function coaRef(v, t){
+  const lab = t.lab || 'Independent laboratory';
+  return `${(lab.replace(/[^A-Za-z]/g,'').slice(0,3)||'LAB').toUpperCase()}-${(t.date||'').replace(/-/g,'').slice(2) || '000000'}-${(v.lot||v.id||'').toString().replace(/[^A-Za-z0-9]/g,'').slice(-4).toUpperCase() || '0000'}`;
+}
+// Barcode bars drawn from the reference code (decorative, the same code always gives the same bars)
+function coaBarcode(code){
+  let h = 2166136261, x = 4, bars = '';
+  for(let k=0; k<46; k++){
+    h ^= code.charCodeAt(k % code.length) + k; h = Math.imul(h, 16777619) >>> 0;
+    const w = 1 + (h % 3), gap = 1 + ((h >> 3) % 2);
+    if(x + w > 176) break;
+    bars += `<rect x="${x}" y="0" width="${w}" height="30"/>`; x += w + gap;
+  }
+  return `<svg class="hc-bars" viewBox="0 0 180 30" preserveAspectRatio="none" aria-hidden="true">${bars}</svg>`;
+}
+/* Full certificate as a holographic card, rebuilt from what the user entered for this vial's lab test. */
 function coaDocHTML(v, t){
   const labelMg = num(v.mgPerVial,0);
   const g = coaGrades(t, labelMg);
-  const chip = k=> k ? `<span class="coa-res ${k}">${k==='ok'?'Conforms':k==='warn'?'Borderline':'Out of range'}</span>` : '<span class="coa-res">—</span>';
   const fmt = (x,d=2)=> x==null ? '—' : String(Math.round(x*10**d)/10**d);
+  const verdict = k=> k==='ok' ? 'Conforms' : k==='warn' ? 'Borderline' : k==='bad' ? 'Out of range' : 'Not tested';
   const lab = t.lab || 'Independent laboratory';
-  const ref = `${(lab.replace(/[^A-Za-z]/g,'').slice(0,3)||'LAB').toUpperCase()}-${(t.date||'').replace(/-/g,'') || '000000'}-${(v.lot||v.id||'').toString().replace(/[^A-Za-z0-9]/g,'').slice(-5).toUpperCase() || '00000'}`;
+  const ref = coaRef(v, t);
   const coa = safeUrl(t.coaUrl);
-  return `<div class="coa-doc">
-      <div class="coa-band"><div class="coa-logo">${esc(lab.slice(0,1).toUpperCase())}</div><div><div class="coa-lab">${esc(lab)}</div><div class="coa-sub">Analytical testing report</div></div></div>
-      <div class="coa-title">Certificate of Analysis</div>
-      <div class="coa-ref mono">Ref ${esc(ref)}</div>
-      <table class="coa-kv">
-        <tr><th>Sample</th><td>${esc(v.compound||'—')}</td></tr>
-        <tr><th>Supplier</th><td>${esc(v.pharmacy||'—')}</td></tr>
-        <tr><th>Lot / batch</th><td class="mono">${esc(v.lot||'—')}</td></tr>
-        <tr><th>Label claim</th><td class="mono">${labelMg?esc(labelMg+' mg / vial'):'—'}</td></tr>
-        <tr><th>Test date</th><td>${t.date?esc(fmtDate(t.date)):'—'}</td></tr>
-      </table>
-      <table class="coa-res-t">
-        <thead><tr><th>Test</th><th>Method</th><th>Result</th><th></th></tr></thead>
-        <tbody>
-          <tr><td>Content</td><td>HPLC</td><td class="mono">${g.mass==null?'—':esc(fmt(g.mass)+' mg')}${g.massPct!=null?`<small>${esc(fmt(g.massPct,1))}% of label</small>`:''}</td><td>${chip(g.massG)}</td></tr>
-          <tr><td>Purity</td><td>HPLC</td><td class="mono">${g.pur==null?'—':esc(fmt(g.pur)+'%')}</td><td>${chip(g.purG)}</td></tr>
-          <tr><td>Endotoxin</td><td>LAL</td><td class="mono">${g.endo==null?'—':esc(fmt(g.endo,3)+' EU/mg')}</td><td>${chip(g.endoG)}</td></tr>
-        </tbody>
-      </table>
-      <div class="coa-foot">
-        <div class="coa-sign"><div class="coa-sig-line"></div><span>Analyst</span></div>
-        <div class="coa-seal"><span>${esc(lab.slice(0,12).toUpperCase())}</span><b>TESTED</b><span>${t.date?esc(fmtDateShort(t.date)):''}</span></div>
+  const color = colorFor(v.compound, 0);
+  const all = [g.massG, g.purG, g.endoG].filter(Boolean);
+  const perfect = all.length >= 2 && all.every(k=> k==='ok');
+  const stat = (label, val, sub, k, wide)=> `<div class="hc-stat ${k||''} ${wide?'wide':''}"><span class="hc-k">${label}</span><i></i><strong class="mono">${val}</strong>${sub ? `<small class="mono">${sub}</small>` : ''}<em>${verdict(k)}</em></div>`;
+  return `<div class="hc" data-hc style="--vc:${color}">
+    <div class="hc-card">
+      <div class="hc-face">
+        <div class="hc-head"><span class="hc-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><circle cx="5" cy="8" r="2.6"/><circle cx="19" cy="7" r="2.4"/><circle cx="6" cy="17.5" r="2.8"/><circle cx="18" cy="17" r="3"/></svg></span>
+          <span class="hc-brand"><b>Verified COA</b><span>Pep Prep</span></span><span class="hc-ref mono">#${esc(ref)}</span></div>
+        <div class="hc-body">
+          <span class="hc-k">Peptide</span>
+          <div class="hc-name">${esc(v.compound || 'Peptide')}</div>
+          <div class="hc-panel">
+            <div class="hc-lab"><span class="hc-lab-ic">${esc(lab.slice(0,1).toUpperCase())}</span><div><span class="hc-k">Laboratory</span><strong>${esc(lab)}</strong></div>
+              <span class="hc-vial">${vialSVG({color, pct:null, mgTag: labelMg?`${labelMg} mg`:'', name: v.compound||'', brand: v.pharmacy||'', lot: v.lot||''}, 'hc'+Math.random().toString(36).slice(2,7))}</span></div>
+            <div class="hc-meta"><div><span class="hc-k">Supplier</span><b>${esc(v.pharmacy||'—')}</b></div><div><span class="hc-k">Lot</span><b class="mono">${esc(v.lot||'—')}</b></div><div><span class="hc-k">Tested</span><b>${t.date?esc(fmtDateShort(t.date)):'—'}</b></div></div>
+          </div>
+          <span class="hc-k hc-core">Core panel</span>
+          <div class="hc-stats">
+            ${stat('Purity', g.pur==null?'—':fmt(g.pur)+'%', 'HPLC · spec ≥ 98%', g.purG)}
+            ${stat('Content', g.mass==null?'—':fmt(g.mass)+' mg', g.massPct!=null ? `${fmt(g.massPct,1)}% of ${labelMg} mg label` : labelMg ? `label ${labelMg} mg` : 'HPLC', g.massG)}
+            ${stat('Endotoxin', g.endo==null?'—':fmt(g.endo,3)+' EU/mg', 'LAL · spec ≤ 1 EU/mg', g.endoG, true)}
+          </div>
+        </div>
+        <div class="hc-foot">${coaBarcode(ref)}<span class="hc-date mono">${t.date?esc(fmtDate(t.date)).toUpperCase():''}</span>
+          ${perfect ? `<span class="hc-seal"><b>✦</b><span>ALL<br>CLEAR</span></span>` : ''}</div>
       </div>
+      <div class="hc-holo"></div><div class="hc-spark"></div><div class="hc-glare"></div>
     </div>
-    ${coa ? `<a class="btn btn-sm coa-orig" href="${esc(coa)}" target="_blank" rel="noopener">Open original report ↗</a>` : ''}`;
+  </div>
+  ${coa ? `<a class="btn btn-sm coa-orig" href="${esc(coa)}" target="_blank" rel="noopener">Open original report ↗</a>` : ''}`;
+}
+/* Makes holographic cards move: a slow idle sway, tilting toward your finger, and following the phone's tilt once
+   motion access is allowed (asked on the first tap). The foil, sparkle and glare follow the same angle. */
+function holoCards(root){
+  const cards = $$('[data-hc]', root); if(!cards.length) return;
+  const still = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const st = cards.map(el=> ({el, card: $('.hc-card', el), x:0, y:0, tx:0, ty:0, touchAt:0}));
+  let gyro = null, base = null, raf = 0, t0 = performance.now();
+  const set = (s, px, py)=>{ s.tx = Math.max(-1, Math.min(1, px)); s.ty = Math.max(-1, Math.min(1, py)); s.touchAt = performance.now(); };
+  st.forEach(s=>{
+    const from = e=>{ const r = s.card.getBoundingClientRect(); set(s, ((e.clientX - r.left)/r.width)*2-1, ((e.clientY - r.top)/r.height)*2-1); };
+    s.card.addEventListener('pointermove', from, {passive:true});
+    s.card.addEventListener('pointerdown', e=>{ from(e); askMotion(); }, {passive:true});
+  });
+  const onTilt = e=>{
+    if(e.beta==null || e.gamma==null) return;
+    if(!base) base = {b: e.beta, g: e.gamma};
+    gyro = {x: (e.gamma - base.g)/22, y: (e.beta - base.b)/22};
+  };
+  function askMotion(){
+    if(askMotion.done) return; askMotion.done = true;
+    const D = window.DeviceOrientationEvent;
+    if(D && typeof D.requestPermission === 'function') D.requestPermission().then(r=>{ if(r==='granted') window.addEventListener('deviceorientation', onTilt); }).catch(()=>{});
+    else if(D) window.addEventListener('deviceorientation', onTilt);
+  }
+  const frame = now=>{
+    if(!root.isConnected){ window.removeEventListener('deviceorientation', onTilt); return; }
+    const t = (now - t0)/1000;
+    st.forEach((s, k)=>{
+      const idle = now - s.touchAt > 1400;
+      let tx = s.tx, ty = s.ty;
+      if(idle){
+        if(gyro){ tx = Math.max(-1, Math.min(1, gyro.x)); ty = Math.max(-1, Math.min(1, gyro.y)); }
+        else if(!still){ tx = Math.sin(t*0.8 + k)*0.55; ty = Math.sin(t*0.55 + k + 1)*0.35; }
+        else { tx = 0; ty = 0; }
+      }
+      s.x += (tx - s.x)*0.12; s.y += (ty - s.y)*0.12;
+      const c = s.card.style;
+      c.transform = `rotateY(${(s.x*13).toFixed(2)}deg) rotateX(${(-s.y*11).toFixed(2)}deg)`;
+      c.setProperty('--mx', `${(50 + s.x*42).toFixed(1)}%`); c.setProperty('--my', `${(50 + s.y*42).toFixed(1)}%`);
+      c.setProperty('--fx', `${(50 + s.x*30).toFixed(1)}%`); c.setProperty('--fy', `${(50 + s.y*30).toFixed(1)}%`);
+      c.setProperty('--hi', Math.min(1, .35 + Math.hypot(s.x, s.y)*.8).toFixed(3));
+    });
+    raf = requestAnimationFrame(frame);
+  };
+  raf = requestAnimationFrame(frame);
 }
 /* Certificates for a vial; several are laid side by side and swiped between, starting at index i. */
 function openCoaModal(v, i){
@@ -2884,12 +2945,13 @@ function openCoaModal(v, i){
   const many = tests.length > 1;
   openModal(many ? `Certificates of analysis` : 'Certificate of analysis', `
     ${many ? `<div class="coa-pager"><button type="button" class="coa-nav" id="coaPrev" aria-label="Previous certificate">‹</button><span id="coaCount" class="mono">1 / ${tests.length}</span><button type="button" class="coa-nav" id="coaNext" aria-label="Next certificate">›</button></div>` : ''}
-    <div class="coa-track ${many?'many':''}" id="coaTrack">${tests.map(t=>`<div class="coa-slide">${coaDocHTML(v, t)}</div>`).join('')}</div>
+    <div class="coa-track coa-viewer ${many?'many':''}" id="coaTrack">${tests.map(t=>`<div class="coa-slide">${coaDocHTML(v, t)}</div>`).join('')}</div>
     ${many ? `<div class="coa-dots" id="coaDots">${tests.map((_,k)=>`<i data-k="${k}"></i>`).join('')}</div>` : ''}
-    <p class="footnote" style="margin-top:10px;">Rebuilt from the values you entered for this vial. Grades: mass 90–110% of label, purity ≥ 98%, endotoxin ≤ 1 EU/mg.</p>
+    <p class="footnote" style="margin-top:10px;">Rebuilt from the values you entered for this vial. Tilt your phone or drag across the card to catch the foil. Grades: content 90–110% of label, purity ≥ 98%, endotoxin ≤ 1 EU/mg.</p>
     <div class="form-actions"><button type="button" class="btn btn-accent-pep" id="coaEdit">Edit vial</button></div>
   `, body=>{
     $('#coaEdit',body).addEventListener('click', ()=>{ closeModal(); openVialModal(v); });
+    holoCards(body);
     if(!many) return;
     const track = $('#coaTrack',body), dots = $$('#coaDots i',body), count = $('#coaCount',body);
     const cur = ()=> Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
@@ -6845,8 +6907,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.46.0';
+const APP_VERSION = '1.47.0';
 const WHATS_NEW = [
+  {v:'1.47.0', title:'Holographic COAs', items:[
+    ['✨','Certificates of analysis are now holographic cards: a rainbow foil, sparkles and a glare that move as the card gently sways.'],
+    ['📱','Tilt your phone or drag across the card to catch the light. The first tap asks for motion access so the card can follow your phone.'],
+    ['🏅','Cards where every test conforms get an "All clear" holo seal. The small COA on each lot is a mini foil card too.'],
+  ]},
   {v:'1.46.0', title:'A more colourful library', items:[
     ['🧭','Peptide pages have a section bar that follows you down the page and lights up the section you\'re reading. Tap any chip to jump there.'],
     ['🎨','Every section has its own colour and icon: green checks for benefits, red for contraindications, amber for side effects and interactions.'],
