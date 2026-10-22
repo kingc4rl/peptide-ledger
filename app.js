@@ -387,6 +387,14 @@ function calcMath(){
   const leftMl = Math.max(0, usableMl - doseMl);
   return {blend, totalMg, water, loss, extra, waterAdd, conc, usableMl, usableMg, doseMg, rawUnits, units, doseMl, actualMg, doses, leftMl, step};
 }
+/* Wording for the two filter options, with the volumes for the current inputs. */
+function calcLossText(m){
+  const loss = num(C.filter.lossMl,0);
+  return {
+    reduce: `<strong>Accept the loss</strong> · add ${cfmt(m.water,2)} mL; you end with ${cfmt(Math.max(0, m.water-loss),2)} mL at the same strength, so a few fewer doses`,
+    extra: `<strong>Add extra water</strong> · add ${cfmt(m.water+loss,2)} mL so you still end with ${cfmt(m.water,2)} mL. It's a little weaker, so the units go up; the peptide left in the filter is still lost`,
+  };
+}
 /* Kept for the endotoxin check: the vial, water and dose the calculator is set to. */
 function calcState(){
   const m = calcMath();
@@ -479,8 +487,8 @@ function renderCalc(){
         <div class="footnote">Filter size (some solution stays in the filter)</div>
         <div class="chip-row pc-chips">${CALC_FILTERS.map(f=>`<button type="button" class="chip-btn ${C.filter.mm===f.mm?'on':''}" data-pc-filter="${f.mm}" title="${esc(f.note)}">${f.mm} mm · ${f.ml} mL</button>`).join('')}</div>
         <div class="pc-inline"><span class="footnote">Loss</span><div class="pc-num sm"><input type="number" id="pcLoss" inputmode="decimal" min="0" step="any" value="${esc(C.filter.lossMl)}" aria-label="Filter loss (mL)"><span>mL</span></div></div>
-        <label class="pc-radio"><input type="radio" name="pcLossMode" value="reduce" ${C.filter.mode!=='extra'?'checked':''}><span><strong>Accept the loss</strong> · same water, a little less solution and fewer doses</span></label>
-        <label class="pc-radio"><input type="radio" name="pcLossMode" value="extra" ${C.filter.mode==='extra'?'checked':''}><span><strong>Add extra water</strong> · add ${cfmt(num(C.filter.lossMl,0),2)} mL more so you still end with ${cfmt(m.water,2)} mL</span></label>
+        <label class="pc-radio"><input type="radio" name="pcLossMode" value="reduce" ${C.filter.mode!=='extra'?'checked':''}><span id="pcLossReduce">${calcLossText(m).reduce}</span></label>
+        <label class="pc-radio"><input type="radio" name="pcLossMode" value="extra" ${C.filter.mode==='extra'?'checked':''}><span id="pcLossExtra">${calcLossText(m).extra}</span></label>
       </div>` : ''}
     </div>
     ${rev ? `<div class="pc-sec">
@@ -525,10 +533,11 @@ function renderCalcResult(){
     </div>`;
   };
   const blendBreak = (doseMl)=> C.mode==='blend' && m.blend.length ? `<div class="pc-blendout"><div class="footnote">Each dose contains</div>${m.blend.map(c=>`<div><span>${esc(c.name||'Compound')}</span><strong class="mono">${cmg(num(c.mg,0)/m.waterAdd*doseMl)}</strong></div>`).join('')}</div>` : '';
-  const filterLine = m.loss ? [['Filter loss', `${cfmt(m.loss,2)} mL`]] : [];
+  // With a filter, show what goes in, what stays in the filter and what's left to dose from.
+  const filterLine = m.loss ? [['Left in filter', `−${cfmt(m.loss,2)} mL · ${cfmt(m.loss*m.conc,2)} mg`], ['You end with', `${cfmt(m.usableMl,2)} mL · ${cfmt(m.usableMg,2)} mg`]] : [];
   let html = '';
   if(C.mode==='reverse'){
-    const base = [['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['1 unit', cmg(m.conc/100)]];
+    const base = [['Vial', `${cfmt(m.totalMg,2)} mg`], [m.loss ? 'Water to add' : 'Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['1 unit', cmg(m.conc/100)]];
     if(C.revTab==='units'){
       const u = num(C.revUnits,0), mg = u/100*m.conc;
       html = u>0 ? `<div class="pc-hero"><div class="pc-hero-big">${cmg(mg)}</div><div class="pc-hero-sub">in ${cfmt(u,1)} units (${cfmt(u/100,3)} mL)</div><div class="pc-hero-meta">${Math.floor(m.usableMl/(u/100)+1e-9)} draws of ${cfmt(u,1)}u in the vial</div></div>` : `<div class="pc-empty">Enter the units you're drawing.</div>`;
@@ -557,7 +566,7 @@ function renderCalcResult(){
       <div class="pc-syr">${calcSyringeSVG(m.units, C.syrCap)}</div>
       <div class="pc-stats"><div><strong>${m.doses}</strong><span>doses in the vial</span></div><div><strong>${m.usableMl ? Math.round(m.leftMl/m.usableMl*100) : 0}%</strong><span>left after one dose</span></div><div><strong>${cfmt(m.leftMl,2)}</strong><span>mL left</span></div></div>
       ${blendBreak(m.doseMl)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Dose', cmg(m.actualMg)], ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], [m.loss ? 'Water to add' : 'Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Dose', cmg(m.actualMg)], ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}
       ${vialPair(m.leftMl, ` @ ${cmg(m.actualMg)}`)}`;
   } else if(C.device==='pen'){
     const max = Math.max(1, num(C.penMax,60)), shots = Math.ceil(m.units/max - 1e-9);
@@ -575,7 +584,7 @@ function renderCalcResult(){
       ${per > CALC_VIAL_ML ? `<div class="pc-warn">${cfmt(m.usableMl,2)} mL won't fit in ${carts} cartridge${carts>1?'s':''}. You need at least ${needCarts}.</div>` : ''}
       <div class="pc-carts">${Array.from({length:carts}, (_,i)=>{ const ml = Math.min(per, CALC_VIAL_ML); return `<div class="pc-cart"><div class="pc-cart-bar"><i style="width:${Math.round(ml/CALC_VIAL_ML*100)}%"></i></div><div class="pc-cart-h">Cartridge ${i+1}<span>${Math.round(ml/CALC_VIAL_ML*100)}% full</span></div><div class="pc-cart-n"><span><strong class="mono">${cfmt(ml,2)}</strong> mL</span><span><strong class="mono">${cfmt(ml*m.conc,2)}</strong> mg</span><span><strong class="mono">${m.doseMl?Math.floor(ml/m.doseMl+1e-9):0}</strong> doses</span></div></div>`; }).join('')}</div>
       ${blendBreak(m.doseMl)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}`;
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], [m.loss ? 'Water to add' : 'Water', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per dose', `${cfmt(m.doseMl,3)} mL`], ['1 unit', cmg(m.conc/100)]])}`;
   } else {
     const per = num(C.sprayMl,0), mgPer = per*m.conc, sprays = mgPer ? m.doseMg/mgPer : 0, whole = Math.ceil(sprays - 1e-9);
     html = per>0 ? `<div class="pc-hero">
@@ -585,9 +594,11 @@ function renderCalcResult(){
       </div>
       <div class="pc-stats"><div><strong>${Math.floor(m.usableMl/per+1e-9)}</strong><span>sprays in the bottle</span></div><div><strong>${whole ? Math.floor(m.usableMl/(whole*per)+1e-9) : 0}</strong><span>doses of ${whole}</span></div><div><strong>${cfmt(m.conc,2)}</strong><span>mg/mL</span></div></div>
       ${blendBreak(per)}
-      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], ['Water/saline', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per spray', cmg(mgPer)]])}` : `<div class="pc-empty">Enter how much one spray or pump delivers.</div>`;
+      ${formula([['Vial', `${cfmt(m.totalMg,2)} mg`], [m.loss ? 'Water/saline to add' : 'Water/saline', `${cfmt(m.waterAdd,2)} mL`], ...filterLine, ['Strength', `${cfmt(m.conc,3)} mg/mL`, true], ['Per spray', cmg(mgPer)]])}` : `<div class="pc-empty">Enter how much one spray or pump delivers.</div>`;
   }
   el.innerHTML = (warn.length ? `<div class="pc-warn">${warn.join(' ')}</div>` : '') + html;
+  const lt = calcLossText(m), lr = $('#pcLossReduce'), le = $('#pcLossExtra');
+  if(lr) lr.innerHTML = lt.reduce; if(le) le.innerHTML = lt.extra;
   const use = $('#pcUseWater', el);
   if(use) use.addEventListener('click', ()=>{ const u = num(C.revDrawUnits,0), d = num(C.revDrawMg,0); C.waterMl = +trimNum(m.totalMg*(u/100)/d, 3); C.doseMg = d; C.doseUnit = 'mg'; C.mode = C.mode==='reverse' ? 'standard' : C.mode; C.device = 'syringe'; saveCalc(); renderCalc(); });
   renderCalcNext(m);
@@ -6526,8 +6537,11 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.45.0';
+const APP_VERSION = '1.45.1';
 const WHATS_NEW = [
+  {v:'1.45.1', title:'Clearer filter math', items:[
+    ['🧮','Calculator: with a syringe filter, the summary now shows the water to add, what stays in the filter and exactly what you end up with (mL and mg).'],
+  ]},
   {v:'1.45.0', title:'Peptide library', items:[
     ['📚','More › Peptide library: 150 peptides from PeptideSchedule, searchable by name or alias, with dosing by goal, half-life, safety, FAQs and references.'],
     ['🧪','Each page shows your own vials and protocols for that peptide, plus a button to start a protocol from it.'],
