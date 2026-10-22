@@ -2132,7 +2132,7 @@ const HALF_LIFE_RULES = [
 function defaultHalfLife(name){
   const s = String(name||'');
   for(const r of HALF_LIFE_RULES){ if(r[0].test(s) && !(r[2] && r[2].test(s))) return r[1]; }
-  return null;
+  return typeof libHalfLife==='function' ? libHalfLife(s) : null;     // else the peptide library's figure, once loaded
 }
 function halfLifeOf(p){
   const own = num(p.halfLifeHours, null);
@@ -5710,8 +5710,186 @@ function initAskChat(){
   renderAsk();
 }
 
+/* ===================== Peptide library =====================
+   Reference pages for 150+ peptides from Peptide Schedule (peptideschedule.com), imported with their permission.
+   library/index.json is a small searchable list; library/<slug>.json holds one peptide's page and is fetched when
+   opened (the service worker keeps both for offline use). Pages show your own stash and protocols for that peptide
+   and can start a protocol. The library also supplies half-lives for the serum chart when the app has none. */
+let libIndex = null, libLoading = null, libCat = 'All', libQuery = '', libSlug = null;
+const libPages = new Map();
+const LIB_COLORS = {'Weight Loss':'#ff8a1e','Healing & Recovery':'#30b0c7','Growth Hormone':'#5e5ce6','Anti-Aging':'#bf5af2','Cognitive':'#0a84ff','Sexual Health':'#ff375f','Immune':'#34c759','Sleep':'#5856d6','Muscle Growth':'#ff453a','Skin & Hair':'#ff9f0a','Tanning':'#a2845e','Metabolic':'#64d2ff','Longevity':'#bf5af2','Mitochondrial':'#ffd60a','Hormonal':'#ff6482','Gut Health':'#32d74b'};
+const libColor = c=> LIB_COLORS[c] || '#8e8e93';
+const libKey = s=> String(s||'').toLowerCase().replace(/\(.*?\)/g,'').replace(/[^a-z0-9]/g,'');
+function loadLibIndex(){
+  if(libIndex) return Promise.resolve(libIndex);
+  if(!libLoading) libLoading = fetch('library/index.json').then(r=> r.ok ? r.json() : null).then(j=>{ libIndex = j && j.items || []; return libIndex; }).catch(()=>{ libLoading = null; return []; });
+  return libLoading;
+}
+function loadLibPage(slug){
+  if(libPages.has(slug)) return Promise.resolve(libPages.get(slug));
+  return fetch(`library/${slug}.json`).then(r=> r.ok ? r.json() : null).then(j=>{ if(j) libPages.set(slug, j); return j; }).catch(()=> null);
+}
+// The library entry for a compound name (matches the name or any alias, ignoring punctuation and case).
+function libFind(name){
+  if(!libIndex || !name) return null;
+  const k = libKey(name); if(!k) return null;
+  return libIndex.find(x=> libKey(x.n)===k || x.a.some(a=> libKey(a)===k)) || null;
+}
+function libHalfLife(name){ const e = libFind(name); return e && e.h > 0 ? e.h : null; }
+// What you have of a peptide: protocols (including blends that contain it) and vials in the stash
+function libMine(entry){
+  const keys = new Set([entry.n].concat(entry.a).map(libKey));
+  const hit = n=> keys.has(libKey(n));
+  const protos = state.protocols.filter(p=> p.status!=='archived' && (hit(p.compound) || (blendOf(p)||[]).some(c=> hit(c.name))));
+  const vials = state.vials.filter(v=> !isDepleted(v) && (hit(v.compound) || (isMixedBlend(v) && v.blend.some(c=> hit(c.name)))));
+  return {protos, vials, count: vials.reduce((t,v)=> t + num(v.qty,0) + (v.remainingMg!=null ? 1 : 0), 0)};
+}
+function libInitials(n){ const w = String(n).replace(/[^A-Za-z0-9 -]/g,'').split(/[\s-]+/).filter(Boolean); return (w.length > 1 ? w[0][0] + (w[1][0]||'') : String(n).slice(0,3)).toUpperCase().slice(0,3); }
+async function renderLibrary(){
+  const list = $('#libList'); if(!list) return;
+  if(!libIndex){ list.innerHTML = `<p class="footnote lib-none">Loading the library…</p>`; await loadLibIndex(); }
+  if(!libIndex.length){ list.innerHTML = `<p class="footnote lib-none">The library couldn't load. Check your connection and try again.</p>`; return; }
+  $('#libSearch').placeholder = `Search ${libIndex.length} peptides`;
+  const cats = ['All','In my stash'].concat([...new Set(libIndex.map(x=> x.c).filter(Boolean))].sort());
+  $('#libCats').innerHTML = cats.map(c=> `<button type="button" data-lib-cat="${esc(c)}" class="${c===libCat?'on':''}">${esc(c)}</button>`).join('');
+  const q = libKey(libQuery), words = libQuery.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  let items = libIndex.filter(x=>{
+    if(libCat==='In my stash'){ if(!libMine(x).protos.length && !libMine(x).count) return false; }
+    else if(libCat!=='All' && x.c!==libCat) return false;
+    if(!q) return true;
+    const hay = [x.n].concat(x.a, x.t, [x.c]).join(' ').toLowerCase();
+    return libKey(x.n).includes(q) || x.a.some(a=> libKey(a).includes(q)) || words.every(w=> hay.includes(w));
+  });
+  if(!items.length){ list.innerHTML = `<p class="footnote lib-none">No peptides match “${esc(libQuery)}”.</p>`; return; }
+  let html = '', letter = null;
+  items.forEach(x=>{
+    const L = /[a-z]/i.test(x.n[0]) ? x.n[0].toUpperCase() : '#';
+    if(!q && libCat==='All' && L!==letter){ html += `${letter ? '</div>' : ''}<div class="lib-letter">${L}</div><div class="ios-list">`; letter = L; }
+    else if(letter===null && html===''){ html += '<div class="ios-list">'; letter = ''; }
+    const mine = libMine(x);
+    html += `<button type="button" class="lib-row" data-lib="${esc(x.s)}"><span class="lib-ic" style="--lc:${libColor(x.c)}">${esc(libInitials(x.n))}</span>
+      <span class="lib-rt"><strong>${esc(x.n)}${mine.protos.length || mine.count ? '<i class="lib-mine">Mine</i>' : ''}</strong><span>${esc([x.c, x.hl ? 't½ '+x.hl : '', x.a.slice(0,2).join(', ')].filter(Boolean).join(' · '))}</span></span>
+      ${x.g ? `<span class="lib-grade g${esc(x.g[0])}" title="Safety grade ${esc(x.g)}">${esc(x.g)}</span>` : ''}<span class="ios-chev"></span></button>`;
+  });
+  list.innerHTML = html + '</div>';
+  // the rest of the library downloads quietly for offline reading
+  if(!renderLibrary.prefetched){ renderLibrary.prefetched = true; libPrefetch(); }
+}
+function libPrefetch(){
+  const queue = libIndex.map(x=> x.s);
+  const next = ()=>{ const s0 = queue.shift(); if(!s0) return; fetch(`library/${s0}.json`).catch(()=>{}).finally(()=> setTimeout(next, 120)); };
+  setTimeout(next, 2500);
+}
+function openPeptide(slug){
+  libSlug = slug;
+  const e = libIndex && libIndex.find(x=> x.s===slug);
+  TAB_META.peptide.title = e ? e.n : 'Peptide';
+  setTab('peptide');
+  renderPeptidePage();
+}
+// Inline text: **bold**, [links](url) and citation markers [n] that jump to the reference
+function libInline(x){
+  return esc(x).replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>')
+    .replace(/ ?\[(\d{1,2})\]/g, '<span class="lib-cite" data-cite="$1">$1</span>');
+}
+function libBlocks(blocks){
+  let html = '', i = 0;
+  while(i < blocks.length){
+    const b = blocks[i];
+    if(b.t==='li'){ let ul = ''; while(i < blocks.length && blocks[i].t==='li') ul += `<li>${libInline(blocks[i++].x)}</li>`; html += `<ul>${ul}</ul>`; continue; }
+    if(b.t==='kv'){ let dl = ''; while(i < blocks.length && blocks[i].t==='kv'){ dl += `<dt>${libInline(blocks[i].k)}</dt><dd>${libInline(blocks[i].v)}</dd>`; i++; } html += `<dl>${dl}</dl>`; continue; }
+    if(b.t==='row'){
+      const rows = []; while(i < blocks.length && blocks[i].t==='row') rows.push(blocks[i++].c);
+      const head = rows.length > 1 && rows[0].every(c=> c.length < 30) ? rows.shift() : null;
+      const n = Math.max(...rows.map(r0=> r0.length), head ? head.length : 0);
+      html += `<div class="lib-tbl"><table>${head ? `<thead><tr>${head.map(c=>`<th>${libInline(c)}</th>`).join('')}</tr></thead>` : ''}<tbody>${rows.map(r0=>`<tr>${Array.from({length:n},(_,k)=>`<td>${libInline(r0[k]||'')}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+      continue;
+    }
+    html += b.t==='h' ? `<h4>${libInline(b.x)}</h4>` : `<p>${libInline(b.x)}</p>`;
+    i++;
+  }
+  return html;
+}
+function libProtocolsHTML(protos, sel){
+  const p = protos[sel] || protos[0];
+  const phases = (p.phases||[]).map(ph=> `<div class="lib-phase"><span class="lib-wk">Wk ${esc(ph.weeks||'')}</span><div><strong>${esc(ph.name||'')}</strong><span>${esc([ph.dose, ph.frequency, ph.route].filter(Boolean).join(' · '))}</span>${ph.syringeUnits ? `<span>${esc(ph.syringeUnits)}</span>` : ''}</div></div>`).join('');
+  return `<div class="lib-goals">${protos.map((x,i)=> `<button type="button" data-goal="${i}" class="${i===sel?'on':''}">${esc(x.goal)}</button>`).join('')}</div>
+    <div class="pp-badges" style="margin-bottom:8px;">${[p.level, p.source==='community-consensus' ? 'Community' : p.source==='fda-label' ? 'FDA label' : p.source, p.duration].filter(Boolean).map(x=> `<span>${esc(x)}</span>`).join('')}</div>
+    ${phases}
+    ${p.expected ? `<h4>Expected</h4><p>${libInline(p.expected)}</p>` : ''}${p.monitoringNotes ? `<h4>Monitoring</h4><p>${libInline(p.monitoringNotes)}</p>` : ''}${p.notes ? `<p>${libInline(p.notes)}</p>` : ''}`;
+}
+async function renderPeptidePage(){
+  const el = $('#pepPage'); if(!el) return;
+  await loadLibIndex();
+  const e = libIndex.find(x=> x.s===libSlug);
+  if(!e){ el.innerHTML = `<p class="footnote lib-none">Peptide not found.</p>`; return; }
+  if(!libPages.has(libSlug)) el.innerHTML = `<p class="footnote lib-none">Loading ${esc(e.n)}…</p>`;
+  const rec = await loadLibPage(libSlug);
+  if(!rec || libSlug!==e.s){ if(!rec) el.innerHTML = `<p class="footnote lib-none">This page isn't available offline yet. Connect once to download it.</p>`; return; }
+  const f = rec.facts || {}, mine = libMine(e), col = libColor(rec.category);
+  const facts = [['Starting dose', f.tier || f.Dose], ['Half-life', f.hl], ['Vial sizes', f['Vial sizes']], ['BAC water', f['BAC water']], ['Safety grade', f['Safety grade']], ['Science vs community', f['Science vs community']]].filter(x=> x[1]);
+  const notes = rec.notes || [];
+  const secs = rec.sections || [];
+  const extra = [];
+  if(rec.protocols && rec.protocols.length) extra.push({id:'goals', title:'Protocols by goal'});
+  if(rec.faqs && rec.faqs.length) extra.push({id:'faq', title:'FAQ'});
+  if(rec.references && rec.references.length) extra.push({id:'refs', title:'References'});
+  const openByDefault = t=> /^(What is it\?|Dosage Guide)$/.test(t);
+  el.innerHTML = `
+    <div class="card pp-hero" style="--lc:${col}">
+      <div class="pp-badges">${rec.category ? `<span class="b-cat">${esc(rec.category)}</span>` : ''}${rec.status ? `<span>${esc(rec.status)}</span>` : ''}${f.grade ? `<span class="lib-grade g${esc(f.grade[0])}" style="width:auto;height:auto;padding:4px 10px;border-radius:999px;">Grade ${esc(f.grade)}</span>` : ''}${(rec.tags||[]).slice(0,3).map(t=> `<span>${esc(t)}</span>`).join('')}</div>
+      ${rec.aliases && rec.aliases.length ? `<div class="pp-aka">Also known as ${esc(rec.aliases.filter(a=> a!==rec.name).slice(0,6).join(', '))}</div>` : ''}
+      ${rec.summary ? `<p class="pp-sum">${libInline(rec.summary)}</p>` : ''}
+      ${facts.length ? `<div class="pp-facts">${facts.map(([k,v])=> `<div class="pp-fact"><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>` : ''}
+    </div>
+    <div class="card pp-mine">
+      <div class="card-h"><h3>Yours</h3></div>
+      ${mine.protos.length ? mine.protos.map(p=> `<div class="pp-mine-row">📋 <span>${esc(p.compound)} · ${esc(fmtDose(doseAt(p, doseDayISO()).dose, doseAt(p, doseDayISO()).doseUnit))}${p.status==='paused' ? ' · paused' : ''}</span></div>`).join('') : `<div class="footnote">No protocol for ${esc(rec.name)} yet.</div>`}
+      ${mine.count ? `<div class="pp-mine-row">🧪 <span>${mine.count} vial${mine.count===1?'':'s'} in your stash</span></div>` : ''}
+      <div class="pp-actions"><button type="button" class="btn btn-accent-pep btn-sm" id="ppStart">+ Start a protocol</button><button type="button" class="btn btn-sm" id="ppCalc">Calculator</button>${mine.count ? `<button type="button" class="btn btn-sm" id="ppStash">Show in stash</button>` : ''}</div>
+    </div>
+    <div class="pp-jump">${secs.map((x,i)=> `<button type="button" data-jump="s${i}">${esc(x.title)}</button>`).concat(extra.map(x=> `<button type="button" data-jump="${x.id}">${esc(x.title)}</button>`)).join('')}</div>
+    ${secs.map((x,i)=>{
+      const ns = notes.filter(n=> n.section===x.title).map(n=> `<div class="lib-note"><b>Pep Prep note:</b> ${libInline(n.text)}</div>`).join('');
+      const goals = x.title==='Dosage Guide' && rec.protocols && rec.protocols.length ? '' : '';
+      return `<details class="card lib-sec" id="s${i}" ${openByDefault(x.title) || ns ? 'open' : ''}><summary>${esc(x.title)}</summary><div class="lib-body">${ns}${libBlocks(x.b)}${goals}</div></details>`;
+    }).join('')}
+    ${rec.protocols && rec.protocols.length ? `<details class="card lib-sec" id="goals"><summary>Protocols by goal</summary><div class="lib-body" id="ppGoals">${libProtocolsHTML(rec.protocols, 0)}</div></details>` : ''}
+    ${rec.faqs && rec.faqs.length ? `<details class="card lib-sec" id="faq"><summary>FAQ</summary><div class="lib-body lib-faq">${rec.faqs.map(q=> `<details><summary>${libInline(q.q)}</summary><p>${libInline(q.a)}</p></details>`).join('')}</div></details>` : ''}
+    ${rec.references && rec.references.length ? `<details class="card lib-sec" id="refs"><summary>References (${rec.references.length})</summary><div class="lib-body"><ol class="lib-refs">${rec.references.map((x,i)=> `<li id="ref${i+1}"><a href="${esc(safeUrl(x.url))}" target="_blank" rel="noopener">${esc(x.title || x.url)}</a></li>`).join('')}</ol></div></details>` : ''}
+    ${rec.related && rec.related.length ? `<div class="card"><div class="card-h"><h3>Related peptides</h3></div><div class="lib-rel">${rec.related.map(s0=>{ const r0 = libIndex.find(x=> x.s===s0); return r0 ? `<button type="button" data-lib="${esc(s0)}">${esc(r0.n)}</button>` : ''; }).join('')}</div></div>` : ''}
+    <p class="lib-src">From <a href="${esc(rec.source)}" target="_blank" rel="noopener">Peptide Schedule</a>, used with permission${rec.reviewed ? ` · reviewed ${esc(fmtDate(rec.reviewed))}` : ''}.<br>For research and education, not medical advice.</p>`;
+  // actions
+  $('#ppStart',el).addEventListener('click', ()=>{
+    const m = /([\d.]+)\s*(mcg|mg)/i.exec(f.tier || f.Dose || ''), freq = String(f.tier || f.Dose || '').toLowerCase();
+    const fd = /week/.test(freq) ? (/2x|twice/.test(freq) ? '3.5' : '7') : /every other|eod/.test(freq) ? '2' : '1';
+    openProtocolModal(null, {compound: rec.name, dose: m ? m[1] : '', doseUnit: m ? m[2].toLowerCase() : 'mg', frequencyDays: fd,
+      dosesPerDay: /2x daily|twice daily/.test(freq) ? 2 : 1, halfLifeHours: defaultHalfLife(rec.name) ? '' : (rec.hlHours ? String(rec.hlHours) : ''), startDate: todayISO(), nextDose: todayISO(), status:'active'});
+  });
+  $('#ppCalc',el).addEventListener('click', ()=> setTab('tools'));
+  const st = $('#ppStash',el); if(st) st.addEventListener('click', ()=>{ const v = mine.vials[0]; stashSel = v ? v.compound : null; lotSel = null; setTab('inventory'); renderVials(); });
+  $$('[data-jump]',el).forEach(b=> b.addEventListener('click', ()=>{ const t = $('#'+b.dataset.jump, el); if(!t) return; t.open = true; t.scrollIntoView({behavior:'smooth', block:'start'}); }));
+  const goals = $('#ppGoals',el);
+  if(goals) goals.addEventListener('click', ev=>{ const b = ev.target.closest('[data-goal]'); if(b) goals.innerHTML = libProtocolsHTML(rec.protocols, +b.dataset.goal); });
+  el.addEventListener('click', ev=>{
+    const c = ev.target.closest('[data-cite]'); if(!c) return;
+    const refs = $('#refs', el); if(!refs) return; refs.open = true;
+    const li = $('#ref'+c.dataset.cite, el); (li || refs).scrollIntoView({behavior:'smooth', block:'center'});
+  });
+  $$('[data-lib]',el).forEach(b=> b.addEventListener('click', ()=> openPeptide(b.dataset.lib)));
+}
+function initLibrary(){
+  const si = $('#libSearch'); if(!si) return;
+  si.addEventListener('input', ()=>{ libQuery = si.value; renderLibrary(); });
+  $('#libCats').addEventListener('click', e=>{ const b = e.target.closest('[data-lib-cat]'); if(!b) return; libCat = b.dataset.libCat; renderLibrary(); });
+  $('#libList').addEventListener('click', e=>{ const b = e.target.closest('[data-lib]'); if(b) openPeptide(b.dataset.lib); });
+  // half-lives from the library fill gaps in the serum chart once the list has loaded
+  loadLibIndex().then(()=>{ if(state.protocols.some(p=> !halfLifeOf(p) || (blendParts(p)||[]).some(c=> !c.hl))) renderAll(); });
+}
+
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', endo:'#endoView', settings:'#settingsView', resources:'#resourcesView', more:'#moreView'};
+const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', endo:'#endoView', settings:'#settingsView', resources:'#resourcesView', library:'#libraryView', peptide:'#peptideView', more:'#moreView'};
 /* iOS-style navigation: each screen has a large title, an optional subtitle and round glass buttons in the top corner.
    Tools and Resources live under More, so they show a back button and keep More highlighted. */
 const NAV_ICONS = {
@@ -5733,6 +5911,8 @@ const TAB_META = {
   endo:{title:'Endotoxin check', back:'more'},
   settings:{title:'Settings', back:'more'},
   resources:{title:'Resources', back:'more'},
+  library:{title:'Library', back:'more', sub:()=> libIndex ? `${libIndex.length} peptides · from Peptide Schedule` : ''},
+  peptide:{title:'Peptide', back:'library'},
 };
 function updateNav(){
   const m = TAB_META[currentTab] || {title:''};
@@ -5756,7 +5936,7 @@ function setTab(name, opts){
   const prevTab = currentTab;
   currentTab = name;
   Object.entries(TABS).forEach(([k,sel])=>{ $(sel).hidden = k!==name; });
-  const hl = TAB_META[name] && TAB_META[name].back || name;
+  let hl = name; while(TAB_META[hl] && TAB_META[hl].back) hl = TAB_META[hl].back;
   $$('.tabbar [data-tab], .claude-orb').forEach(b=>{ const on = b.dataset.tab===hl; b.classList.toggle('active', on); b.setAttribute('aria-current', on ? 'page' : 'false'); });
   updateNav();
   animateView(prevTab, name);
@@ -5764,6 +5944,7 @@ function setTab(name, opts){
   if(name==='tools') runCalc();          // redraw the syringe now that it has a width
   if(name==='endo') runEndo();
   if(name==='settings'){ showAppVersion(); renderInstallCard(); renderThemeSeg(); }
+  if(name==='library') renderLibrary().then(updateNav);
   if(name==='progress') renderProgress();
   if(name==='ask') renderAsk();
   if(!(opts && opts.keepScroll)) window.scrollTo(0,0);
@@ -6345,8 +6526,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.44.0';
+const APP_VERSION = '1.45.0';
 const WHATS_NEW = [
+  {v:'1.45.0', title:'Peptide library', items:[
+    ['📚','More › Peptide library: 150 peptides from PeptideSchedule, searchable by name or alias, with dosing by goal, half-life, safety, FAQs and references.'],
+    ['🧪','Each page shows your own vials and protocols for that peptide, plus a button to start a protocol from it.'],
+    ['📝','Where we found something worth flagging, a Pep Prep note sits right in the section.'],
+  ]},
   {v:'1.44.0', title:'A more realistic site map', items:[
     ['📍','The injection site map now shows a realistic front view, with grids on your lower abdomen (belly-button height down, out to the hips) and the front of your thighs.'],
   ]},
@@ -6454,6 +6640,7 @@ async function boot(){
   initTabs();
   initAsk();
   initAskChat();
+  initLibrary();
   initProgress();
   $('#syncPill').addEventListener('click', openBackupModal);
   $('#backupNudgeBtn').addEventListener('click', openBackupModal);

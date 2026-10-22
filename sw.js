@@ -1,8 +1,9 @@
 /* Pep Prep service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.44.0';
+const VERSION = 'v1.45.0';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
+const LIBRARY = 'ledger-library';  // peptide library pages; kept across versions
 const SHELL_FILES = [
   './', './index.html', './app.js', './manifest.webmanifest',
   './icons/icon-192.png', './icons/icon-512.png', './icons/icon-maskable-512.png', './icons/apple-touch-icon.png',
@@ -39,6 +40,18 @@ self.addEventListener('fetch', event=>{
     return;
   }
   if(url.origin!==self.location.origin) return;
+
+  // Peptide library: serve the saved copy, refresh it in the background (works offline once viewed or prefetched).
+  if(url.pathname.includes('/library/')){
+    event.respondWith(caches.open(LIBRARY).then(async c=>{
+      const hit = await c.match(req, {ignoreSearch:true});
+      const net = fetch(req, {cache:'no-cache'}).then(res=>{ if(res && res.ok) c.put(req, res.clone()); return res; }).catch(()=> null);
+      if(hit) return hit;
+      const res = await net;
+      return res || new Response('{}', {status:503, headers:{'Content-Type':'application/json'}});
+    }));
+    return;
+  }
 
   // App files: serve from cache instantly, refresh the cache in the background.
   event.respondWith(caches.open(SHELL).then(async c=>{

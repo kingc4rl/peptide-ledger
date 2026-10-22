@@ -1556,6 +1556,85 @@ html.sheet-open, html.sheet-open body{ overflow:hidden; }
 .bm-side{ fill:#7a7076; font:700 12px var(--sf, system-ui), sans-serif; text-anchor:middle; }
 .bm-legend i.k-dot{ background:#e0362c; } .bm-legend i.k-old{ background:#e0362c; opacity:.3; }
 .bm-legend i.k-next{ background:rgba(64,140,255,.35); border-radius:3px; } .bm-legend i.k-sel{ background:#ff8a1e; }
+/* Peptide library */
+.lib-search{ margin:0 0 10px; }
+.lib-cats{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:0 calc(-1*var(--gutter-r)) 12px calc(-1*var(--gutter-l)); padding:0 var(--gutter-r) 2px var(--gutter-l); }
+.lib-cats::-webkit-scrollbar{ display:none; }
+.lib-cats button{ flex:none; border:none; border-radius:999px; padding:7px 13px; font-size:13.5px; font-weight:600; background:var(--fill); color:var(--ink); cursor:pointer; white-space:nowrap; }
+.lib-cats button.on{ background:var(--ink); color:var(--paper, #fff); }
+html.dark .lib-cats button.on{ background:#f2f2f7; color:#000; }
+.lib-letter{ font-size:13px; font-weight:700; color:var(--label2); margin:14px 6px 6px; }
+.lib-row{ display:flex; align-items:center; gap:12px; width:100%; padding:11px 14px; background:none; border:none; text-align:left; cursor:pointer; position:relative; color:var(--ink); }
+.lib-row + .lib-row::before{ content:''; position:absolute; top:0; left:62px; right:0; height:.5px; background:rgba(60,60,67,.18); }
+html.dark .lib-row + .lib-row::before{ background:rgba(84,84,88,.6); }
+.lib-ic{ width:36px; height:36px; flex:none; border-radius:11px; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:800; font-size:12.5px; letter-spacing:-.02em; background:var(--lc, #8e8e93); }
+.lib-rt{ flex:1; min-width:0; }
+.lib-rt strong{ display:block; font-size:16.5px; font-weight:600; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.lib-rt span{ display:block; font-size:13px; color:var(--label2); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; margin-top:1px; }
+.lib-mine{ font-size:11px; font-weight:700; color:var(--good); background:var(--good-soft); padding:2px 7px; border-radius:999px; margin-left:6px; vertical-align:2px; }
+.lib-grade{ flex:none; width:26px; height:26px; border-radius:8px; font-size:13px; font-weight:800; display:flex; align-items:center; justify-content:center; }
+.lib-grade.gA{ background:rgba(52,199,89,.16); color:#1f9a48; } .lib-grade.gB{ background:rgba(48,140,255,.16); color:#1d6fd6; }
+.lib-grade.gC{ background:rgba(255,159,10,.18); color:#c26a00; } .lib-grade.gD, .lib-grade.gF{ background:rgba(255,69,58,.16); color:#d43a30; }
+html.dark .lib-grade.gA{ color:#30d158; } html.dark .lib-grade.gB{ color:#4ea3ff; } html.dark .lib-grade.gC{ color:#ffa64d; } html.dark .lib-grade.gD, html.dark .lib-grade.gF{ color:#ff6961; }
+.lib-none{ text-align:center; padding:24px 0; }
+.lib-credit{ text-align:center; margin:18px 8px 0; }
+/* peptide page */
+.pp-hero{ display:flex; flex-direction:column; gap:12px; }
+.pp-badges{ display:flex; flex-wrap:wrap; gap:6px; }
+.pp-badges span{ font-size:12.5px; font-weight:600; padding:4px 10px; border-radius:999px; background:var(--fill); color:var(--ink); }
+.pp-badges .b-cat{ background:color-mix(in srgb, var(--lc) 18%, transparent); color:var(--lc); }
+.pp-aka{ font-size:13.5px; color:var(--label2); }
+.pp-sum{ font-size:15.5px; line-height:1.5; margin:0; }
+.pp-facts{ display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; }
+.pp-fact{ padding:10px 12px; border-radius:14px; background:var(--fill); min-width:0; }
+.pp-fact span{ display:block; font-size:11.5px; font-weight:600; letter-spacing:.04em; text-transform:uppercase; color:var(--label2); }
+.pp-fact strong{ display:block; font-size:15px; font-weight:650; margin-top:2px; overflow-wrap:anywhere; }
+.pp-mine .pp-mine-row{ display:flex; align-items:center; gap:8px; font-size:14.5px; padding:4px 0; }
+.pp-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:8px; }
+.pp-jump{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin:4px calc(-1*var(--gutter-r)) 10px calc(-1*var(--gutter-l)); padding:0 var(--gutter-r) 2px var(--gutter-l); position:sticky; top:calc(env(safe-area-inset-top,0px) + 50px); z-index:5; }
+.pp-jump::-webkit-scrollbar{ display:none; }
+.pp-jump button{ flex:none; border:none; border-radius:999px; padding:7px 12px; font-size:13px; font-weight:600; background:var(--gl); -webkit-backdrop-filter:var(--gl-blur); backdrop-filter:var(--gl-blur); box-shadow:var(--gl-edge); color:var(--ink); cursor:pointer; white-space:nowrap; }
+details.lib-sec{ padding:0; overflow:hidden; }
+details.lib-sec > summary{ list-style:none; display:flex; align-items:center; justify-content:space-between; gap:10px; padding:16px 18px; cursor:pointer; font-size:18px; font-weight:700; letter-spacing:-.01em; }
+details.lib-sec > summary::-webkit-details-marker{ display:none; }
+details.lib-sec > summary::after{ content:''; width:8px; height:8px; border:solid var(--label2); border-width:0 2.2px 2.2px 0; transform:rotate(45deg); margin-top:-4px; transition:transform .2s; flex:none; }
+details.lib-sec[open] > summary::after{ transform:rotate(-135deg); margin-top:4px; }
+.lib-body{ padding:0 18px 18px; font-size:15px; line-height:1.55; }
+.lib-body p{ margin:0 0 10px; }
+.lib-body ul{ margin:0 0 10px; padding-left:20px; }
+.lib-body li{ margin:0 0 6px; }
+.lib-body h4{ font-size:15.5px; font-weight:700; margin:14px 0 6px; }
+.lib-body h4:first-child{ margin-top:0; }
+.lib-body dl{ display:grid; grid-template-columns:minmax(0,.9fr) minmax(0,1.6fr); gap:8px 12px; margin:0 0 12px; }
+.lib-body dt{ font-size:13px; font-weight:600; color:var(--label2); }
+.lib-body dd{ margin:0; font-weight:550; }
+.lib-body a{ color:var(--info); }
+.lib-tbl{ overflow-x:auto; margin:0 0 12px; }
+.lib-tbl table{ border-collapse:collapse; width:100%; font-size:13.5px; }
+.lib-tbl th, .lib-tbl td{ text-align:left; padding:8px; border-bottom:.5px solid var(--line-soft, rgba(0,0,0,.08)); vertical-align:top; }
+.lib-tbl th{ font-size:12px; text-transform:uppercase; letter-spacing:.04em; color:var(--label2); }
+.lib-cite{ font-size:11px; font-weight:700; color:var(--info); vertical-align:super; margin-left:1px; cursor:pointer; }
+.lib-note{ margin:0 0 12px; padding:10px 12px; border-radius:12px; background:var(--info-soft); color:var(--ink); font-size:14px; line-height:1.45; }
+.lib-note b{ color:var(--info); }
+.lib-goals{ display:flex; gap:6px; overflow-x:auto; scrollbar-width:none; margin-bottom:12px; }
+.lib-goals::-webkit-scrollbar{ display:none; }
+.lib-goals button{ flex:none; max-width:240px; border:none; border-radius:12px; padding:8px 12px; font-size:13px; font-weight:600; background:var(--fill); color:var(--ink); cursor:pointer; text-align:left; white-space:normal; line-height:1.25; }
+.lib-goals button.on{ background:var(--accent-pep-soft); color:var(--accent-pep-strong); box-shadow:inset 0 0 0 1.5px rgba(255,138,30,.5); }
+.lib-phase{ display:flex; gap:12px; padding:10px 0; border-top:.5px solid var(--line-soft, rgba(0,0,0,.08)); }
+.lib-phase:first-of-type{ border-top:none; }
+.lib-wk{ flex:none; width:58px; font-size:12px; font-weight:700; color:var(--label2); padding-top:2px; }
+.lib-phase strong{ display:block; font-size:15px; }
+.lib-phase span{ display:block; font-size:13.5px; color:var(--label2); margin-top:2px; }
+.lib-faq details{ border-top:.5px solid var(--line-soft, rgba(0,0,0,.08)); padding:10px 0; }
+.lib-faq details:first-child{ border-top:none; }
+.lib-faq summary{ font-weight:600; cursor:pointer; list-style:none; }
+.lib-faq summary::-webkit-details-marker{ display:none; }
+.lib-faq details p{ margin:8px 0 0; color:var(--ink); }
+.lib-refs{ padding-left:22px; margin:0; font-size:13.5px; }
+.lib-refs li{ margin-bottom:8px; }
+.lib-rel{ display:flex; flex-wrap:wrap; gap:8px; }
+.lib-rel button{ border:none; border-radius:999px; padding:8px 14px; background:var(--fill); color:var(--ink); font-weight:600; font-size:14px; cursor:pointer; }
+.lib-src{ text-align:center; font-size:12.5px; color:var(--label2); margin:16px 8px 0; line-height:1.5; }
 .hap-test{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
 .hap-test span{ font-size:14px; margin-right:auto; }
 .vial-shelf ~ .vial-detail::before{ display:none; }
@@ -1991,8 +2070,20 @@ html.dark .pc-syr, html.dark .syringe-wrap{ background:rgba(242,242,247,.92); bo
 
       </section>
 
+      <section id="libraryView" class="view" hidden>
+        <label class="glass-search lib-search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.5 15.5L20 20"/></svg><input type="search" id="libSearch" placeholder="Search peptides" autocomplete="off" aria-label="Search the peptide library"></label>
+        <div class="lib-cats" id="libCats"></div>
+        <div id="libList"></div>
+        <p class="footnote lib-credit">Peptide information from <a href="https://www.peptideschedule.com/peptides" target="_blank" rel="noopener">Peptide Schedule</a>, used with permission. For research and education, not medical advice.</p>
+      </section>
+
+      <section id="peptideView" class="view" hidden>
+        <div id="pepPage"></div>
+      </section>
+
       <section id="moreView" class="view" hidden>
         <div class="ios-list">
+          <button type="button" class="ios-row" data-goto="library"><span class="ios-ic" style="--ic:#30b0c7"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5.5L5.5 17a2.5 2.5 0 0 0 2.2 3.7h8.6a2.5 2.5 0 0 0 2.2-3.7L14 8.5V3"/><circle cx="10" cy="15.5" r="1"/><circle cx="14" cy="17" r=".8"/></svg></span><span class="ios-row-t">Peptide library<small>Dosing, side effects and research for 150+ peptides</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="tools"><span class="ios-ic" style="--ic:#ff8a1e"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span class="ios-row-t">Calculator<small>Reconstitution, syringe units, labels</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="endo"><span class="ios-ic" style="--ic:#ff5e57"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5.5L5.5 17a2.5 2.5 0 0 0 2.2 3.7h8.6a2.5 2.5 0 0 0 2.2-3.7L14 8.5V3"/><path d="M7.5 14h9"/></svg></span><span class="ios-row-t">Endotoxin check<small>Check a dose against the FDA ceiling</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="resources"><span class="ios-ic" style="--ic:#5aa9ff"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><span class="ios-row-t">Resources<small>Links, guides and vendors</small></span><span class="ios-chev"></span></button>
