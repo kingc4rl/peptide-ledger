@@ -2833,8 +2833,18 @@ function coaMiniSVG(t, labelMg){
   const g = coaGrades(t, labelMg);
   const dot = k=> k==='ok' ? '#1fae5b' : k==='warn' ? '#e09a12' : k==='bad' ? '#e0443a' : '#b9bcc6';
   const big = g.pur!=null ? `${Math.floor(g.pur)}%` : g.mass!=null ? `${Math.round(g.mass)}` : '✓';
-  return `<span class="hcm" aria-hidden="true"><span class="hcm-band"></span><span class="hcm-k">COA</span><b class="hcm-big">${esc(big)}</b>
+  return `<span class="hcm" data-finish="${coaFinish()}" aria-hidden="true"><span class="hcm-band"></span><span class="hcm-k">COA</span><b class="hcm-big">${esc(big)}</b>
     <span class="hcm-dots">${['massG','purG','endoG'].map(k=> `<i style="background:${dot(g[k])}"></i>`).join('')}</span><span class="hcm-bar"></span><span class="hcm-foil"></span></span>`;
+}
+/* Card finishes, from soft pastel to full rainbow foil. The choice is a per-device look, kept in localStorage. */
+const COA_FINISHES = [
+  ['aurora','Aurora','Soft pastel foil'], ['prism','Prism','Maximum rainbow'], ['galaxy','Galaxy','Deep space sparkle'],
+  ['chrome','Chrome','Polished silver'], ['gold','Gold','Gold foil'], ['crystal','Crystal','Clear and minimal'],
+];
+const coaFinish = ()=>{ const f = lsGet('ledger.coaFinish','aurora'); return COA_FINISHES.some(x=> x[0]===f) ? f : 'aurora'; };
+function coaFinishPicker(){
+  const cur = coaFinish();
+  return `<div class="hc-pick" role="radiogroup" aria-label="Card finish">${COA_FINISHES.map(([k,n,d])=> `<button type="button" role="radio" aria-checked="${k===cur}" class="${k===cur?'on':''}" data-finish-pick="${k}"><i class="hc-sw" data-finish="${k}"></i><b>${n}</b><span>${d}</span></button>`).join('')}</div>`;
 }
 /* A short reference code for a lab test, stable for the same lab, date and lot. */
 function coaRef(v, t){
@@ -2865,7 +2875,7 @@ function coaDocHTML(v, t){
   const all = [g.massG, g.purG, g.endoG].filter(Boolean);
   const perfect = all.length >= 2 && all.every(k=> k==='ok');
   const stat = (label, val, sub, k, wide)=> `<div class="hc-stat ${k||''} ${wide?'wide':''}"><span class="hc-k">${label}</span><i></i><strong class="mono">${val}</strong>${sub ? `<small class="mono">${sub}</small>` : ''}<em>${verdict(k)}</em></div>`;
-  return `<div class="hc" data-hc style="--vc:${color}">
+  return `<div class="hc" data-hc data-finish="${coaFinish()}" style="--vc:${color}">
     <div class="hc-card">
       <div class="hc-face">
         <div class="hc-head"><span class="hc-logo"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4.2"/><circle cx="5" cy="8" r="2.6"/><circle cx="19" cy="7" r="2.4"/><circle cx="6" cy="17.5" r="2.8"/><circle cx="18" cy="17" r="3"/></svg></span>
@@ -2945,6 +2955,7 @@ function openCoaModal(v, i){
   const many = tests.length > 1;
   openModal(many ? `Certificates of analysis` : 'Certificate of analysis', `
     ${many ? `<div class="coa-pager"><button type="button" class="coa-nav" id="coaPrev" aria-label="Previous certificate">‹</button><span id="coaCount" class="mono">1 / ${tests.length}</span><button type="button" class="coa-nav" id="coaNext" aria-label="Next certificate">›</button></div>` : ''}
+    ${coaFinishPicker()}
     <div class="coa-track coa-viewer ${many?'many':''}" id="coaTrack">${tests.map(t=>`<div class="coa-slide">${coaDocHTML(v, t)}</div>`).join('')}</div>
     ${many ? `<div class="coa-dots" id="coaDots">${tests.map((_,k)=>`<i data-k="${k}"></i>`).join('')}</div>` : ''}
     <p class="footnote" style="margin-top:10px;">Rebuilt from the values you entered for this vial. Tilt your phone or drag across the card to catch the foil. Grades: content 90–110% of label, purity ≥ 98%, endotoxin ≤ 1 EU/mg.</p>
@@ -2952,6 +2963,14 @@ function openCoaModal(v, i){
   `, body=>{
     $('#coaEdit',body).addEventListener('click', ()=>{ closeModal(); openVialModal(v); });
     holoCards(body);
+    const pick = $('.hc-pick', body);
+    if(pick) pick.addEventListener('click', e=>{
+      const b = e.target.closest('[data-finish-pick]'); if(!b) return;
+      const k = b.dataset.finishPick; lsSet('ledger.coaFinish', k); haptic('select');
+      $$('[data-finish-pick]', pick).forEach(x=>{ x.classList.toggle('on', x===b); x.setAttribute('aria-checked', x===b); });
+      $$('.hc', body).forEach(c=> c.dataset.finish = k);
+      $$('.hcm').forEach(c=> c.dataset.finish = k);
+    });
     if(!many) return;
     const track = $('#coaTrack',body), dots = $$('#coaDots i',body), count = $('#coaCount',body);
     const cur = ()=> Math.round(track.scrollLeft / Math.max(1, track.clientWidth));
@@ -6907,8 +6926,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.47.0';
+const APP_VERSION = '1.48.0';
 const WHATS_NEW = [
+  {v:'1.48.0', title:'Choose your COA finish', items:[
+    ['🃏','Six card finishes to pick from at the top of any certificate: Aurora, Prism, Galaxy, Chrome, Gold and Crystal.'],
+    ['✨','They range from full rainbow foil and starfields to polished metal and clear glass. Your pick is remembered and the small COA cards on your stash match it.'],
+  ]},
   {v:'1.47.0', title:'Holographic COAs', items:[
     ['✨','Certificates of analysis are now holographic cards: a rainbow foil, sparkles and a glare that move as the card gently sways.'],
     ['📱','Tilt your phone or drag across the card to catch the light. The first tap asks for motion access so the card can follow your phone.'],
