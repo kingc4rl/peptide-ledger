@@ -5860,7 +5860,7 @@ async function renderLibrary(){
     else if(letter===null && html===''){ html += '<div class="ios-list">'; letter = ''; }
     const mine = libMine(x);
     html += `<button type="button" class="lib-row" data-lib="${esc(x.s)}"><span class="lib-ic">${libMolecule(libColor(x.c), 30)}</span>
-      <span class="lib-rt"><strong>${esc(x.n)}${mine.protos.length || mine.count ? '<i class="lib-mine">Mine</i>' : ''}</strong><span><em style="color:${libColor(x.c)}">${esc(x.c||'')}</em>${esc([x.hl ? 't½ '+x.hl : '', x.a.slice(0,2).join(', ')].filter(Boolean).map(t=> ' · '+t).join(''))}</span></span>
+      <span class="lib-rt"><strong>${esc(x.n)}${mine.protos.length || mine.count ? '<i class="lib-mine">Mine</i>' : ''}</strong><span><em style="color:${libColor(x.c)}">${esc(x.c||'')}</em></span></span>
       ${x.g ? `<span class="lib-grade g${esc(x.g[0])}" title="Safety grade ${esc(x.g)}">${esc(x.g)}</span>` : ''}<span class="ios-chev"></span></button>`;
   });
   list.innerHTML = html + '</div>';
@@ -5873,6 +5873,7 @@ function libPrefetch(){
   setTimeout(next, 2500);
 }
 function openPeptide(slug){
+  if(slug!==libSlug) libTab = 'overview';
   libSlug = slug;
   const e = libIndex && libIndex.find(x=> x.s===slug);
   TAB_META.peptide.title = e ? e.n : 'Peptide';
@@ -5925,10 +5926,14 @@ const LIB_SEC = {
   'Is it legal?':['bank','grey'], 'Who Should Consider it':['users','blue'], 'Recent updates':['bell','indigo'], 'Storage & Stability':['snow','cyan'],
   'FAQ':['help','blue'], 'References':['book','grey'],
 };
-const LIB_NAV = {'What is it?':'Overview', 'How it works':'How it works', 'Science vs community':'Evidence', 'Dosage Guide':'Dosage', 'Protocols by goal':'Protocols',
-  'How to Use it':'How to use', 'How to Inject it':'How to inject', 'Stacking Protocols':'Stacking', 'Estimated Cost':'Cost', 'Contraindications':'Avoid if',
-  'Drug Interactions':'Interactions', 'Product Quality':'Quality', 'Recommended Monitoring':'Monitoring', 'Is it legal?':'Legal', 'Who Should Consider it':'Who it’s for',
-  'Recent updates':'Updates', 'Storage & Stability':'Storage', 'Pharmacokinetics':'Half-life'};
+// The four tabs of a peptide page and which sections each holds
+const LIB_TABS = [
+  ['overview','Overview','info','blue', ['What is it?','How it works','Benefits','Who Should Consider it']],
+  ['dosing','Dosing','syringe','orange', ['Dosage Guide','Protocols by goal','How to Use it','How to Inject it','Stacking Protocols','Storage & Stability','Estimated Cost']],
+  ['safety','Safety','shield','red', ['Side Effects','Contraindications','Drug Interactions','Recommended Monitoring','Product Quality']],
+  ['science','Science','flask','purple', ['Science vs community','Pharmacokinetics','Recent updates','Is it legal?','FAQ','References']],
+];
+let libTab = 'overview';
 const libC = c=> `var(--lb-${c})`;
 const libPill = (txt, c, ic)=> `<span class="lb-pill" style="--c:${libC(c)}">${ic ? libIc(ic) : ''}${esc(txt)}</span>`;
 const LIB_STATUS = {'FDA Approved':'green', 'Phase 3':'blue', 'Phase 2':'blue', 'Phase 1':'blue', 'Preclinical':'amber', 'Research':'amber', 'Compounded':'purple', 'Cosmetic':'pink'};
@@ -6207,30 +6212,38 @@ async function renderPeptidePage(){
       return `<li id="ref${i+1}"><span class="lb-ref-n mono">${i+1}</span><div><a href="${esc(u)}" target="_blank" rel="noopener">${esc(x.title || x.url)}</a>${host ? `<span class="lb-tag">${host}</span>` : ''}</div></li>`; }).join('')}</ol>${rec.references.length > 6 ? `<button type="button" class="lb-more" data-refs>Show all ${rec.references.length}</button>` : ''}`;
     return libSection(s.title, s.b.slice(), rec);
   };
+  // the page is split into four tabs so each screen stays short; anything unexpected lands in Science
+  const tabOf = t=> LIB_TABS.find(x=> x[4].includes(t)) || LIB_TABS[3];
+  const secHTML = s=>{
+    const [ic, c] = LIB_SEC[s.title] || ['info', 'grey'];
+    const ns = notes.filter(n=> n.section===s.title).map(n=> `<div class="lib-note">${libIc('note')}<div><b>Pep Prep note</b> ${libInline(n.text)}</div></div>`).join('');
+    return `<section class="card lb-sec" id="${s.id}" style="--c:${libC(c)}"><h3 class="lb-sec-h"><span class="lb-sec-ic">${libIc(ic)}</span>${esc(s.title==='References' ? `References (${rec.references.length})` : s.title)}</h3><div class="lb-body">${ns}${body(s)}</div></section>`;
+  };
+  const glance = rec.summary || f.tier || (rec.tags||[]).length ? `<section class="card lb-sec lb-glance" style="--c:${libC('blue')}">
+      ${rec.summary ? libClamp(`<p class="lb-lead">${libInline(rec.summary)}</p>`, rec.summary.length) : ''}
+      ${f.tier ? `<div class="lb-hero-tier">${libIc('syringe')}<span><b>Beginner tier</b> ${esc(f.tier)}</span></div>` : ''}
+      ${(rec.tags||[]).length ? `<div class="lb-tags">${rec.tags.map(t=> `<span><i style="background:${col}"></i>${esc(t)}</span>`).join('')}</div>` : ''}
+    </section>` : '';
+  const related = rec.related && rec.related.length ? `<section class="card lb-sec" style="--c:${libC('grey')}"><h3 class="lb-sec-h"><span class="lb-sec-ic">${libIc('layers')}</span>Related peptides</h3><div class="lb-rel">${rec.related.map(s0=>{ const r0 = libIndex.find(x=> x.s===s0); return r0 ? `<button type="button" data-lib="${esc(s0)}">${libMolecule(libColor(r0.c), 30)}<span><strong>${esc(r0.n)}</strong><small>${esc(r0.c||'')}</small></span>${libIc('chev')}</button>` : ''; }).join('')}</div></section>` : '';
+  const verdict = f['Science vs community'];
+  const mineLine = [mine.count ? `${mine.count} vial${mine.count===1?'':'s'} in your stash` : '', ...mine.protos.map(p=> `${p.compound} ${fmtDose(doseAt(p, doseDayISO()).dose, doseAt(p, doseDayISO()).doseUnit)}${p.status==='paused' ? ' (paused)' : ''}`)].filter(Boolean).join(' · ');
+  if(!LIB_TABS.some(t=> t[0]===libTab)) libTab = 'overview';
   el.innerHTML = `
     <div class="card lb-hero" style="--lc:${col}">
-      <div class="lb-hero-top">${libMolecule(col, 52)}<div class="lb-hero-t">${rec.category ? `<span class="lb-pill lb-cat" style="--c:${col}"><i></i>${esc(rec.category)}</span>` : ''}${rec.status ? libPill(rec.status, LIB_STATUS[rec.status]||'grey', rec.status==='FDA Approved' ? 'shield' : 'flask') : ''}${grade ? libPill(`Grade ${f.grade}`, LIB_GRADE[grade]||'grey') : ''}</div></div>
-      ${f.tier ? `<div class="lb-hero-tier">${libIc('syringe')}<span><b>Beginner tier</b> ${esc(f.tier)}</span></div>` : ''}
-      ${(rec.tags||[]).length ? `<div class="lb-tags">${rec.tags.slice(0,4).map(t=> `<span><i style="background:${col}"></i>${esc(t)}</span>`).join('')}</div>` : ''}
+      <div class="lb-hero-top">${libMolecule(col, 46)}<div class="lb-hero-t">${rec.category ? `<span class="lb-pill lb-cat" style="--c:${col}"><i></i>${esc(rec.category)}</span>` : ''}${rec.status ? libPill(rec.status, LIB_STATUS[rec.status]||'grey', rec.status==='FDA Approved' ? 'shield' : 'flask') : ''}${grade ? libPill(`Grade ${f.grade}`, LIB_GRADE[grade]||'grey') : ''}${verdict ? libPill(verdict, LIB_VERDICT[verdict.toLowerCase()]||'grey', 'scale') : ''}</div></div>
       ${rec.aliases && rec.aliases.filter(a=> a!==rec.name).length ? `<div class="lb-aka"><b>Also known as</b> ${esc(rec.aliases.filter(a=> a!==rec.name).slice(0,6).join(', '))}</div>` : ''}
       ${facts.length ? `<div class="lb-facts">${facts.map(([k,v,ic,c])=> `<div class="lb-fact" style="--c:${libC(c)}"><span>${libIc(ic)}${esc(k)}</span><strong class="mono">${esc(v)}</strong></div>`).join('')}</div>` : ''}
-      ${f['Science vs community'] || f['Safety grade'] ? `<div class="lb-verdicts">${f['Science vs community'] ? `<div>${libIc('scale')}<span>Science vs community</span>${libPill(f['Science vs community'], LIB_VERDICT[f['Science vs community'].toLowerCase()]||'grey')}</div>` : ''}${f['Safety grade'] ? `<div>${libIc('shield')}<span>Safety</span>${libPill(f['Safety grade'], LIB_GRADE[(f['Safety grade'].match(/Grade\s+([A-F])/)||[])[1]]||'grey')}</div>` : ''}</div>` : ''}
-      ${rec.reviewed ? `<div class="lb-reviewed">${libIc('check')}Reviewed ${esc(fmtDate(rec.reviewed))}${rec.references ? ` · ${rec.references.length} references` : ''}</div>` : ''}
+      <div class="lb-yours"><div class="lb-yours-t">${libIc('vial')}<span>${mineLine ? esc(mineLine) : `Not in your stash or protocols yet`}</span></div>
+        <div class="pp-actions"><button type="button" class="btn btn-accent-pep btn-sm" id="ppStart">+ Start a protocol</button><button type="button" class="btn btn-sm" id="ppCalc">Calculator</button>${mine.count ? `<button type="button" class="btn btn-sm" id="ppStash">Show in stash</button>` : ''}</div></div>
     </div>
-    <div class="card lb-mine">
-      <div class="lb-mine-h">${libIc('vial')}<strong>Yours</strong>${mine.count ? `<span class="lb-pill" style="--c:${libC('green')}">${mine.count} in stash</span>` : ''}</div>
-      ${mine.protos.length ? mine.protos.map(p=> `<div class="lb-mine-r"><i></i><span>${esc(p.compound)} · ${esc(fmtDose(doseAt(p, doseDayISO()).dose, doseAt(p, doseDayISO()).doseUnit))}${p.status==='paused' ? ' · paused' : ''}</span></div>`).join('') : `<div class="footnote">No protocol for ${esc(rec.name)} yet.</div>`}
-      <div class="pp-actions"><button type="button" class="btn btn-accent-pep btn-sm" id="ppStart">+ Start a protocol</button><button type="button" class="btn btn-sm" id="ppCalc">Calculator</button>${mine.count ? `<button type="button" class="btn btn-sm" id="ppStash">Show in stash</button>` : ''}</div>
-    </div>
-    ${rec.summary ? `<div class="card lb-sec lb-summary"><p>${libInline(rec.summary)}</p></div>` : ''}
-    <nav class="lb-nav" aria-label="Sections">${secs.map(s=>{ const [, c] = LIB_SEC[s.title] || ['', 'grey']; return `<button type="button" data-jump="${s.id}" style="--c:${libC(c)}"><i></i>${esc(LIB_NAV[s.title] || s.title)}</button>`; }).join('')}</nav>
-    ${secs.map(s=>{
-      const [ic, c] = LIB_SEC[s.title] || ['info', 'grey'];
-      const ns = notes.filter(n=> n.section===s.title).map(n=> `<div class="lib-note">${libIc('note')}<div><b>Pep Prep note</b> ${libInline(n.text)}</div></div>`).join('');
-      return `<section class="card lb-sec" id="${s.id}" style="--c:${libC(c)}"><h3 class="lb-sec-h"><span class="lb-sec-ic">${libIc(ic)}</span>${esc(s.title==='References' ? `References (${rec.references.length})` : s.title)}</h3><div class="lb-body">${ns}${body(s)}</div></section>`;
-    }).join('')}
-    ${rec.related && rec.related.length ? `<section class="card lb-sec" style="--c:${libC('grey')}"><h3 class="lb-sec-h"><span class="lb-sec-ic">${libIc('layers')}</span>Related peptides</h3><div class="lb-rel">${rec.related.map(s0=>{ const r0 = libIndex.find(x=> x.s===s0); return r0 ? `<button type="button" data-lib="${esc(s0)}">${libMolecule(libColor(r0.c), 30)}<span><strong>${esc(r0.n)}</strong><small>${esc(r0.c||'')}</small></span>${libIc('chev')}</button>` : ''; }).join('')}</div></section>` : ''}
-    <p class="lib-src">From <a href="${esc(rec.source)}" target="_blank" rel="noopener">Peptide Schedule</a>, used with permission${rec.reviewed ? ` · reviewed ${esc(fmtDate(rec.reviewed))}` : ''}.<br>For research and education, not medical advice.</p>`;
+    <nav class="lb-tabs" role="tablist" aria-label="Peptide sections">${LIB_TABS.map(([k,n,ic,c])=> `<button type="button" role="tab" data-ltab="${k}" aria-selected="${k===libTab}" class="${k===libTab?'on':''}" style="--c:${libC(c)}">${libIc(ic)}<span>${n}</span></button>`).join('')}</nav>
+    <div class="lb-panes">${LIB_TABS.map(([k], ti)=>{
+      const mine = secs.filter(s=> tabOf(s.title)[0]===k);
+      const next = LIB_TABS[(ti+1) % LIB_TABS.length];
+      return `<div class="lb-pane" data-lpane="${k}" ${k===libTab?'':'hidden'}>${k==='overview' ? glance : ''}${mine.map(secHTML).join('')}${k==='overview' ? related : ''}
+        <button type="button" class="lb-next" data-ltab="${next[0]}" style="--c:${libC(next[3])}">${ti===LIB_TABS.length-1 ? 'Back to' : 'Next:'} <b>${next[1]}</b> ${libIc('chev')}</button></div>`;
+    }).join('')}</div>
+    <p class="lib-src">From <a href="${esc(rec.source)}" target="_blank" rel="noopener">Peptide Schedule</a>, used with permission${rec.reviewed ? ` · reviewed ${esc(fmtDate(rec.reviewed))}` : ''}${rec.references ? ` · ${rec.references.length} references` : ''}.<br>For research and education, not medical advice.</p>`;
   // actions
   $('#ppStart',el).addEventListener('click', ()=>{
     const m = /([\d.]+)\s*(mcg|mg)/i.exec(f.tier || f.Dose || ''), freq = String(f.tier || f.Dose || '').toLowerCase();
@@ -6242,42 +6255,41 @@ async function renderPeptidePage(){
   const st = $('#ppStash',el); if(st) st.addEventListener('click', ()=>{ const v = mine.vials[0]; stashSel = v ? v.compound : null; lotSel = null; setTab('inventory'); renderVials(); });
   const goals = $('#ppGoals',el);
   if(goals) goals.addEventListener('click', ev=>{ const b = ev.target.closest('[data-goal]'); if(!b) return; goals.innerHTML = libProtocolsHTML(rec.protocols, +b.dataset.goal); haptic('light'); });
+  const bar = $('.lb-tabs', el);
+  // switching tabs keeps the tab bar where it is and starts the new tab at its top
+  const show = (k, dir)=>{
+    if(k===libTab) return;
+    libTab = k;
+    $$('[data-ltab]', bar).forEach(b=>{ b.classList.toggle('on', b.dataset.ltab===k); b.setAttribute('aria-selected', b.dataset.ltab===k); });
+    $$('.lb-pane', el).forEach(p=>{ const on = p.dataset.lpane===k; p.hidden = !on; if(on && dir){ p.classList.remove('in-l','in-r'); void p.offsetWidth; p.classList.add(dir > 0 ? 'in-r' : 'in-l'); } });
+    const top = parseFloat(getComputedStyle(bar).top) || 0;
+    if(bar.getBoundingClientRect().top <= top + 1) window.scrollTo({top: bar.getBoundingClientRect().top + window.scrollY - top});
+    haptic('select');
+  };
+  const idx = k=> LIB_TABS.findIndex(t=> t[0]===k);
   el.onclick = ev=>{
-    const j = ev.target.closest('[data-jump]');
-    if(j){ const t = $('#'+j.dataset.jump, el); if(t) t.scrollIntoView({behavior:'smooth', block:'start'}); return; }
+    const t = ev.target.closest('[data-ltab]');
+    if(t){ show(t.dataset.ltab, idx(t.dataset.ltab) > idx(libTab) ? 1 : -1); return; }
     const mo = ev.target.closest('[data-more]');
     if(mo){ const c = mo.previousElementSibling; const open = c.classList.toggle('open'); mo.textContent = open ? 'Show less' : 'Read more'; return; }
     const rf = ev.target.closest('[data-refs]');
     if(rf){ const l = $('.lb-refs', el); l.classList.remove('short'); rf.remove(); return; }
     const lb = ev.target.closest('[data-lib]');
-    if(lb){ openPeptide(lb.dataset.lib); window.scrollTo(0,0); return; }
+    if(lb){ libTab = 'overview'; openPeptide(lb.dataset.lib); window.scrollTo(0,0); return; }
     const c = ev.target.closest('[data-cite]'); if(!c) return;
     const l = $('.lb-refs', el); if(!l) return; l.classList.remove('short'); const rb = $('[data-refs]', el); if(rb) rb.remove();
+    show(tabOf('References')[0], 1);
     const li = $('#ref'+c.dataset.cite, el); if(li){ li.scrollIntoView({behavior:'smooth', block:'center'}); li.classList.add('flash'); setTimeout(()=> li.classList.remove('flash'), 1600); }
   };
-  libSpy(el);
-}
-// Highlights the section you're reading in the sticky navigator and keeps that chip in view.
-function libSpy(el){
-  const nav = $('.lb-nav', el); if(!nav) return;
-  const secs = $$('.lb-sec[id]', el);
-  let cur = null, raf = 0;
-  const update = ()=>{
-    raf = 0;
-    if(!el.isConnected || $('#peptideView').hidden){ window.removeEventListener('scroll', onScroll); return; }
-    const line = nav.getBoundingClientRect().bottom + 24;
-    let id = null; secs.forEach(s=>{ if(s.getBoundingClientRect().top <= line) id = s.id; });
-    nav.classList.toggle('stuck', nav.getBoundingClientRect().top <= parseFloat(getComputedStyle(nav).top) + 1);
-    if(id===cur) return; cur = id;
-    $$('button', nav).forEach(b=> b.classList.toggle('on', b.dataset.jump===id));
-    const b = id && $(`[data-jump="${id}"]`, nav);
-    if(b) nav.scrollTo({left: b.offsetLeft - nav.clientWidth/2 + b.offsetWidth/2, behavior:'smooth'});
-  };
-  const onScroll = ()=>{ if(!raf) raf = requestAnimationFrame(update); };
-  if(libSpy.off) window.removeEventListener('scroll', libSpy.off);
-  libSpy.off = onScroll;
-  window.addEventListener('scroll', onScroll, {passive:true});
-  update();
+  // swipe left or right on the content to move between tabs (rows that scroll sideways keep their own swipe)
+  const panes = $('.lb-panes', el); let sx = null, sy = 0;
+  panes.addEventListener('touchstart', e=>{ sx = e.target.closest('.lib-goals, .lib-tbl') ? null : e.touches[0].clientX; sy = e.touches[0].clientY; }, {passive:true});
+  panes.addEventListener('touchend', e=>{
+    if(sx==null) return; const dx = e.changedTouches[0].clientX - sx, dy = e.changedTouches[0].clientY - sy; sx = null;
+    if(Math.abs(dx) < 70 || Math.abs(dy) > Math.abs(dx)*0.6) return;
+    const i = idx(libTab) + (dx < 0 ? 1 : -1);
+    if(i >= 0 && i < LIB_TABS.length) show(LIB_TABS[i][0], dx < 0 ? 1 : -1);
+  }, {passive:true});
 }
 function initLibrary(){
   const si = $('#libSearch'); if(!si) return;
@@ -6926,8 +6938,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.49.0';
+const APP_VERSION = '1.50.0';
 const WHATS_NEW = [
+  {v:'1.50.0', title:'A roomier library', items:[
+    ['🗂️','Peptide pages are split into four tabs (Overview, Dosing, Safety and Science) that stay pinned at the top. Tap one, or swipe left and right to move between them.'],
+    ['🌿','More breathing room everywhere: a slimmer header with your stash and protocol buttons built in, wider spacing, and a Next button at the end of each tab.'],
+    ['📋','The library list is simpler: each peptide shows its name, category and safety grade, and you can still search by alias.'],
+  ]},
   {v:'1.49.0', title:'Two new COA finishes', items:[
     ['🪩','Pearl Chrome: polished silver with a soft pastel rainbow sheen that drifts as you tilt.'],
     ['🌈','Soft Prism: the full rainbow Prism foil with gentler, wider light rays.'],
