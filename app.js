@@ -1102,7 +1102,7 @@ function renderDoseCalendar(){
   if(lbl) lbl.textContent = dayName;
   const rows = dosesOnDay(calDay);
   if(!rows.length){
-    list.innerHTML = `<p class="footnote cal-empty">${!state.protocols.some(isActiveP) && diff>=0 ? 'No active protocols. Set a schedule on the Protocols tab.' : diff<0 ? `Nothing logged ${diff===-1?'yesterday':'on this day'}.` : `No doses scheduled ${diff===0?'today':diff===1?'tomorrow':'on this day'}.`}</p>`;
+    list.innerHTML = `<p class="footnote cal-empty">${!state.protocols.some(isActiveP) && diff>=0 ? 'No active protocols. Add one under Protocols below.' : diff<0 ? `Nothing logged ${diff===-1?'yesterday':'on this day'}.` : `No doses scheduled ${diff===0?'today':diff===1?'tomorrow':'on this day'}.`}</p>`;
     return;
   }
   const pill = {taken:'<span class="pill pill-good">Taken</span>', due: diff===0 ? '<span class="pill pill-pep">Due</span>' : '<span class="pill pill-info">Scheduled</span>', missed:'<span class="pill pill-warn">Missed</span>'};
@@ -1153,8 +1153,8 @@ function renderProtocols(){
     lbl.textContent = !active.length ? '' : due ? `${due} due today` : (sched.length || loggedToday) ? 'All done for today ✓' : 'No doses due today';
   }
   if(!active.length){
-    el.innerHTML = `<div class="empty"><div class="glyph">💉</div><p>No active protocols. Add one on the Protocols tab to start logging doses.</p><button type="button" class="btn btn-sm" data-goto-tab="protocols">Go to Protocols</button></div>`;
-    $$('[data-goto-tab]',el).forEach(b=> b.addEventListener('click', ()=> setTab(b.dataset.gotoTab)));
+    el.innerHTML = `<div class="empty"><div class="glyph">💉</div><p>No active protocols. Add one to start logging doses.</p><button type="button" class="btn btn-sm" data-add-proto>+ Add protocol</button></div>`;
+    $$('[data-add-proto]',el).forEach(b=> b.addEventListener('click', ()=> $('#addProtocolBtn').click()));
     return;
   }
   // Active (started, not off-cycle) protocols A-Z first; then the rest by sortOrder.
@@ -1688,7 +1688,7 @@ async function resumeProtocol(p){
   await dbSet('protocols', p.id, {...stripId(p), status:'active', pausedDate:null, pauseLog: log, nextDose});
 }
 function stripId(obj){ const {id, ...rest} = obj; return rest; }
-/* Protocols tab: every non-archived protocol, tap to edit. */
+/* Protocols (bottom of Today): every non-archived protocol, tap to edit. */
 function relDay(iso){
   const t = doseDayISO(), n = daysBetween(t, iso);
   if(n===0) return 'Today'; if(n===1) return 'Tomorrow'; if(n===-1) return 'Yesterday';
@@ -6301,7 +6301,7 @@ function initLibrary(){
 }
 
 /* ===================== Navigation (bottom tab bar) ===================== */
-const TABS = {dose:'#doseView', protocols:'#protocolsView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', endo:'#endoView', settings:'#settingsView', resources:'#resourcesView', library:'#libraryView', peptide:'#peptideView', more:'#moreView'};
+const TABS = {dose:'#doseView', inventory:'#inventoryView', ask:'#askView', progress:'#progressView', tools:'#pepCalcView', endo:'#endoView', settings:'#settingsView', resources:'#resourcesView', library:'#libraryView', peptide:'#peptideView', more:'#moreView'};
 /* iOS-style navigation: each screen has a large title, an optional subtitle and round glass buttons in the top corner.
    Tools and Resources live under More, so they show a back button and keep More highlighted. */
 const NAV_ICONS = {
@@ -6312,7 +6312,6 @@ const NAV_ICONS = {
 };
 const TAB_META = {
   dose:{title:'Today', sub:()=>{ const d = new Date().toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'}); const l = ($('#doseTodayLabel')||{}).textContent||''; return l ? `${d} · ${l}` : d; }},
-  protocols:{title:'Protocols', sub:()=>{ const n = state.protocols.filter(isActiveP).length; return n ? `${n} active` : ''; }, actions:[['plus','#addProtocolBtn','Add protocol']]},
   inventory:{title:'Stash', sub:()=>{ const live = state.vials.filter(v=>!isDepleted(v)); const kinds = new Set(live.map(v=> (v.compound||'').trim().toLowerCase())).size;
     const n = live.reduce((t,v)=> t + num(v.qty,1) + (v.remainingMg!=null?1:0), 0); return live.length ? `${kinds} peptide${kinds===1?'':'s'} · ${n} vial${n===1?'':'s'}` : ''; },
     actions:[['scan','#scanVialBtn','Scan a vial'],['plus','#addVialBtn','Add vial'],['search','#stashSearchBtn','Search your stash']], noSync:true},
@@ -6323,7 +6322,7 @@ const TAB_META = {
   endo:{title:'Endotoxin check', back:'more'},
   settings:{title:'Settings', back:'more'},
   resources:{title:'Resources', back:'more'},
-  library:{title:'Library', back:'more', sub:()=> libIndex ? `${libIndex.length} peptides · from Peptide Schedule` : ''},
+  library:{title:'Library', sub:()=> libIndex ? `${libIndex.length} peptides · from Peptide Schedule` : ''},
   peptide:{title:'Peptide', back:'library'},
 };
 function updateNav(){
@@ -6344,6 +6343,8 @@ function updateIosBar(){
 }
 let currentTab = 'dose';
 function setTab(name, opts){
+  // Protocols used to be its own tab; it now sits at the bottom of Today
+  if(name==='protocols'){ setTab('dose', opts); const b = $('#protocolsBlock'); if(b) setTimeout(()=> b.scrollIntoView({behavior:'smooth', block:'start'}), 60); return; }
   if(!TABS[name]) name = 'dose';
   const prevTab = currentTab;
   currentTab = name;
@@ -6938,8 +6939,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.50.0';
+const APP_VERSION = '1.51.0';
 const WHATS_NEW = [
+  {v:'1.51.0', title:'A new tab bar', items:[
+    ['📋','Protocols now live at the bottom of Today, with Add protocol and your past protocols right there.'],
+    ['📚','The Peptide library has its own Library tab, between Progress and More.'],
+  ]},
   {v:'1.50.0', title:'A roomier library', items:[
     ['🗂️','Peptide pages are split into four tabs (Overview, Dosing, Safety and Science) that stay pinned at the top. Tap one, or swipe left and right to move between them.'],
     ['🌿','More breathing room everywhere: a slimmer header with your stash and protocol buttons built in, wider spacing, and a Next button at the end of each tab.'],
@@ -7038,7 +7043,7 @@ function hideLaunch(){
   const wait = Math.max(0, 650 - (performance.now() - (window.__launchT||0)));
   setTimeout(()=>{ l.classList.add('out'); setTimeout(()=> l.remove(), 520); }, wait);
 }
-const TAB_ORDER = ['dose','protocols','inventory','progress','more','tools','resources','ask'];
+const TAB_ORDER = ['dose','inventory','progress','library','more','tools','resources','ask'];
 function animateView(prev, next){
   const el = $(TABS[next]); if(!el || prev===next || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const dir = TAB_ORDER.indexOf(next) >= TAB_ORDER.indexOf(prev) ? 1 : -1;

@@ -2216,19 +2216,19 @@ html.dark .pc-syr, html.dark .syringe-wrap{ background:rgba(242,242,247,.92); bo
           </div>
         </section>
 
-      </section>
+        <section class="card-block" id="protocolsBlock">
+          <div class="card-block-head"><div class="card-h"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div></div>
+          <div class="card">
+            <div id="protocolManager"></div>
+          </div>
+        </section>
 
-      <section id="protocolsView" class="view" hidden>
-
-        <div class="card">
-          <div class="card-h ios-hide"><h3>Protocols</h3><button class="btn btn-accent-pep btn-sm" id="addProtocolBtn">+ Add protocol</button></div>
-          <div id="protocolManager"></div>
-        </div>
-
-        <div class="card">
-          <div class="card-h"><h3>Past protocols</h3></div>
-          <div id="archivedProtocolList"></div>
-        </div>
+        <section class="card-block">
+          <div class="card-block-head"><div class="card-h"><h3>Past protocols</h3></div></div>
+          <div class="card">
+            <div id="archivedProtocolList"></div>
+          </div>
+        </section>
 
       </section>
 
@@ -2430,7 +2430,6 @@ html.dark .pc-syr, html.dark .syringe-wrap{ background:rgba(242,242,247,.92); bo
 
       <section id="moreView" class="view" hidden>
         <div class="ios-list">
-          <button type="button" class="ios-row" data-goto="library"><span class="ios-ic" style="--ic:#30b0c7"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5.5L5.5 17a2.5 2.5 0 0 0 2.2 3.7h8.6a2.5 2.5 0 0 0 2.2-3.7L14 8.5V3"/><circle cx="10" cy="15.5" r="1"/><circle cx="14" cy="17" r=".8"/></svg></span><span class="ios-row-t">Peptide library<small>Dosing, side effects and research for 150+ peptides</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="tools"><span class="ios-ic" style="--ic:#ff8a1e"><svg viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="18" rx="2.5"/><path d="M8.5 7.5h7M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg></span><span class="ios-row-t">Calculator<small>Reconstitution, syringe units, labels</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="endo"><span class="ios-ic" style="--ic:#ff5e57"><svg viewBox="0 0 24 24"><path d="M9 3h6M10 3v5.5L5.5 17a2.5 2.5 0 0 0 2.2 3.7h8.6a2.5 2.5 0 0 0 2.2-3.7L14 8.5V3"/><path d="M7.5 14h9"/></svg></span><span class="ios-row-t">Endotoxin check<small>Check a dose against the FDA ceiling</small></span><span class="ios-chev"></span></button>
           <button type="button" class="ios-row" data-goto="resources"><span class="ios-ic" style="--ic:#5aa9ff"><svg viewBox="0 0 24 24"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15H6.5A2.5 2.5 0 0 0 4 20.5z"/><path d="M4 20.5A2.5 2.5 0 0 0 6.5 23H20v-5"/></svg></span><span class="ios-row-t">Resources<small>Links, guides and vendors</small></span><span class="ios-chev"></span></button>
@@ -2467,9 +2466,9 @@ html.dark .pc-syr, html.dark .syringe-wrap{ background:rgba(242,242,247,.92); bo
 
   <nav class="tabbar" aria-label="Sections">
     <button type="button" data-tab="dose"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 3l6 6"/><path d="M18 6L8.5 15.5a2.1 2.1 0 0 1-3 0v0a2.1 2.1 0 0 1 0-3L15 3"/><path d="M5.5 18.5L3 21"/><path d="M10 8l2 2"/><path d="M7.5 10.5l2 2"/></svg><span>Today</span></button>
-    <button type="button" data-tab="protocols"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="4" width="14" height="17" rx="2.5"/><path d="M9 4.5V3h6v1.5"/><path d="M8.5 10h7M8.5 14h7M8.5 18h4"/></svg><span>Protocols</span></button>
     <button type="button" data-tab="inventory"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="2.5" width="8" height="3.5" rx="1"/><path d="M9 6v2c-1.6.6-2.5 1.6-2.5 3.2V19a2.5 2.5 0 002.5 2.5h6a2.5 2.5 0 002.5-2.5v-7.8C17.5 9.6 16.6 8.6 15 8V6"/><path d="M6.5 14.5h11"/></svg><span>Stash</span></button>
     <button type="button" data-tab="progress"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 20h18"/><path d="M5 16l4.5-5 3.5 3 6-7"/></svg><span>Progress</span></button>
+    <button type="button" data-tab="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z"/><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z"/></svg><span>Library</span></button>
     <button type="button" data-tab="more"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5.5" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18.5" cy="12" r="1.6"/></svg><span>More</span></button>
   </nav>
   <button type="button" class="claude-orb" data-tab="ask" aria-label="Ask Claude"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.5l2.1 6.4 6.4 2.1-6.4 2.1L12 19.5l-2.1-6.4L3.5 11l6.4-2.1z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></svg></button>
