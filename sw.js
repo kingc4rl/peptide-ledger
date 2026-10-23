@@ -1,6 +1,6 @@
 /* Pep Prep service worker: makes the app open offline.
    Bump VERSION whenever you upload changed files so phones pick up the update. */
-const VERSION = 'v1.48.0';
+const VERSION = 'v1.49.0';
 const SHELL = `ledger-shell-${VERSION}`;
 const FONTS = 'ledger-fonts';
 const LIBRARY = 'ledger-library';  // peptide library pages; kept across versions

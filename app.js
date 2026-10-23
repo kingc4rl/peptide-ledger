@@ -2838,8 +2838,8 @@ function coaMiniSVG(t, labelMg){
 }
 /* Card finishes, from soft pastel to full rainbow foil. The choice is a per-device look, kept in localStorage. */
 const COA_FINISHES = [
-  ['aurora','Aurora','Soft pastel foil'], ['prism','Prism','Maximum rainbow'], ['galaxy','Galaxy','Deep space sparkle'],
-  ['chrome','Chrome','Polished silver'], ['gold','Gold','Gold foil'], ['crystal','Crystal','Clear and minimal'],
+  ['aurora','Aurora','Soft pastel foil'], ['prism','Prism','Maximum rainbow'], ['prismsoft','Soft Prism','Gentler light rays'], ['galaxy','Galaxy','Deep space sparkle'],
+  ['chrome','Chrome','Polished silver'], ['pearl','Pearl Chrome','Silver with a pastel sheen'], ['gold','Gold','Gold foil'], ['crystal','Crystal','Clear and minimal'],
 ];
 const coaFinish = ()=>{ const f = lsGet('ledger.coaFinish','aurora'); return COA_FINISHES.some(x=> x[0]===f) ? f : 'aurora'; };
 function coaFinishPicker(){
@@ -6926,8 +6926,12 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.48.0';
+const APP_VERSION = '1.49.0';
 const WHATS_NEW = [
+  {v:'1.49.0', title:'Two new COA finishes', items:[
+    ['🪩','Pearl Chrome: polished silver with a soft pastel rainbow sheen that drifts as you tilt.'],
+    ['🌈','Soft Prism: the full rainbow Prism foil with gentler, wider light rays.'],
+  ]},
   {v:'1.48.0', title:'Choose your COA finish', items:[
     ['🃏','Six card finishes to pick from at the top of any certificate: Aurora, Prism, Galaxy, Chrome, Gold and Crystal.'],
     ['✨','They range from full rainbow foil and starfields to polished metal and clear glass. Your pick is remembered and the small COA cards on your stash match it.'],

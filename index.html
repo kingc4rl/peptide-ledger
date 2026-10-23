@@ -1122,6 +1122,41 @@ html.dark .hc-holo{ mix-blend-mode:color-dodge; opacity:calc(.08 + var(--hi) * .
 html.dark .hc[data-finish="crystal"] .hc-card{ background:linear-gradient(150deg, rgba(58,58,66,.85), rgba(36,36,44,.75)) padding-box, linear-gradient(135deg, rgba(255,140,210,.7), rgba(140,170,255,.7), rgba(140,255,200,.7)) border-box; }
 html.dark .hc[data-finish="crystal"] .hc-panel, html.dark .hc[data-finish="crystal"] .hc-stat{ background:rgba(255,255,255,.06); box-shadow:inset 0 0 0 1px rgba(255,255,255,.1); }
 
+.hc[data-finish="prismsoft"] .hc-card{ background:linear-gradient(150deg, #efe9ff, #dff7ff 30%, #e7ffe9 55%, #fff3dc 78%, #ffe3f4) padding-box, conic-gradient(from 210deg, #ff5fb8, #ffcf4d, #5dffa0, #4fcfff, #9a7bff, #ff5fb8) border-box; border-width:3px; color:#1c1d26; }
+.hc[data-finish="prismsoft"] .hc-holo{ background:repeating-conic-gradient(from 0deg at var(--mx) var(--my), #ff3fa8 0deg, #ffc21f 8deg, #2dff88 16deg, #1fc4ff 24deg, #8a5cff 32deg, #ff3fa8 40deg); mix-blend-mode:soft-light; opacity:calc(.8 + var(--hi) * .2); }
+.hc[data-finish="prismsoft"] .hc-holo::after{ mix-blend-mode:color-burn; opacity:calc(.25 + var(--hi) * .5); }
+.hc[data-finish="prismsoft"] .hc-spark{ background-size:17px 17px, 29px 29px; background-image:radial-gradient(circle, #fff 0 1.4px, transparent 2.2px), radial-gradient(circle, rgba(255,255,255,.9) 0 1px, transparent 1.8px); mix-blend-mode:normal; opacity:calc(.35 + var(--hi) * .65); -webkit-mask-image:radial-gradient(circle at var(--mx) var(--my), #000 0, transparent 75%); mask-image:radial-gradient(circle at var(--mx) var(--my), #000 0, transparent 75%); }
+.hc[data-finish="prismsoft"] .hc-panel, .hc[data-finish="prismsoft"] .hc-stat{ background:rgba(255,255,255,.62); box-shadow:inset 0 0 0 1px rgba(255,255,255,.9), 0 2px 8px rgba(60,50,120,.1); }
+.hc[data-finish="prismsoft"] .hc-k, .hc[data-finish="prismsoft"] .hc-stat small, .hc[data-finish="prismsoft"] .hc-brand span{ color:#6c6788; }
+.hc[data-finish="prismsoft"] .hc-brand b, .hc[data-finish="prismsoft"] .hc-date{ color:#2e2a45; } .hc[data-finish="prismsoft"] .hc-bars{ fill:#25232f; }
+.hc[data-finish="prismsoft"] .hc-ref, .hc[data-finish="prismsoft"] .hc-core{ color:#1f8f4c; }
+.hc[data-finish="prismsoft"] .hc-stat.ok em{ color:#1f8f4c; } .hc[data-finish="prismsoft"] .hc-stat.warn em{ color:#b57700; } .hc[data-finish="prismsoft"] .hc-stat.bad em{ color:#c9342b; }
+.hc[data-finish="pearl"] .hc-face{ background-image:none; }
+.hc[data-finish="pearl"] .hc-holo{ background:linear-gradient(115deg, transparent 35%, rgba(255,120,200,.25) 45%, rgba(120,220,255,.25) 55%, transparent 65%); background-size:250% 250%; background-position:var(--fx) var(--fy); mix-blend-mode:overlay; opacity:calc(.2 + var(--hi) * .3); animation:none; }
+.hc[data-finish="pearl"] .hc-holo::after{ display:none; }
+.hc[data-finish="pearl"] .hc-spark{ display:none; }
+.hc[data-finish="pearl"] .hc-glare{ background:linear-gradient(115deg, transparent calc(var(--mx) - 22%), rgba(255,255,255,.9) var(--mx), transparent calc(var(--mx) + 22%)); mix-blend-mode:soft-light; opacity:1; }
+.hc[data-finish="pearl"] .hc-panel, .hc[data-finish="pearl"] .hc-stat{ background:rgba(255,255,255,.38); box-shadow:inset 0 0 0 1px rgba(255,255,255,.85), inset 0 -1px 0 rgba(0,0,0,.12), 0 1px 2px rgba(0,0,0,.12); }
+.hc[data-finish="pearl"] .hc-k, .hc[data-finish="pearl"] .hc-stat small, .hc[data-finish="pearl"] .hc-brand span{ color:#4f555f; }
+.hc[data-finish="pearl"] .hc-brand b, .hc[data-finish="pearl"] .hc-date{ color:#1d2026; } .hc[data-finish="pearl"] .hc-bars{ fill:#16181d; }
+.hc[data-finish="pearl"] .hc-ref, .hc[data-finish="pearl"] .hc-core{ color:#1d2026; }
+.hc[data-finish="pearl"] .hc-name, .hc[data-finish="pearl"] .hc-stat strong{ text-shadow:0 1px 0 rgba(255,255,255,.8); }
+.hc[data-finish="pearl"] .hc-head, .hc[data-finish="pearl"] .hc-meta, .hc[data-finish="pearl"] .hc-foot{ border-color:rgba(0,0,0,.18); }
+.hc[data-finish="pearl"] .hc-stat.ok em{ color:#167a40; } .hc[data-finish="pearl"] .hc-stat.warn em{ color:#9a6400; } .hc[data-finish="pearl"] .hc-stat.bad em{ color:#b3261e; }
+/* ---- Pearl Chrome: the chrome finish with a pastel rainbow sheen that drifts as you tilt ---- */
+.hc[data-finish="pearl"] .hc-card{ background:repeating-linear-gradient(90deg, rgba(255,255,255,.07) 0 1px, rgba(0,0,0,.02) 1px 2px), linear-gradient(135deg, #f8f5fc 0%, #cdd2df 24%, #fdfbff 44%, #b6bccb 66%, #f2eef7 84%, #c8cbd7 100%) padding-box,
+  linear-gradient(135deg, #ffe3f3, #b9c3ff 30%, #f4f5f7 50%, #b6f0e4 75%, #fff0c9) border-box; background-size:auto, 180% 180%, auto; background-position:0 0, var(--fx) var(--fy), 0 0; color:#16181d; box-shadow:0 18px 40px -14px rgba(60,50,110,.4), 0 2px 6px rgba(20,25,35,.15); }
+.hc[data-finish="pearl"] .hc-holo{ background:repeating-linear-gradient(120deg, #ffb0dd 0%, #ffe08f 8%, #a8ffcf 16%, #a6dcff 24%, #cdb5ff 32%, #ffb0dd 40%); background-size:220% 220%; background-position:var(--fx) var(--fy); mix-blend-mode:soft-light; opacity:calc(.7 + var(--hi) * .3); animation:hc-hue 12s linear infinite; }
+.hc[data-finish="pearl"] .hc-glare{ background:linear-gradient(115deg, transparent calc(var(--mx) - 22%), rgba(255,255,255,.75) var(--mx), transparent calc(var(--mx) + 22%)); }
+.hc-sw[data-finish="pearl"], .hcm[data-finish="pearl"]{ background:linear-gradient(135deg, #f8f5fc, #c8cde0 28%, #ffe6f4 44%, #d9f3ff 56%, #b6bccb 72%, #f3edf8); }
+.hcm[data-finish="pearl"] .hcm-band{ background:linear-gradient(90deg, #ffc4e6, #c4ffdf, #bfe6ff, #dccbff); }
+/* ---- Soft Prism: the prism foil with wider, fainter rays ---- */
+.hc[data-finish="prismsoft"] .hc-holo{ background:repeating-conic-gradient(from 0deg at var(--mx) var(--my), #ff7ac6 0deg, #ffd36b 15deg, #7dffb2 30deg, #6fd6ff 45deg, #a98bff 60deg, #ff7ac6 75deg); mix-blend-mode:soft-light; opacity:calc(.5 + var(--hi) * .2);
+  -webkit-mask-image:radial-gradient(circle at var(--mx) var(--my), rgba(0,0,0,.35) 0, #000 55%); mask-image:radial-gradient(circle at var(--mx) var(--my), rgba(0,0,0,.35) 0, #000 55%); }
+.hc[data-finish="prismsoft"] .hc-holo::after{ opacity:calc(.12 + var(--hi) * .25); }
+.hc[data-finish="prismsoft"] .hc-spark{ opacity:calc(.25 + var(--hi) * .5); }
+.hc-sw[data-finish="prismsoft"]{ background:conic-gradient(from 30deg at 40% 40%, #ffc2e4, #ffe7a8, #c2ffd9, #bfeaff, #dccdff, #ffc2e4); }
+.hcm[data-finish="prismsoft"]{ background:conic-gradient(from 30deg at 40% 30%, #ffe3f3, #fff5d2, #e0ffec, #def5ff, #ece4ff, #ffe3f3); }
 /* mini cards on the stash follow the chosen finish */
 .hcm[data-finish="prism"]{ background:conic-gradient(from 30deg at 40% 30%, #ffd6ef, #fff0b8, #c9ffdc, #c4efff, #e0d4ff, #ffd6ef); }
 .hcm[data-finish="galaxy"]{ background:radial-gradient(circle at 30% 20%, #6a3fc4 0, transparent 55%), radial-gradient(circle at 80% 80%, #17698f 0, transparent 60%), radial-gradient(circle, #fff 0 .6px, transparent 1px) 0 0/6px 6px, #0b0a1f; color:#fff; }
