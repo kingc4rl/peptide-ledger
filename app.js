@@ -293,12 +293,22 @@ function unitsPerInjection(p, iso){
   return null;
 }
 function fmtDose(dose, unit){ const n = num(dose,null); return n==null ? '' : `${Math.round(n*1000)/1000} ${unit||''}`.trim(); }
+/* Strength of an open vial in mg/mL (its own record first, then the protocol drawing from it), and the syringe units
+   left in it. */
+function vialConc(v){
+  if(!v) return null;
+  if(num(v.concentration,0) > 0) return num(v.concentration);
+  if(num(v.mgPerVial,0) > 0 && num(v.bacMl,0) > 0) return num(v.mgPerVial)/num(v.bacMl);
+  const p = state.protocols.find(x=> x.activeVialId===v.id && x.status!=='archived');
+  return p && num(p.vialMg,0) > 0 && num(p.bacMl,0) > 0 ? num(p.vialMg)/num(p.bacMl) : null;
+}
+function unitsLeft(v){ const c = vialConc(v); return c && v && v.remainingMg!=null ? Math.max(0, Math.round(num(v.remainingMg,0)/c*100)) : null; }
 function vialLabel(v){
   const bits = [];
   if(v.pharmacy) bits.push(v.pharmacy);
   if(v.lot) bits.push('Lot '+v.lot);
   if(v.mgPerVial) bits.push(`${num(v.mgPerVial)}mg`);
-  bits.push(v.remainingMg!=null ? `${Math.round(v.remainingMg*10)/10}mg left` : 'unopened');
+  bits.push(v.remainingMg!=null ? `${Math.round(v.remainingMg*10)/10}mg left${unitsLeft(v)!=null ? ` (${unitsLeft(v)}u)` : ''}` : 'unopened');
   if(v.bud) bits.push('BUD '+fmtDateShort(v.bud));
   return bits.join(' · ');
 }
@@ -1054,7 +1064,7 @@ function dosesOnDay(iso){
   const today = doseDayISO(), colorMap = protocolColorMap(), out = [];
   state.protocols.filter(p=>p.status!=='archived').forEach(p=>{
     const color = colorMap.get(p.id) || 'var(--muted)';
-    injectionEvents(p).filter(e=>e.day===iso).forEach(e=> out.push({kind:'taken', p, color, t:e.t, day:e.day, amt:fmtAmount(e.mg)}));
+    injectionEvents(p).filter(e=>e.day===iso).forEach(e=> out.push({kind:'taken', p, color, t:e.t, day:e.day, amt: fmtAmount(e.mg) + (e.prime>0 ? ` +${primeLabel(p, e.prime)} primed` : '')}));
     if(!isActiveP(p) || (p.startDate && iso < p.startDate)) return;
     const sched = iso < today ? doseDatesInRange({...p, nextDose:null}, iso, iso) : doseDatesInRange(p, iso, iso);
     if(!sched.length) return;
@@ -1268,9 +1278,32 @@ function bindDoseEditor(body, conc, unit0, onChange){
   }));
   return {mg, unit: ()=> unit};
 }
+/* Priming: units pushed out of the pen or syringe before the injection. They come out of the vial but aren't part of
+   the dose. Shown only when the vial's strength is known, since priming is measured in units. */
+const primeLabel = (p, mg)=>{ const c = protoConc(p); return c ? `${Math.round(mg/c*100*10)/10}u` : fmtAmount(mg); };
+function primeHTML(conc, on, units){
+  if(!conc) return '';
+  return `<div class="ql-prime">
+      <label class="ql-prime-t"><input type="checkbox" id="qlPrimeOn" ${on?'checked':''}><span><b>Primed the pen or syringe</b><small>Comes out of the vial but isn't counted as your dose</small></span></label>
+      <div class="ql-prime-b" id="qlPrimeB" ${on?'':'hidden'}>
+        <div class="ql-step sm"><button type="button" data-qp="-1" aria-label="One unit less">−</button><input id="qlPrime" type="number" inputmode="decimal" step="any" min="0" value="${units}" aria-label="Units primed"><button type="button" data-qp="1" aria-label="One unit more">+</button></div>
+        <span class="ql-prime-u">units primed</span>
+      </div>
+      <div class="ql-prime-eq" id="qlPrimeEq"></div>
+    </div>`;
+}
+function bindPrime(body, conc, onChange){
+  const on = $('#qlPrimeOn',body), inp = $('#qlPrime',body);
+  if(!on) return {mg: ()=> 0, on: ()=> false, units: ()=> 0};
+  on.addEventListener('change', ()=>{ $('#qlPrimeB',body).hidden = !on.checked; haptic('select'); onChange(); });
+  inp.addEventListener('input', onChange);
+  $$('[data-qp]',body).forEach(b=> b.addEventListener('click', ()=>{ inp.value = String(Math.max(0, Math.round((num(inp.value,0) + +b.dataset.qp)*10)/10)); haptic('select'); onChange(); }));
+  return {mg: ()=> on.checked ? num(inp.value,0)/100*conc : 0, on: ()=> on.checked, units: ()=> num(inp.value,0)};
+}
+const primeTotalNote = (conc, doseMg, primeMg)=> primeMg>0 && conc ? `The vial loses <b>${Math.round((doseMg+primeMg)/conc*100*10)/10} units</b> in all: ${Math.round(doseMg/conc*100*10)/10} injected + ${Math.round(primeMg/conc*100*10)/10} primed.` : '';
 /* Every logged injection with the amount actually taken written onto it, so a later change to the protocol's dose
    never rewrites history. */
-function frozenTimes(p){ return injectionEvents(p).map(e=>({day:e.day, t:e.t, mg: Math.round(e.mg*1e6)/1e6})).slice(-400); }
+function frozenTimes(p){ return injectionEvents(p).map(e=> Object.assign({day:e.day, t:e.t, mg: Math.round(e.mg*1e6)/1e6}, e.prime>0 ? {prime: Math.round(e.prime*1e6)/1e6} : {})).slice(-400); }
 /* Make perMg (one injection) the protocol's dose from the dose day `day` on: today's titration step if one is
    running, otherwise the base dose. Writes into upd. */
 function setProtocolDose(cur, upd, perMg, unit, day){
@@ -1300,6 +1333,7 @@ function openQuickLog(p, hhmm){
       ${n>1 ? `<div class="footnote ql-sub">Injection ${done+1} of ${n} today</div>` : ''}
       ${doseEditorHTML(conc, perMg, unit)}
       <div class="ql-change" id="qlChange" hidden></div>
+      ${primeHTML(conc, !!p.primeOn, num(p.primeUnits,0) > 0 ? num(p.primeUnits) : 2)}
       <div class="ql-row"><span class="ql-k">Time</span><input type="time" id="qlTime" value="${hhmm || `${hh}:${mm}`}"></div>
       <div class="ql-k" style="margin-top:14px;">Injection site <span class="ql-opt">optional</span></div>
       <div class="body-map ql-map" id="qlMap"></div>
@@ -1307,17 +1341,19 @@ function openQuickLog(p, hhmm){
     </div>
     <div class="form-actions"><button type="button" class="btn" id="qlCancel">Cancel</button><button type="button" class="btn btn-accent-pep" id="qlGo">${SYRINGE_ICON}<span>Log dose</span></button></div>
   `, body=>{
-    let ed;
+    let ed, pr;
     const changed = ()=> Math.abs(ed.mg() - perMg) > 1e-6;
     const refresh = ()=>{
       const mg = ed.mg();
       if(conc && n>1) $('#qlEq',body).textContent = mg>0 ? `${fmtAmount(mg*n)} for the day` : '';
+      if(pr && $('#qlPrimeEq',body)) $('#qlPrimeEq',body).innerHTML = primeTotalNote(conc, mg, pr.mg());
       const ch = $('#qlChange',body);
       ch.hidden = !changed() || !(mg>0);
       if(!ch.hidden) ch.textContent = doseChangeNote(p, fmtDose(d.dose, unit), fmtAmount(mg*n));
       $('#qlGo',body).disabled = !(mg>0);
     };
     ed = bindDoseEditor(body, conc, unit, refresh);
+    pr = bindPrime(body, conc, refresh);
     const siteNote = ()=>{ $('#qlSite',body).innerHTML = sst.site ? `Logging <strong>${esc(sst.site)}</strong>. Tap the square again to clear.` : `Tap where you injected. Suggested next: <strong>${esc(suggestNextSite(p))}</strong>.`; };
     bindBodyMap($('#qlMap',body), p, sst, siteNote);
     $('#qlCancel',body).addEventListener('click', closeModal);
@@ -1334,11 +1370,14 @@ function openQuickLog(p, hhmm){
         const log = siteLogOf(cur).filter(e=> e.date!==day).concat({date:day, site:sst.site, spot:sst.spot}).sort((a,b)=> (a.date||'').localeCompare(b.date||''));
         upd.siteLog = log.slice(-60);
       }
-      if(changed() || sst.site){ await dbSet('protocols', cur.id, upd); cur = state.protocols.find(x=> x.id===p.id) || cur; }
-      const time = $('#qlTime',body).value || nowHHMM();
+      // remember whether this protocol is usually primed, and by how much
+      const primeChanged = conc && (!!cur.primeOn !== pr.on() || (pr.on() && num(cur.primeUnits,0) !== pr.units()));
+      if(primeChanged){ upd.primeOn = pr.on(); if(pr.on()) upd.primeUnits = pr.units(); }
+      if(changed() || sst.site || primeChanged){ await dbSet('protocols', cur.id, upd); cur = state.protocols.find(x=> x.id===p.id) || cur; }
+      const time = $('#qlTime',body).value || nowHHMM(), primeMg = pr.mg();
       closeModal();
-      await logInjection(cur, day, 1, time, mg);
-      showToast(`Logged ${p.compound||'dose'} · ${fmtAmount(mg)}${sst.site ? ' · '+sst.site : ''}`);
+      await logInjection(cur, day, 1, time, mg, primeMg);
+      showToast(`Logged ${p.compound||'dose'} · ${fmtAmount(mg)}${primeMg>0 ? ` · primed ${primeLabel(cur, primeMg)}` : ''}${sst.site ? ' · '+sst.site : ''}`);
       maybeCelebrate();
     });
     siteNote(); refresh();
@@ -1361,21 +1400,24 @@ function openEditDose(p, day, t){
       <div class="footnote ql-sub">${esc(p.compound||'Dose')} · ${esc(new Date(day+'T00:00:00').toLocaleDateString(undefined,{weekday:'long', month:'long', day:'numeric'}))}</div>
       ${doseEditorHTML(conc, ev.mg, unit)}
       <div class="ql-change" id="qlChange" hidden></div>
+      ${primeHTML(conc, ev.prime>0, ev.prime>0 && conc ? Math.round(ev.prime/conc*100*10)/10 : (num(p.primeUnits,0) || 2))}
       <div class="ql-row"><span class="ql-k">Time</span><input type="time" id="qlTime" value="${hh}:${mm}"></div>
     </div>
     <div class="form-actions"><button type="button" class="btn btn-danger" id="edDel">Delete</button><button type="button" class="btn" id="qlCancel">Cancel</button><button type="button" class="btn btn-accent-pep" id="edSave">Save</button></div>
   `, body=>{
-    let ed;
+    let ed, pr;
     const changed = ()=> Math.abs(ed.mg() - ev.mg) > 1e-6;
     const refresh = ()=>{
       const mg = ed.mg();
       if(conc && n>1) $('#qlEq',body).textContent = '';
+      if(pr && $('#qlPrimeEq',body)) $('#qlPrimeEq',body).innerHTML = primeTotalNote(conc, mg, pr.mg());
       const ch = $('#qlChange',body);
       ch.hidden = !(latest && changed() && mg>0);
       if(!ch.hidden) ch.textContent = doseChangeNote(p, fmtDose(cur0.dose, cur0.doseUnit), fmtAmount(mg*n));
       $('#edSave',body).disabled = !(mg>0);
     };
     ed = bindDoseEditor(body, conc, unit, refresh);
+    pr = bindPrime(body, conc, refresh);
     $('#qlCancel',body).addEventListener('click', closeModal);
     $('#edDel',body).addEventListener('click', ()=> confirmAction(`Delete this ${p.compound||''} dose? It goes back into the active vial.`, async ()=>{
       const cur = state.protocols.find(x=> x.id===p.id) || p;
@@ -1392,15 +1434,17 @@ function openEditDose(p, day, t){
       const cur = state.protocols.find(x=> x.id===p.id) || p;
       const times = frozenTimes(cur), k = times.findIndex(e=> e.day===day && e.t===t);
       if(k<0){ closeModal(); return; }
-      const oldMg = times[k].mg;
+      const oldMg = times[k].mg + num(times[k].prime,0), primeMg = conc ? pr.mg() : num(times[k].prime,0);
       times[k] = {...times[k], mg: Math.round(mg*1e6)/1e6, t: momentOn(day, $('#qlTime',body).value) || times[k].t};
+      if(primeMg>0) times[k].prime = Math.round(primeMg*1e6)/1e6; else delete times[k].prime;
       const upd = {...stripId(cur), doseTimes: times};
       if(latest && changed()) setProtocolDose(cur, upd, mg, ed.unit(), doseDayISO());
       await dbSet('protocols', cur.id, upd);
       // the active vial gives or takes back the difference
       const vial = cur.activeVialId ? state.vials.find(v=> v.id===cur.activeVialId) : null;
-      if(vial && vial.remainingMg!=null && Math.abs(mg-oldMg) > 1e-9){
-        const rem = Math.max(0, Math.min(num(vial.mgPerVial, Infinity), round2(num(vial.remainingMg,0) - (mg-oldMg))));
+      const used = mg + primeMg;
+      if(vial && vial.remainingMg!=null && Math.abs(used-oldMg) > 1e-9){
+        const rem = Math.max(0, Math.min(num(vial.mgPerVial, Infinity), round2(num(vial.remainingMg,0) - (used-oldMg))));
         await dbSet('vials', vial.id, {...stripId(vial), remainingMg: rem});
       }
       closeModal(); showToast('Dose updated');
@@ -1599,7 +1643,7 @@ function doseCardHTML(p, color, day, serum, opts={}){
   const dueText = notStarted ? `Starts ${fmtDateShort(p.startDate)}`
     : (complete && done>0) ? `Done today${nextT ? ` · next ${fmtMoment(nextT, !!p.doseTime)}` : ''}`
     : nextT ? `${fmtMoment(nextT, !!p.doseTime)} · ${scheduledToday ? 'Due' : 'Upcoming'}` : 'No schedule set';
-  const remaining = vial ? (vial.remainingMg!=null ? `${round2(vial.remainingMg)} mg <span class="footnote">of ${num(vial.mgPerVial,0)} mg</span>` : `Unopened ${num(vial.mgPerVial,0)} mg vial`) : '<span class="footnote">No active vial set</span>';
+  const remaining = vial ? (vial.remainingMg!=null ? `${round2(vial.remainingMg)} mg${unitsLeft(vial)!=null ? ` · ${unitsLeft(vial)} units` : ''} <span class="footnote">of ${num(vial.mgPerVial,0)} mg</span>` : `Unopened ${num(vial.mgPerVial,0)} mg vial`) : '<span class="footnote">No active vial set</span>';
   const parts = blendParts(p);
   const comp = parts ? `<div class="dc-sec"><h4>Dose composition</h4>${parts.map((c,i)=>`<div class="dc-comp"><span><i style="background:${serum.find(s=>s.id===`${p.id}:${i}`)?.color || color}"></i>${esc(c.name)}</span><span class="mono">${perInj!=null ? esc(fmtDose(Math.round(perInj*c.frac*1000)/1000, d.doseUnit)) : '—'}</span></div>`).join('')}</div>` : '';
   const syr = u!=null ? `<div class="dc-sec"><div class="dc-sec-h"><h4>Syringe guide</h4><span class="mono dc-small">Draw to the ${u} unit mark</span></div>
@@ -1669,7 +1713,7 @@ function momentOn(day, hhmm){
   if(+m[1] < 2) d.setDate(d.getDate()+1);   // 12–2am still belongs to the previous dose day
   return d.getTime();
 }
-async function logInjection(p, day, delta, hhmm, mgTaken){
+async function logInjection(p, day, delta, hhmm, mgTaken, primeMg){
   if(delta>0) haptic('success');
   if(!p) return;
   const n = splitCount(p);
@@ -1680,11 +1724,12 @@ async function logInjection(p, day, delta, hhmm, mgTaken){
   let moved = planned;   // mg taken from (or returned to) the active vial
   if(delta>0){
     if(before>=n) return;
-    moved = mgTaken>0 ? mgTaken : planned;
-    log.push(day); times.push({day, t: momentOn(day, hhmm) || (day===doseDayISO() ? Date.now() : new Date(day+'T12:00:00').getTime()), mg: Math.round(moved*1e6)/1e6});
+    const taken = mgTaken>0 ? mgTaken : planned, prime = primeMg>0 ? primeMg : 0;
+    moved = taken + prime;   // priming leaves the vial but isn't part of the dose
+    log.push(day); times.push(Object.assign({day, t: momentOn(day, hhmm) || (day===doseDayISO() ? Date.now() : new Date(day+'T12:00:00').getTime()), mg: Math.round(taken*1e6)/1e6}, prime ? {prime: Math.round(prime*1e6)/1e6} : {}));
   } else {
     const i = log.lastIndexOf(day); if(i<0) return; log.splice(i,1);
-    for(let k=times.length-1;k>=0;k--) if(times[k].day===day){ if(num(times[k].mg,null)!=null) moved = num(times[k].mg); times.splice(k,1); break; }
+    for(let k=times.length-1;k>=0;k--) if(times[k].day===day){ if(num(times[k].mg,null)!=null) moved = num(times[k].mg); moved += num(times[k].prime,0); times.splice(k,1); break; }
   }
   log.sort();
   times = times.slice(-400);
@@ -2281,7 +2326,7 @@ function injectionEvents(p){
     const t = e ? e.t : new Date(day+'T12:00:00').getTime();
     const d = doseAt(p, day);
     // the amount actually taken is kept on the injection; older entries fall back to the protocol's dose for that day
-    return {t, mg: e && num(e.mg,null)!=null ? num(e.mg) : (doseToMg(d.dose, d.doseUnit)||0)/n, day};
+    return {t, mg: e && num(e.mg,null)!=null ? num(e.mg) : (doseToMg(d.dose, d.doseUnit)||0)/n, prime: e ? num(e.prime,0) : 0, day};
   });
 }
 /* Doses still to come from the schedule, at the usual time of day for this protocol. */
@@ -2712,7 +2757,7 @@ function renderVials(){
       const isOpen = v.remainingMg!=null;
       const pct = isOpen && mg>0 ? Math.max(0,Math.min(1, v.remainingMg/mg)) : null;
       const status = isOpen
-        ? `<span class="pill pill-pep">Opened${v.dateOpened?' '+esc(fmtDateShort(v.dateOpened)):''}</span><span class="lot-left mono">${Math.round(v.remainingMg*10)/10} / ${mg} mg</span>`
+        ? `<span class="pill pill-pep">Opened${v.dateOpened?' '+esc(fmtDateShort(v.dateOpened)):''}</span><span class="lot-left mono">${Math.round(v.remainingMg*10)/10} / ${mg} mg${unitsLeft(v)!=null ? ` · ${unitsLeft(v)}u` : ''}</span>`
         : `<span class="pill pill-muted">Unopened</span>`;
       const tests = vialTests(v);
       const meta = [isMixedBlend(v) ? v.blend.map(c=> `${esc(c.name)} ${round2(num(c.mg,0))} mg`).join(' + ') : '', v.lot?`Lot ${esc(v.lot)}`:'', v.concentration?`${num(v.concentration)} mg/mL`:''].filter(Boolean).join(' · ');
@@ -2737,7 +2782,7 @@ function renderVials(){
       return {id: v.id, tile, card};
     });
     const sealed = lots.reduce((s,v)=> s+num(v.qty,1), 0);   // qty counts sealed vials; the open one is separate
-    const meta = fill ? `${Math.round(fill.remainingMg*10)/10} of ${num(fill.mgPerVial,0)} mg${sealed>0?` · +${sealed} sealed`:''}`
+    const meta = fill ? `${Math.round(fill.remainingMg*10)/10} of ${num(fill.mgPerVial,0)} mg${unitsLeft(fill)!=null ? ` · ${unitsLeft(fill)}u left` : ''}${sealed>0?` · +${sealed} sealed`:''}`
       : `${totalQty} sealed${num(lots[0].mgPerVial,0)?` · ${num(lots[0].mgPerVial,0)} mg`:''}`;
     const mgTag = num(lots[0].mgPerVial,0) ? `${num(lots[0].mgPerVial,0)} mg` : '';
     const vendors = [...new Set(lots.map(v=> (v.pharmacy||'').trim()).filter(Boolean))];
@@ -3168,7 +3213,7 @@ function openVialSwapModal({p=null, cur=null, preselect=null}={}){
   const vialBit = (v, pct, tag)=> `<div class="swap-vial">${vialSVG({color, pct, mgTag: num(v.mgPerVial,0)?`${num(v.mgPerVial,0)} mg`:'', name: compound, brand: v.pharmacy||'', lot: v.lot||''}, tag)}</div>`;
   const optMeta = v=>{
     if(finishing && v.id===finishing.id) return `Same lot · ${num(v.qty,0)} sealed${v.bud?` · BUD ${fmtDateShort(v.bud)}`:''}`;
-    if(v.remainingMg!=null) return `Already open · ${round2(num(v.remainingMg,0))} mg left`;
+    if(v.remainingMg!=null) return `Already open · ${round2(num(v.remainingMg,0))} mg left${unitsLeft(v)!=null ? ` (${unitsLeft(v)}u)` : ''}`;
     return `${num(v.qty,1)} sealed${v.bud?` · BUD ${fmtDateShort(v.bud)}`:''}${v.lot?` · Lot ${v.lot}`:''}`;
   };
   const left = finishing ? round2(num(finishing.remainingMg,0)) : 0;
@@ -7046,8 +7091,13 @@ function maybeCelebrate(){
 }
 
 /* ===================== Launch animation, screen transitions, What's new ===================== */
-const APP_VERSION = '1.52.0';
+const APP_VERSION = '1.53.0';
 const WHATS_NEW = [
+  {v:'1.53.0', title:'Units left and priming', items:[
+    ['🧪','Open vials and pens now show the units left alongside the mg, on your stash, the dose screen and when switching vials.'],
+    ['💧','When you log a dose, switch on "Primed the pen or syringe" and set the units. Priming comes out of the vial but isn\'t counted as your dose or on the serum chart.'],
+    ['🔁','Your last priming choice is remembered for each protocol, and you can change it later by tapping the logged dose.'],
+  ]},
   {v:'1.52.0', title:'Change any dose', items:[
     ['💉','When you log a dose, set the units or the amount (mg or mcg). Change one and the other follows, and the new amount becomes your protocol\'s dose from then on.'],
     ['✏️','Tap a logged dose in the Doses list to change its amount or time, or delete it. Editing your latest dose updates the protocol too.'],
